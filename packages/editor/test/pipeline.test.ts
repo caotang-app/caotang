@@ -352,11 +352,10 @@ describe('§4 · the total-parse claim, and the one body that breaks it', () => 
   });
 
   it('an empty body projection loads as one empty paragraph — the gap is CLOSED', async () => {
-    // This test was an `it.fails` written on 2026-10-04 05:0x, and
-    // its comment is the decision an earlier change supersedes. Both halves are kept,
-    // because the superseded half is the part a future reader needs:
+    // Both the rejected placement and the adopted one are kept here,
+    // because the rejected half is the part a future reader needs:
     //
-    // **What an earlier change recorded.** §4 says `setContent`'s parse *"cannot fail (Markdown
+    // **The rejected placement.** §4 says `setContent`'s parse *"cannot fail (Markdown
     // is total)"*. It was false for the empty body: `doc: block+` (§3.1) means a
     // doc needs at least one block, and remark-parse produces none for `''`.
     // The placement call was that the fix is **not** in this package —
@@ -364,9 +363,9 @@ describe('§4 · the total-parse claim, and the one body that breaks it', () => 
     // the document, and the policy belongs to §4's `setContent` (Tiptap's own
     // answer is to ensure one block at the editor level)"*.
     //
-    // **Why an earlier change put it in `parse` instead.** The cost of the other placement is a
+    // **Why it is in `parse` instead.** The cost of the other placement is a
     // **precondition on a function**: `parse('')` would keep throwing, and every
-    // caller — the Tiptap adapter that does not exist yet, and every future
+    // caller — the Tiptap adapter, and every future
     // consumer of `parseWithDiagnostics` — would have to remember to pre-normalise
     // an empty body. That is the defect class exactly (*"a check this function
     // can forget"*), and the argument against it does not survive the round trip:

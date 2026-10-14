@@ -21,10 +21,10 @@
  * ## Saving to a folder another writer may share
  *
  * The desktop and the Caotang MCP server can both write one folder. `saveFolder` writes only when the folder still holds the `caotang.json` this session last loaded or saved **from that
- * folder** (a copy taken from another folder is no baseline for it), and every document and codex file this session held (DS-1): a file another program changed, removed or added is
+ * folder** (a copy taken from another folder is no baseline for it), and every document and codex file this session held: a file another program changed, removed or added is
  * refused, named by its title, and written only when the writer says to replace it. The digests of those files are taken when the folder is opened and after each save (folder-digests.ts).
  * It never removes a document file the session did not delete (integrity-model.ts, write.ts `pruneDocumentIds`), and it never writes a project id the folder does not already hold.
- * A folder whose project this browser already keeps opens as that project when the stored copy is the same book (the same manifest, document text and codex entries), and the folder is then saved back to. A folder whose project another tab holds is refused, as the projects list refuses it. A folder whose project this browser keeps in a different version is not copied without a word: the writer is asked whether to use the folder's version, keep this browser's version and save it to the folder, or open the folder as a second copy with its own id, which cannot be saved into the folder (`answerFolderDiffers`, DS-2). A project remembers the folder it was saved to or opened from as its own (folder-memory.ts), so the projects list can reopen it.
+ * A folder whose project this browser already keeps opens as that project when the stored copy is the same book (the same manifest, document text and codex entries), and the folder is then saved back to. A folder whose project another tab holds is refused, as the projects list refuses it. A folder whose project this browser keeps in a different version is not copied without a word: the writer is asked whether to use the folder's version, keep this browser's version and save it to the folder, or open the folder as a second copy with its own id, which cannot be saved into the folder (`answerFolderDiffers`). A project remembers the folder it was saved to or opened from as its own (folder-memory.ts), so the projects list can reopen it.
  * A session that a stale write has stopped saves nothing to a folder either.
  */
 
@@ -137,7 +137,7 @@ async function leaseFor(projectId: string): Promise<ProjectLease> {
   const lease = await acquireProjectLease(projectId);
   if (lease === null) throw new ProjectOpenElsewhereError(projectId);
   // The lease is recorded as this page's until it is given back, so the projects list does not take a project this page is still closing
-  // for one another tab holds (`openElsewhere`, DS-5).
+  // for one another tab holds (`openElsewhere`).
   let given: () => void = () => undefined;
   const back = new Promise<void>((resolve) => {
     given = resolve;
@@ -265,7 +265,7 @@ export interface PendingRecovery {
   readonly folder: DirectoryHandleLike | null;
   /**
    * The digest of each document and codex file the folder held when the offer was read (folder-digests.ts). Accepting the offer checks the
-   * folder against these before it writes, so a file another program changed since is named, not replaced (DS-1). Empty for a bundle.
+   * folder against these before it writes, so a file another program changed since is named, not replaced. Empty for a bundle.
    */
   readonly digests: ReadonlyMap<string, string>;
 }
@@ -367,7 +367,7 @@ export async function openProject(store: RuntimeStore, projectId: string): Promi
 
 /**
  * Removes a project from this browser. The removal takes the project's lease, as an open does, so a project another tab has open is
- * not deleted under that tab: the removal is refused with the reason (DS-5). The lease is given back once the project is gone.
+ * not deleted under that tab: the removal is refused with the reason. The lease is given back once the project is gone.
  */
 export async function removeProject(store: RuntimeStore, projectId: string): Promise<void> {
   // A session on this page that still holds the project is closing (`heldHere`): the removal waits for it, rather than calling it another tab.
@@ -395,7 +395,7 @@ export async function removeProject(store: RuntimeStore, projectId: string): Pro
 
 /**
  * Whether another tab holds the project open, so that it cannot be removed from here. The list asks before it offers Remove, so it
- * can say why instead of offering a removal that would be refused (DS-5). The lease is taken for a moment and given back. A lease this page
+ * can say why instead of offering a removal that would be refused. The lease is taken for a moment and given back. A lease this page
  * holds is not another tab's: the list is shown only once the workspace has left its project, so a session that holds one is closing.
  */
 export async function openElsewhere(projectId: string): Promise<boolean> {
@@ -534,7 +534,7 @@ async function readManifestText(fs: ArtifactFs): Promise<string | null> {
 
 /**
  * The ids of the body nodes a state's tree names, in tree order: a document or a dialogue container, each of which has a body file
- * in `docs/` (project-format §3). A folder copy holds these, so a container deleted from the tree is a deletion the save removes (DS-3).
+ * in `docs/` (project-format §3). A folder copy holds these, so a container deleted from the tree is a deletion the save removes.
  */
 function documentIdsOf(state: ProjectState): string[] {
   return state.manifest.tree.filter((node) => isBodyType(node.type)).map((node) => node.id);
@@ -543,7 +543,7 @@ function documentIdsOf(state: ProjectState): string[] {
 /**
  * Records the folder copy a session holds: the folder's manifest text, the document ids the copy names, and the digests of the folder's
  * document and codex files with the titles they had (`ProjectSession.setFolderBaseline`, `FolderBaseline`). Every place that takes a
- * folder copy goes through here, so the copy is one record on the session and `saveFolder` checks the folder against it (DS-1).
+ * folder copy goes through here, so the copy is one record on the session and `saveFolder` checks the folder against it.
  */
 function holdFolderCopy(
   session: ProjectSession,
@@ -591,7 +591,7 @@ async function rememberedCopyFor(projectId: string, root: DirectoryHandleLike): 
   };
 }
 
-/** The body nodes a folder copy named that the state no longer holds: the only files a save into that folder may remove (DS-3). */
+/** The body nodes a folder copy named that the state no longer holds: the only files a save into that folder may remove. */
 function deletedSince(copy: FolderBaseline, state: ProjectState): string[] {
   const present = new Set(documentIdsOf(state));
   return copy.documentIds.filter((id) => !present.has(id));
@@ -691,7 +691,7 @@ function sameBook(stored: ProjectState, folder: ProjectState): boolean {
 
 /**
  * A state's manifest as the writer serializes it, with `modifiedAt` set to `stamp`, so two manifests compare without the save's stamp. Two
- * things are left out, because they are not the book (DS-2): `derived` is a cache that a load which finds it empty rebuilds with a new stamp
+ * things are left out, because they are not the book: `derived` is a cache that a load which finds it empty rebuilds with a new stamp
  * (read.ts), so a folder's copy never carries the stored copy's; and the serializer keeps each node's keys in the order the object was made
  * in, which a project made in this browser and the same project read from its folder do not share, so the keys are sorted.
  */
@@ -711,7 +711,7 @@ function sortedJson(value: unknown): string {
 }
 
 /**
- * Opens a project this browser already keeps, as the folder's own session (DS-2): the stored state, the folder attached for its exports and
+ * Opens a project this browser already keeps, as the folder's own session: the stored state, the folder attached for its exports and
  * findings, and the pictures the folder holds. A project another tab holds is refused with `ProjectOpenElsewhereError`, as the projects list
  * refuses it: the folder is not opened again as a second copy of a book that tab already has open.
  */
@@ -827,7 +827,7 @@ export async function openFolder(store: RuntimeStore, root: DirectoryHandleLike)
   const fs = folderArtifactFs(root);
   const onDisk = await readManifestText(fs);
   // The folder's document and codex files are digested before anything is read, so a change made while the project is read is one the
-  // first save sees, not one this session is taken to have loaded (DS-1).
+  // first save sees, not one this session is taken to have loaded.
   let digests = await projectFileDigests(fs);
   let loaded: LoadResult;
   try {
@@ -851,7 +851,7 @@ export async function openFolder(store: RuntimeStore, root: DirectoryHandleLike)
     } else {
       const report = emptyReport();
       try {
-        // A backfill is not a save of the writer's deletions, so it removes no file from the folder (DS-1): an empty list says so. Each file
+        // A backfill is not a save of the writer's deletions, so it removes no file from the folder: an empty list says so. Each file
         // is checked against the digest taken above, as a save checks it.
         await writeProject(fs, copyState(loaded.state), { now: new Date(), pruneDocumentIds: [], expectedDigests: digests, report });
         baselineText = (await readManifestText(fs)) ?? '';
@@ -862,7 +862,7 @@ export async function openFolder(store: RuntimeStore, root: DirectoryHandleLike)
       digests = await digestsAfterWrite(fs, digests, report);
     }
   }
-  // A project this browser keeps that is the same book as the folder opens as the folder's own session (DS-2). Otherwise the folder opens
+  // A project this browser keeps that is the same book as the folder opens as the folder's own session. Otherwise the folder opens
   // as a copy, which cannot be saved back into the folder. The folder's pictures go into the browser's copy as the project opens, so a
   // later open from the list (no folder) reads them too.
   const pictures = await folderPictures(root);
@@ -888,7 +888,7 @@ export async function openFolder(store: RuntimeStore, root: DirectoryHandleLike)
       },
     };
   }
-  // A stored copy of this book opens as the folder's own session, and another tab's hold on it refuses the open (openStored, DS-2).
+  // A stored copy of this book opens as the folder's own session, and another tab's hold on it refuses the open (openStored).
   const opened =
     route === 'own'
       ? await openStored(store, projectId, root, { notices, droppedFields, folderLog }, pictures)
@@ -927,7 +927,7 @@ export interface FolderDiffers {
  * - `keep-browser`: this browser's copy opens with the folder attached, and `saveToFolder` asks the workspace to save it there. The save is
  *   checked against the folder as it stands, with this browser's version of each file it holds (`keepBrowserDigests`), so a document the
  *   save would write over is named in the changed-documents question first, and nothing is written until the writer answers.
- * - `separate-copy`: the folder opens as a second project with its own id, as it did before the question existed (adopt, DS-2).
+ * - `separate-copy`: the folder opens as a second project with its own id, as it did before the question existed (adopt).
  */
 export async function answerFolderDiffers(store: RuntimeStore, differs: FolderDiffers, answer: FolderDiffersAnswer): Promise<Opened> {
   const { root } = differs;
@@ -948,7 +948,7 @@ export async function answerFolderDiffers(store: RuntimeStore, differs: FolderDi
       folderCopy: await rememberedFolderCopy(differs.projectId),
       copiedFrom: await copiedFromOf(differs.projectId),
     };
-    // The removal takes the project's lease, so a copy another tab has open is refused here, before anything changes (DS-5).
+    // The removal takes the project's lease, so a copy another tab has open is refused here, before anything changes.
     await removeProject(store, differs.projectId);
     const log = [...differs.folderLog, ...linesNotHeld(storedLog, differs.folderLog)];
     let opened: Opened;
@@ -1045,7 +1045,7 @@ export async function completeRecovery(
     });
     // The baseline is always the offer's text, so `unknown` cannot come back. It is a change if it ever did.
     if (verdict !== 'write') return { kind: 'refused', reason: verdict === 'locked' ? 'locked' : 'changed', files: [] };
-    // The document and codex files are checked against the digests the offer read, as a save checks them (DS-1): a file another program
+    // The document and codex files are checked against the digests the offer read, as a save checks them: a file another program
     // changed since is named, and the recovery writes nothing.
     const drift = driftOf(recovery.digests, await projectFileDigests(recovery.fs));
     if (hasDrift(drift)) return { kind: 'refused', reason: 'files', files: folderChanges(drift, offer.state, new Map()) };
@@ -1084,7 +1084,7 @@ export type FolderFileChange = ProjectFileChange;
 
 /**
  * The changes a drift names, in the folder question's words: a document by its title, a codex entry by its name, and a file this copy does
- * not hold described, so no node id and no file name reaches the writer (DS-1). The wording is the store's, which the MCP server shares.
+ * not hold described, so no node id and no file name reaches the writer. The wording is the store's, which the MCP server shares.
  */
 export function folderChanges(drift: FolderDrift, state: ProjectState, heldTitles: ReadonlyMap<string, string>): FolderFileChange[] {
   return projectFileChanges(drift, state, heldTitles, 'this copy');
@@ -1106,7 +1106,7 @@ export type FolderSaveOutcome =
       readonly removed?: true;
     };
 
-/** What a copy opened from a folder says when it is asked to save into that folder (DS-2): a copy of the book, not the book. */
+/** What a copy opened from a folder says when it is asked to save into that folder: a copy of the book, not the book. */
 const COPY_CANNOT_SAVE_INTO_FOLDER =
   'This copy cannot be saved into that folder. It is a second copy of the book the folder holds, and saving it there would change the folder’s book into this copy. Nothing was written. Save this copy to a new folder, or export a backup.';
 
@@ -1129,7 +1129,7 @@ export async function saveFolder(
   const onDisk = await readManifestText(fs);
   // Whose project the folder holds (`folderProjectRoute`). A separate copy made from the folder's own book has an id of its own (adopt), and
   // writing it there would turn the folder's book into the copy, so that save is refused, before anything is written and whatever the
-  // writer answers (DS-2). Any other project is asked about (`unknown`), and this project's own earlier save is never called another project.
+  // writer answers. Any other project is asked about (`unknown`), and this project's own earlier save is never called another project.
   const route = folderProjectRoute({
     folderId: onDisk === null ? undefined : projectIdOf(onDisk),
     ownId: session.state.manifest.project.id,
@@ -1142,7 +1142,7 @@ export async function saveFolder(
   const copy = session.folderBaseline();
   let held = copy !== null && (await isSameFolder(copy.folder, root)) ? copy : null;
   if (held === null && route === 'own') held = await rememberedCopyFor(session.projectId, root);
-  // What the folder holds now, digested before anything is compared or written, so the check and the write see the same files (DS-1).
+  // What the folder holds now, digested before anything is compared or written, so the check and the write see the same files.
   const before = await projectFileDigests(fs);
   const files = held === null ? [] : folderChanges(driftOf(held.digests, before), session.state, held.titles);
   const verdict = folderSaveVerdict({
@@ -1168,7 +1168,7 @@ export async function saveFolder(
       now: new Date(),
       // Only the copy's own folder can hold documents this session deleted. Any other folder keeps every file it has.
       pruneDocumentIds: held === null ? [] : deletedSince(held, session.state),
-      // Each file is checked against the digest the folder held just before this save, as it is written or removed (DS-1).
+      // Each file is checked against the digest the folder held just before this save, as it is written or removed.
       expectedDigests: before,
       report,
     });

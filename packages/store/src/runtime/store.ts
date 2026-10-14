@@ -107,7 +107,7 @@ export const SESSION_PROJECT_INDEX = 'byProject';
  * re-stored — the checkpoint *references the existing snapshot*. Keying on the
  * revision a body was captured at makes that dedupe a property of the key: the
  * same revision cannot be written twice, so "re-stored" is impossible rather
- * than merely avoided. An earlier change owns the eviction ladder that walks these rows.
+ * than merely avoided. `retention.ts` owns the eviction ladder that walks these rows.
  */
 export const SNAPSHOT_STORE = 'snapshots';
 /** Index for "every snapshot of project P", so the retention sweep needs no key range. */
@@ -238,7 +238,7 @@ export class ProjectNotFoundError extends Error {
 }
 
 /**
- * This tab's connection to the runtime store was closed because another tab opened the database at a newer version (DS-6).
+ * This tab's connection to the runtime store was closed because another tab opened the database at a newer version.
  *
  * A newer build of Caotang has upgraded the store, and this build does not know that schema, so it cannot write to it. The browser
  * refuses to reopen at this build's version for the same reason, so the way forward is a reload of this tab, which opens the store
@@ -483,7 +483,7 @@ export function openRuntimeStore(
       // Another tab asking for a newer version must not be blocked by this
       // connection holding the old one open forever, so the cooperative half of
       // the version-change handshake lives here. The connection is marked first, so
-      // a later write says it was closed by an upgrade (RuntimeStoreStaleError, DS-6).
+      // a later write says it was closed by an upgrade (RuntimeStoreStaleError).
       db.onversionchange = () => {
         upgradedConnections.add(db);
         db.close();
@@ -672,20 +672,17 @@ export function commitProject(store: RuntimeStore, commit: ProjectCommit): Promi
         }
         projects.put(row);
         for (const doc of commit.createDocuments ?? []) {
-          // `add`, not `put` (An earlier change; found by the 2026-09-30 review, a review finding
-          // 2). A `put` at a key that is taken overwrites the row, so a
-          // `createDocuments` entry naming a document that already exists
-          // replaced its body and restarted its revision at 0 — the one failure
-          // the counter exists to prevent, and the
-          // exact opposite of what this interface's own comment promised, which
-          // is what made it a trap rather than a bug: the documentation told the
-          // M2 caller the store had this covered.
+          // `add`, not `put`. A `put` at a key that is taken overwrites the row, so a
+          // `createDocuments` entry naming a document that already exists would
+          // replace its body and restart its revision at 0 — the one failure
+          // the counter exists to prevent, and the exact opposite of what this
+          // interface's own comment promises its callers.
           //
-          // An earlier change made the same move for `sessions.jsonl`, where a `put` would have
-          // rewritten a line the file is append-only by definition. The point in
+          // `sessions.jsonl` makes the same move, where a `put` would have
+          // rewritten a line in a file that is append-only by definition. The point in
           // both cases is that the rule becomes **a constraint the runtime
           // enforces** rather than a check this function might forget or
-          // reorder — the same reason an earlier change puts hard-deny ahead of the
+          // reorder — the same reason the permission gate puts hard-deny ahead of the
           // inheritance branch instead of inside it.
           //
           // The refusal aborts the transaction, so the manifest swap staged
@@ -1010,7 +1007,7 @@ export function readSessions(store: RuntimeStore, projectId: string): Promise<Se
  *
  * **What this refuses, exactly: a second capture at a revision already held.**
  * The body is validated for nothing else — no size limit (rule 1 is "full bodies,
- * not deltas"), and **no check that the document has a row**. A review measured it: a
+ * not deltas"), and **no check that the document has a row**. Measured: a
  * capture for a `docId` with no row is accepted and persisted, because the
  * transaction spans `[SNAPSHOT_STORE]` alone. The bus path cannot reach that
  * (commands.ts's `requireDocument` throws first), but this function is exported

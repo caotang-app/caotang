@@ -1,5 +1,5 @@
 /**
- * The board's gestures and its header, in the app (storyboard.md §3.1, media-track M3). A card dragged onto another takes its
+ * The board's gestures and its header, in the app (storyboard.md §3.1). A card dragged onto another takes its
  * place through `binder.move`, the Earlier and Later buttons still move a card, and the header gives the animatic total and how
  * many shots are left out of it for want of a duration.
  */
@@ -58,7 +58,7 @@ test('the board header gives the animatic total, and how many shots are left out
   await expect(page.locator('.sb-bar')).toContainText('4 s of animatic, with 1 shot left out for want of a duration');
 });
 
-test('an empty storyboard beside one scene offers to derive that scene, and the offer sends its request to the agent (M3)', async ({ page }) => {
+test('an empty storyboard beside one scene offers to derive that scene, and the offer sends its request to the agent', async ({ page }) => {
   // The request goes to the agent, so the endpoint is the fake one (endpoint.ts), and no network is used.
   await fakeEndpoint(page, () => JSON.stringify({ reply: 'Done.' }));
   await useFakeEndpoint(page);
@@ -85,7 +85,7 @@ test('an empty storyboard beside one scene offers to derive that scene, and the 
 
 const DERIVE_SCENE = 'INT. LIGHTHOUSE - NIGHT\n\nELENA\nIs anyone there?\n';
 
-test('the derive the offer sends is planned, and Approve puts its shots in the scene’s own shots folder (M3)', async ({ page }) => {
+test('the derive the offer sends is planned, and Approve puts its shots in the scene’s own shots folder', async ({ page }) => {
   // The model's reply to the derive call is its shot list, which quotes the scene's one line of dialogue. The planner's reply is the
   // derive step, which names the scene by its title, as the offer's request does. Nothing else is asked of the endpoint.
   const shotList = {

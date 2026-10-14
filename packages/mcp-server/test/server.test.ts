@@ -61,11 +61,11 @@ const WRITE_TOOLS = TOOL_METADATA.filter((meta) => meta.risk === 'write-auto' ||
 /**
  * The tools this server does not list, because no port answers them here and an unwired tool is never advertised
  * (tools.ts, the `wired` check). The first three draft with Caotang's own provider, which this server does not hold.
- * m8 adds `coherence.review` (coherence.md §5.3), whose review pipeline calls the provider. m8-integration adds three
- * more: `shots.derive` (its proposal is staged by a model) and `prompt.draft` (a model). `shots.annotate` is not here: the
+ * `coherence.review` (coherence.md §5.3) is here too, because its review pipeline calls the provider, and so are
+ * `shots.derive` (its proposal is staged by a model) and `prompt.draft` (a model). `shots.annotate` is not here: the
  * harness completes the store registry this server passes it with the shot commands (runtime.ts, completeRegistry), so
  * the write-auto tool is wired, and it is listed on a server started with --allow-writes, as any write is.
- * m8's media track adds `dialogue.draft` (dialogue-narrative.md §7): it writes the Ink the loop stages, so it is unwired
+ * `dialogue.draft` (dialogue-narrative.md §7) writes the Ink the loop stages, so it is unwired
  * until a provider supplies it. Its read, `dialogue.table`, is wired and listed. The video-prompt-pack module's
  * `prompt.variant` (video-prompt-pack.md §6) is a read that makes a model call, so it has no port here either, and it
  * is not listed. The name is kept as the list it has always been; the reasons are the comment's.

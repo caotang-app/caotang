@@ -28,7 +28,7 @@ export function firstPicture<F extends { readonly type: string; readonly name: s
 
 /**
  * Where the project's list of pictures stands: still loading, listed, or failed to list. A picture is only known to be missing once
- * the list has come back without it, so the note below waits for `listed` (F-08).
+ * the list has come back without it, so the note below waits for `listed`.
  */
 export type PictureListing = 'pending' | 'listed' | 'failed';
 
@@ -53,7 +53,7 @@ export interface HeldListing<Source, Item> {
 /**
  * What the asset hook (`useAssetListing`) shows, from the listing it holds. With no folder nothing can be listed, so it is `failed`. A
  * listing of another folder is not shown, and reads as `pending`. A listing taken at an earlier session version is shown, but reads as
- * `pending`, so a picture added since is not called missing before the new listing has it (F-08).
+ * `pending`, so a picture added since is not called missing before the new listing has it.
  */
 export function shownListingOf<Source, Item>(
   source: Source | undefined,

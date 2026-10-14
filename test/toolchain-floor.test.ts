@@ -1,41 +1,26 @@
 /**
- * The toolchain floor an earlier change landed, and the two facts `pnpm audit` cannot see.
+ * The toolchain floor, and the two facts `pnpm audit` cannot see.
  *
  * ## Why this file exists
  *
- * An earlier change moved three declarations in the root manifest —
- * `vitest` 2.1.9 → 5.0.3, `vite` `^6.0.7` → `^6.4.0`, `engines.node` → vitest 5's
- * own floor — and cleared all seven advisories in one command. Its acceptance
- * criterion 4 required the vulnerable subtree's absence to be *"proved rather than
- * asserted"*, and its Delegated 2 recorded the proof as **a lockfile read plus
- * `pnpm audit`**, declining to add a test.
+ * The root manifest pins a toolchain floor — `vitest`, `vite`, and `engines.node`
+ * set to vitest's own floor — that keeps a vulnerable subtree out of the install.
+ * That absence should be *proved rather than asserted*, and a lockfile read plus
+ * `pnpm audit` is not a proof that keeps running:
  *
- * Two things were true of that record when it was written and one of them is no
- * longer:
+ * 1. **A guard belongs in the root suite.** `vitest.config.ts` collects the root
+ *    `test` suite alongside the package tests, because *"a guard that verify never
+ *    collects is a guard that is green because it never ran."* So this check needs
+ *    no workspace package of its own.
  *
- * 1. **The stated blocker was removed six hours later.** Delegated 2's reason for
- *    adding no test was that *"a lockfile-reading unit test would be scoped by the
- *    test glob to `packages/*`...*, so it would have needed a new workspace package
- *    to live in — which is a different slice."* That was correct at 04:05, when
- *    `vitest.config.ts` collected package tests only. At 10:32 the same day, review
- *    A review added the root `test` suite to that `include` — and wrote the lesson into the
- *    comment beside it: *"a guard that verify never collects is a guard that is green
- *    because it never ran."* The premise died; the conclusion stayed on the page, so
- *    a reader today would re-decide on a false fact. This file is the correction: the
- *    guard lives in the root suite, so **no new package was needed**, which was the
- *    whole of the objection.
- *
- * 2. **The nominated continuous check is blind to the trap.** Delegated 2 records
- *    that *"the continuous check is `pnpm audit` itself"*, and the commit message
- *    names what an earlier change avoided: `@vitejs/plugin-react` 6.1.1 peers `vite ^8.0.0` and
- *    would have turned a three-declaration slice into a Vite-major migration.
+ * 2. **`pnpm audit` is blind to the trap.** `@vitejs/plugin-react` 6.1.1 peers
+ *    `vite ^8.0.0`, so adopting it forces a Vite-major migration.
  *    **That is a peer-range fact, and no advisory database will ever carry it.**
  *    Measured in a clean-room `%TEMP%` project, not argued: `pnpm add -D
  *    @vitejs/plugin-react@6.1.1` followed by `pnpm audit` reports
- *    **`No known vulnerabilities found`** — the exact version an earlier change avoided audits
- *    clean, on its own. A clean `pnpm audit` therefore proves nothing about the
- *    constraint the commit was written around, which makes the peer assertions
- *    below the part of this file that is not a duplicate of `pnpm audit`.
+ *    **`No known vulnerabilities found`**. A clean `pnpm audit` therefore proves
+ *    nothing about that constraint, which makes the peer assertions below the part
+ *    of this file that is not a duplicate of `pnpm audit`.
  *
  * ## The technique
  *
@@ -48,9 +33,9 @@
  * these assertions pass on its merits instead of needing an exemption.
  *
  * That is also why no version is written as a literal here. docs/decisions.md
- * (14:00) already corrected *"plugin-react stays on 4.x"* to its reason — **the
- * reason is durable and the version is not** — and a guard built on the version
- * would re-freeze the over-broad form the same entry rejected.
+ * states the plugin-react constraint as its reason, not as *"stays on 4.x"* —
+ * **the reason is durable and the version is not** — and a guard built on the
+ * version would freeze the over-broad form that entry rejects.
  *
  * Every absence assertion in this file passes vacuously against an empty parse, so
  * the parse is asserted first, in its own test, exactly as the queue guard does.
@@ -69,10 +54,10 @@ const manifest = JSON.parse(readFileSync(resolve(repoRoot, 'package.json'), 'utf
 /**
  * The build allowlist, read from **pnpm-workspace.yaml**.
  *
- * It was a `pnpm` block in package.json until 2026-10-02, and reading it from
- * there is now a silent wrong answer rather than an error: pnpm 12 does not read
- * that key at all, so a manifest that still carried it would satisfy this
- * helper's old home while pnpm ignored the entry entirely — and, as measured,
+ * Not from a `pnpm` block in package.json: reading it from there would be a
+ * silent wrong answer rather than an error, because pnpm 12 does not read that
+ * key at all, so a manifest carrying it would satisfy such a helper while pnpm
+ * ignored the entry entirely — and, as measured,
  * failed the install with ERR_PNPM_IGNORED_BUILDS.
  *
  * Parsed by hand because the repo reads its own lockfile by hand for the same
@@ -193,45 +178,45 @@ describe("the toolchain floor, read out of the lockfile", () => {
     // `absent` claim below is satisfied by an empty map, so without this a broken
     // parser would report a clean tree for the wrong reason.
     //
-    // It earned its keep on 2026-10-02: pnpm 12 writes the lockfile as TWO
-    // documents (see test/lockfile.ts), this file read the first, and the
-    // control reported `expected 15 to be greater than or equal to 300`. The
-    // guard below the control could not have noticed on its own — every
+    // pnpm 12 writes the lockfile as TWO documents (see test/lockfile.ts); a
+    // reader of the first alone sees about 15 resolutions, and this control
+    // fails with `expected 15 to be greater than or equal to 300`. The
+    // guard below the control could not notice that on its own — every
     // assertion it makes is an `absent` claim, and an empty map satisfies all
     // of them.
     expect(resolutions.length).toBeGreaterThanOrEqual(300);
     for (const name of ['vitest', 'vite', '@vitejs/plugin-react', 'typescript']) {
       expect(resolvedVersions(name), `${name} must resolve somewhere in the tree`).not.toEqual([]);
     }
-    // Spot-check the two exact resolutions the commit message names.
+    // Spot-check the exact vitest resolution the floor pins.
     expect(resolvedVersions('vitest')).toEqual(['5.0.3']);
   });
 
-  it("carries no resolution of vite below major 6 -- criterion 4's subtree absence", () => {
-    // An earlier change claimed `vite@5.4.21` and `esbuild@0.21.5` are absent because *the edge
-    // that nested them is gone*, not because anything was upgraded past them. The
-    // durable form of that claim is a floor, not two versions: a later toolchain
-    // slice may move either one upward, and must not move either one downward
-    // without deciding to.
+  it('carries no resolution of vite below major 6 -- the vulnerable subtree stays absent', () => {
+    // `vite@5.4.21` and `esbuild@0.21.5` are absent because *the edge that nested
+    // them is gone*, not because anything was upgraded past them. The durable
+    // form of that claim is a floor, not two versions: a later toolchain change
+    // may move either one upward, and must not move either one downward without
+    // deciding to.
     const vite = resolvedVersions('vite');
     expect(vite.filter((v) => majorOf(v) < 6), `vite below 6 resolved: ${vite.join(', ')}`).toEqual([]);
 
     // The esbuild half is now stronger than a version floor: since Vite 8,
     // **esbuild is not in the tree at all** (it bundled with esbuild; Vite 8
-    // bundles with rolldown/oxc). Measured 2026-10-02 — 0 resolutions in the
-    // lockfile, and `pnpm install` completes with no build allowlist, which is
-    // why pnpm-workspace.yaml no longer names it. Asserted as an absence rather
-    // than left to the floor above, because "esbuild is gone entirely" is the
-    // fact a future slice would otherwise have to re-derive.
+    // bundles with rolldown/oxc). There are 0 resolutions in the lockfile, and
+    // `pnpm install` completes with no build allowlist, which is why
+    // pnpm-workspace.yaml does not name it. Asserted as an absence rather than
+    // left to the floor above, because "esbuild is gone entirely" is the fact a
+    // future change would otherwise have to re-derive.
     expect(resolvedVersions('esbuild'), 'esbuild no longer resolves: Vite 8 bundles with rolldown/oxc').toEqual(
       [],
     );
   });
 
   it('resolves one vite major, because a second one is a nested vulnerable edge again', () => {
-    // The subject is **one** major, not a particular one. An earlier change wrote `[6]` as a
-    // literal, and the Vite-8 toolchain slice (2026-10-02) failed it for being a
-    // fossil: the rule is "no second, nested vite edge", so the number to
+    // The subject is **one** major, not a particular one. A literal such as `[6]`
+    // would fail the next Vite-major move for being a fossil: the rule is
+    // "no second, nested vite edge", so the number to
     // compare against is the major the root manifest *declares*, which moves
     // only when someone decides to move it.
     const declared = majorOf(manifest.devDependencies.vite.replace(/^\D*/, ''));
@@ -254,8 +239,8 @@ describe("the toolchain floor, read out of the lockfile", () => {
   it('has plugin-react inside its own declared vite peer range -- the trap pnpm audit cannot see', () => {
     // The constraint, stated as its reason. `@vitejs/plugin-react` 4.7.0 admits
     // vite majors {4,5,6,7}; 6.1.1 admits only {8} and would force the root Vite
-    // major with it. Asserting "stays on 4.x" would freeze the version the 14:00
-    // entry rejected; asserting the peer range keeps the real rule and lets the
+    // major with it. Asserting "stays on 4.x" would freeze the version the
+    // decisions entry rejects; asserting the peer range keeps the real rule and lets the
     // Vite-8 migration pass on its merits.
     const viteMajor = majorOf(resolvedVersions('vite')[0]!);
     const version = resolvedVersions('@vitejs/plugin-react')[0]!;
@@ -276,19 +261,17 @@ describe("the toolchain floor, read out of the lockfile", () => {
     expect(manifest.engines.node).toBe(declaredEngines('vitest', resolvedVersions('vitest')[0]!));
   });
 
-  it('names no build-allowlist entry that is not installed -- Delegated 1, as a rule', () => {
-    // An earlier change kept `esbuild` in the build allowlist and, correctly, argued from the
-    // *package* rather than from the version that had just left: dropping the
-    // entry would suppress a build step the install still needs. This states the
-    // conditional itself, so a later toolchain slice that removes a package is
-    // told to remove the entry too.
+  it('names no build-allowlist entry that is not installed', () => {
+    // A build-allowlist entry is argued from the *package*, not from a version:
+    // dropping an entry the install still needs would suppress its build step.
+    // This states the conditional itself, so a later toolchain change that
+    // removes a package is told to remove the entry too.
     //
-    // Two facts moved it, both on 2026-10-02. **The allowlist is no longer in
-    // package.json** — pnpm 12 reads it from pnpm-workspace.yaml, and leaving it
-    // in package.json made pnpm treat esbuild's install script as an *ignored*
-    // build (ERR_PNPM_IGNORED_BUILDS). And **esbuild is no longer installed at
-    // all**, since Vite 8 bundles with rolldown/oxc — so the entry is gone rather
-    // than stale, and this asserts the rule against a list that may be empty.
+    // **The allowlist lives in pnpm-workspace.yaml**, not package.json — pnpm 12
+    // reads it from there, and an entry left in package.json makes pnpm treat the
+    // install script as an *ignored* build (ERR_PNPM_IGNORED_BUILDS). And
+    // **esbuild is not installed at all**, since Vite 8 bundles with
+    // rolldown/oxc — so this asserts the rule against a list that may be empty.
     const allowlist = buildAllowlist();
     const orphan = allowlist.filter((name) => resolvedVersions(name).length === 0);
     expect(orphan, 'the build allowlist names packages that are not resolved').toEqual([]);

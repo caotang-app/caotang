@@ -1,5 +1,5 @@
 /**
- * Crockford base32 ids — [project-format.md §2 / A4](docs/architecture/project-format.md).
+ * Crockford base32 ids — [project-format.md §2](docs/architecture/project-format.md).
  *
  * One generator family for every id in the system:
  *   `p_` project · `n_` tree node · `c_` codex entry · `cmd_` command
@@ -98,7 +98,7 @@ function encode(bytes: Uint8Array, length: number): string {
  * Generate an id, e.g. `newId('n')` → `n_7K2QX9M4A1`.
  *
  * Callers that need a hard uniqueness guarantee pass `taken`; the generator then
- * re-rolls on collision (project-format A4: collision-checked at generation).
+ * re-rolls on collision (project-format.md §2: collision-checked at generation).
  */
 export function newId(
   prefix: IdPrefix,

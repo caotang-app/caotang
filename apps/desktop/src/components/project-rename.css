@@ -1,4 +1,4 @@
-/* The rename form on the projects list (m4 polish). It takes the row's place while one project is being renamed, and uses the
+/* The rename form on the projects list. It takes the row's place while one project is being renamed, and uses the
    workspace's own tokens, so both themes read correctly. */
 
 .project-row.is-renaming {

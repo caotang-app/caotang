@@ -1,5 +1,5 @@
 /**
- * The asynchronous dispatch that `mcp.invoke` needs (m8-integration; extensibility §6; command-bus §3, §4, §7, §8).
+ * The asynchronous dispatch that `mcp.invoke` needs (extensibility §6; command-bus §3, §4, §7, §8).
  *
  * The synchronous `execute()` keeps refusing a promise, which A2 requires. `executeAsync()` runs the same steps
  * and awaits the apply. These tests pin what the awaited path must keep: the gate reads the risk of the call

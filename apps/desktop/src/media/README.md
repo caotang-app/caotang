@@ -1,4 +1,4 @@
-# Media views (media-track M1–M3)
+# Media views (screenplay, branching dialogue, storyboard)
 
 React views for the three media engines in the app: the screenplay scene, the storyboard board (with the video prompt
 pack as its second tab) and the dialogue container. The centre pane mounts them (`components/Workspace.tsx`), and the

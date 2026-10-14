@@ -10,7 +10,7 @@
  * `_gone and struck together_`, which re-parses as a **single** emphasis: a
  * different document, every character intact, the run boundary gone. Neither
  * channel said anything (`warnings` and `dialect` were both empty), which is the
- * exact failure an earlier change existed to remove.
+ * exact failure this walk exists to remove.
  *
  * ## Why this file exists separately from `degrade.test.ts`
  *
@@ -21,9 +21,9 @@
  * it is "the things that change shape", and this one is the only row whose
  * construct is in the **exact** class by type and degrade by *condition*.
  *
- * ## The premise this row had to be corrected on, and why the correction is the test
+ * ## The premise that is easy to get wrong, and why the right one is the test
  *
- * The row as cut said *"three sibling `emphasis` nodes collapse"*. Measured, the
+ * It is tempting to read the loss as *"three sibling `emphasis` nodes collapse"*. Measured, the
  * mdast is **nested** — one `emphasis` inside another — and the two shapes behave
  * **oppositely**:
  *
@@ -32,7 +32,7 @@
  * - `_a *b* c_` — **nested** → one run, the boundary lost, and a sibling-keyed
  *   check stays silent here.
  *
- * So a check written to the row's wording would be wrong in *both* directions at
+ * So a check written to the sibling reading would be wrong in *both* directions at
  * once, and would still pass a test that only asserted "a warning was emitted".
  * Every test below is therefore written against the **shape**, and the engine's
  * own capability is asserted first, so the criterion cannot be met by reporting a
@@ -394,7 +394,7 @@ describe('the warning is derived per load, like every other one', () => {
 
 describe('merged runs: three measurements that used to live only in prose', () => {
   it('the array is handlers-then-structural, and the banner shows it', async () => {
-    // **The placement an earlier change chose, measured — and the reason a document-order claim
+    // **The placement of the walk, measured — and the reason a document-order claim
     // somewhere else went false.** `pipeline.ts` calls this walk *after* the
     // compile, so the merge warnings land at the end of the array however the
     // document is ordered. Put the merged run at the top and a degrade construct
@@ -438,7 +438,7 @@ describe('merged runs: three measurements that used to live only in prose', () =
     expect(dialect).toEqual([]);
 
     // **Both halves alone, or the assertion above says nothing.** The canonical
-    // spelling with a nested run is the case an earlier change designed the suppression for
+    // spelling with a nested run is the case the suppression was designed for
     // (`strike-in-emphasis`, on §5's sweep list): no notice, correctly. The
     // foreign spelling with no nested run still gets one, which is the reason
     // The exclusion of these three types from `DEGRADE_MDAST_TYPES` was right.

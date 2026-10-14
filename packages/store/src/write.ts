@@ -15,7 +15,7 @@
  *      which §2 step 4 imports as "Recovered" rather than discards. The reverse
  *      order would leave a manifest pointing at files that do not exist — a
  *      fatal load, not a recoverable one. The removal of a deleted document's
- *      file is the one thing that waits for the manifest (rule 3, DS-4).
+ *      file is the one thing that waits for the manifest (rule 3).
  *   2. The previous manifest is rotated *before* `caotang.json` is overwritten,
  *      which is the whole mechanism the §5 recovery ladder walks.
  *   3. A body whose text the file already holds is not written again, and a
@@ -355,21 +355,19 @@ export async function writeProject(
   // to write. Putting the serialization ahead of it buys exactly that.
   //
   // **It is not the first thing that can fail, and a refusal is not free.**
-  // (Corrected 2026-10-04: this comment read "the refusal has to
-  // cost nothing at all, so it is the first thing that can fail", and both halves
-  // were false of the code below.) Steps 1–3 have already run by the time the
+  // Steps 1–3 have already run by the time the
   // serializer is called — three directories created, every changed document
   // body written, codex files rewritten and **pruned**, `.gitignore` created. So a
   // refused write still reaches disk: a body lands and an un-owned codex file is
   // deleted, with the manifest and the ladder untouched. Deleted documents'
   // files are not among them: they are removed after the manifest (step 5). Measured in `test/migration-path.test.ts`
-  // ("a refused write is not free"), and hoisting the check above the writes is a build row, not a review's to land.
+  // ("a refused write is not free"); hoisting the check above the writes is a separate change.
   const manifestText = serializeManifest(state.manifest, format);
   await rotateManifest(fs, depth, report);
   await fs.writeAtomic(MANIFEST_FILE, manifestText);
   report.written.push(MANIFEST_FILE);
 
-  // 5. Documents the save deleted (§3, the folder-save rule). They go after the manifest, not with the body writes (DS-4): the manifest
+  // 5. Documents the save deleted (§3, the folder-save rule). They go after the manifest, not with the body writes: the manifest
   //    that stops naming a document must land first, so a failure between the two leaves an orphan file that the next load imports as
   //    Recovered, and never a manifest naming a file that is gone (§4's "fatal load").
   await pruneDocFiles(fs, state, options.pruneDocumentIds, guard, report);
@@ -434,8 +432,8 @@ export async function writeProject(
  * `codex/` empty. The bytes exist only where the load found them. The own
  * test comment called the export case "cannot lose it"; it loses it, and since
  * this file is codex.md §3's "direct countermeasure to the Manuskript corpus" a
- * backup that drops it is the shape of loss that matters most. **An earlier change
- * — a behaviour change, deliberately not landed by a review.
+ * backup that drops it is the shape of loss that matters most. Changing that is a
+ * behaviour change, and it is deliberately not made here.
  */
 async function pruneCodexFiles(
   fs: ArtifactFs,
@@ -487,7 +485,7 @@ async function pruneCodexFiles(
  * than load-bearing, which is the one asymmetry between the two paths and is why
  * the zip case is tested separately rather than assumed.
  *
- * It runs after the manifest is written (step 5 of `writeProject`, DS-4), so a crash
+ * It runs after the manifest is written (step 5 of `writeProject`), so a crash
  * during the removal leaves an orphan body file and no manifest naming a missing one.
  */
 async function pruneDocFiles(

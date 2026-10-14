@@ -1,6 +1,6 @@
 /**
- * The byte-stable golden prompts (context-assembly §4, the M7 exit criteria: "assembled-prompt
- * fixtures byte-stable"). Each case assembles one call on the fixture project and compares the
+ * The byte-stable golden prompts (context-assembly §4; the requirement is that
+ * assembled-prompt fixtures stay byte-stable). Each case assembles one call on the fixture project and compares the
  * result, byte for byte, with the committed file under `test/golden/`.
  *
  * A golden changes only on purpose. Set `CAOTANG_UPDATE_GOLDEN=1` to rewrite them, then read the

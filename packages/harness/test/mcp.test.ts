@@ -102,9 +102,9 @@ describe('every tool, through the mapping', () => {
 
   it('states the automatic-application sentence on every exposed write-auto tool, and what an external caller has in its place', () => {
     const autos = TOOL_METADATA.filter((meta) => meta.risk === 'write-auto');
-    // m8 adds coherence.setFindingStatus, a write-auto tool restricted to `fixed` (coherence.md §7 tool 17).
+    // coherence.setFindingStatus is a write-auto tool restricted to `fixed` (coherence.md §7 tool 17).
     // Its description carries the same automatic-application sentence the other write-auto tools do.
-    // m8-integration adds shots.annotate, the storyboard module's write-auto tool (storyboard.md §4).
+    // shots.annotate is the storyboard module's write-auto tool (storyboard.md §4).
     expect(autos.map((meta) => meta.name).sort()).toEqual(['coherence.setFindingStatus', 'meta.set', 'notes.append', 'shots.annotate']);
     for (const meta of autos) {
       const exposure = mcpExposure(meta);
@@ -121,7 +121,7 @@ describe('every tool, through the mapping', () => {
     if (!exposure.exposed) throw new Error('doc.import should be exposed');
     expect(exposure.description).toContain('The body is stored exactly as given and read back to prove it.');
     expect(exposure.description).toContain('Requires user confirmation.');
-    // The restriction an earlier codec forced is gone, and so is its warning.
+    // The body may hold newlines, so the description carries no warning about them.
     expect(exposure.description).not.toContain('newline');
   });
 });

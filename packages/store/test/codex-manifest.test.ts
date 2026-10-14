@@ -3,13 +3,11 @@
  *
  * ## Why this file exists
  *
- * `validate.ts` step 3 had no `codex` subsection at all. Measured before the
- * slice (2026-10-07, probe over `validateManifest`): **24 of 24 probed
- * violations produced no error and no warning**, including `codex:
- * "not-an-array"`, a blank name, an unknown `includePolicy` and 33 keywords.
- * The row that cut this work called the gap "latent … nothing in M2 can write a
- * `codex[]` entry"; that was false when written and is disproved below by
- * `the-trigger-has-already-fired`, which drives the shipped `codex.upsert`
+ * Without a `codex` subsection in `validate.ts` step 3 (probe over
+ * `validateManifest`), **24 of 24 probed violations produced no error and no
+ * warning**, including `codex: "not-an-array"`, a blank name, an unknown
+ * `includePolicy` and 33 keywords. The gap is not latent:
+ * `the-trigger-has-already-fired` below drives the shipped `codex.upsert`
  * through the real pipeline.
  *
  * ## How these tests are written
@@ -95,8 +93,8 @@ const all = (codex: unknown) => {
 const at = (codex: unknown, path: string) =>
   all(structuredClone(codex)).complaints.filter((c) => c.path === path);
 
-describe('codex[] shape (criterion 1)', () => {
-  it('accepts a manifest with no codex at all — additive in v1 (D5)', () => {
+describe('codex[] shape', () => {
+  it('accepts a manifest with no codex at all — additive in v1', () => {
     const m = createEmptyManifest('Probe') as unknown as Record<string, unknown>;
     delete m.codex;
     expect(validateManifest(m).ok).toBe(true);
@@ -287,7 +285,7 @@ describe('includePolicy and origin (codex.md §2, closed enums)', () => {
   });
 
   it('coerces an unknown origin to "agent", not to "manual"', () => {
-    // §2 verbatim, and the direction matters: D5 ranks hand-authored above
+    // §2 verbatim, and the direction matters: codex.md ranks hand-authored above
     // agent-inferred, so an unrecognised provenance must not acquire 'manual'.
     const r = report([entry({ origin: 'robot' })]);
     expect((r.manifest as Manifest).codex![0]!.origin).toBe('agent');
@@ -415,7 +413,7 @@ describe('ids and timestamps', () => {
   });
 });
 
-describe('criterion 4 — the manifest path is reached, and named', () => {
+describe('the manifest path is reached, and named', () => {
   it('names the field path of a violation in a caotang.json that would have loaded before', () => {
     const report0 = report([entry({ includePolicy: 'sometimes' })]);
     const w = report0.warnings.find((x) => x.path === 'codex[0].includePolicy');
@@ -597,7 +595,7 @@ describe('the trigger has already fired', () => {
   });
 });
 
-describe('one implementation of each coercion (criterion 3)', () => {
+describe('one implementation of each coercion', () => {
   it('the manifest path and the redundancy-file path agree on the same unknown value', () => {
     // If either surface grows a second copy of §2's coercion, this stops being
     // true and nothing else in the file notices — the guard for the refactor

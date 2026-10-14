@@ -8,15 +8,15 @@
  * here, and both omissions are deliberate rather than unfinished:
  *
  * - **Step 1, the front-matter strip, is `@caotang/store`'s.** The body
- *   projection is a store concept ([project-format.md] §3), and §2's C16
+ *   projection is a store concept ([project-format.md] §3), and §2's Tiptap
  *   preflight already settled where the split is: *"§5's front-matter strip is
  * load-bearing (`@caotang/store`'s, not the library's)"* — the finding
  *   F3. A document store that cannot be read without first reaching into a
  *   Markdown library's concerns is a store with a hidden precondition, so the
  *   input here is a body projection and the caller owns the split. The type
  *   name says so: the parameter is `body`, never `file`.
- * - **Step 3, the editing session, is §4's `EditorApi` adapter** — the next
- *   slice. This pipeline is deliberately headless and importable with no
+ * - **Step 3, the editing session, is §4's `EditorApi` adapter** (`src/tiptap/`).
+ *   This pipeline is deliberately headless and importable with no
  *   engine, no DOM element and no store, so the schema and the round-trip can
  *   be tested as what they are: pure functions over strings.
  *
@@ -85,7 +85,7 @@ import type { DialectNotice } from './dialect.js';
  * **one** loose list with two items — a different document. Ordered lists behave
  * the same way (`1. a\n\n1) b`). So the marker alternation is required by the
  * round-trip and §5's "one canonical spelling per option setting" holds per list
- * position rather than per document. §5 is corrected to say so, and
+ * position rather than per document. §5 says so, and
  * `test/degrade.test.ts` pins the measurement, because a future reader looking at
  * `* task` in a saved file and reading §5's sentence as written would be right to
  * call it a defect.
@@ -188,8 +188,7 @@ export const parseWithDiagnostics = async (body: string): Promise<ParseResult> =
     warnings.push(...definitionWarnings(tree));
     // An empty body projection compiles to an empty `doc`, and §3.1's `doc` is
     // `block+` — so the library's own `check()` throws
-    // `Invalid content for node doc: <>` (measured 2026-10-04 21:0x, an earlier change,
-    // while building §4's `mount`). §5 states load is total — *"parse cannot
+    // `Invalid content for node doc: <>` (measured while building §4's `mount`). §5 states load is total — *"parse cannot
     // fail (Markdown is total)"* — and **a brand-new empty document is the most
     // common document this product will ever open**, so the hole is in the one
     // path §5 promises cannot fail.
@@ -200,10 +199,8 @@ export const parseWithDiagnostics = async (body: string): Promise<ParseResult> =
     // serializes back to `''`, so the round trip is the identity: `getContent()`
     // on a new document returns the empty body it was mounted with.
     //
-    // **This placement supersedes that change's, and the argument is kept where
-    // An earlier change wrote it** (`test/pipeline.test.ts`, which was an `it.fails` naming this
-    // gap and is now the test that closes it). An earlier change held that the policy belongs to
-    // §4's `setContent` rather than to `parse`; the cost of that placement is a
+    // **The policy is here, in `parse`** (`test/pipeline.test.ts` holds the test that pins
+    // it). The alternative puts it in §4's `setContent`; the cost of that placement is a
     // precondition every caller has to remember, and no text is invented here —
     // an empty body has no blocks, so one empty paragraph is the only faithful
     // reading of it. docs/decisions.md records the alternative.
@@ -264,7 +261,7 @@ export const parseFragment = (text: string): PmNode => {
 };
 
 /**
- * The content a §4 primitive inserts for `text`, read as **body Markdown** (M5 finding 8).
+ * The content a §4 primitive inserts for `text`, read as **body Markdown**.
  *
  * The contract, stated here because the primitive's signature does not state it:
  *
@@ -288,7 +285,7 @@ export const parseFragment = (text: string): PmNode => {
  */
 export const insertionOf = (text: string, schema: Schema): Slice => {
   // Only spaces and tabs are the text's own edge whitespace. A newline at either end is a paragraph
-  // boundary, and the parse must see it: kept as a character it saves as `&#xA;` (M5 finding 9).
+  // boundary, and the parse must see it: kept as a character it saves as `&#xA;`.
   const leading = /^[ \t]*/.exec(text)![0];
   const trailing = /[ \t]*$/.exec(text)![0];
   const core = text.slice(leading.length, text.length - trailing.length);

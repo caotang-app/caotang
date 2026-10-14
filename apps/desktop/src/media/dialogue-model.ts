@@ -95,7 +95,7 @@ function nodeOfFinding(graph: DialogueGraph, finding: DialogueFinding): string {
 
 /**
  * A compile error as the view shows it, with its line once. inkjs names the line in its own message ("ERROR: line 3: ..."), and compile.ts
- * keeps that message verbatim, so the prefix is dropped and the line reads in the writer's form, "line 3: ..." (L6).
+ * keeps that message verbatim, so the prefix is dropped and the line reads in the writer's form, "line 3: ...".
  */
 function errorTextOf(error: { readonly text: string; readonly line: number | null }): string {
   if (error.line === null) return error.text;

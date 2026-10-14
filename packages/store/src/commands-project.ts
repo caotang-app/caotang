@@ -1,5 +1,5 @@
 /**
- * m9 (project export): the applies of the project block, the saved export recipes, the vocabulary and the cover import.
+ * Project export: the applies of the project block, the saved export recipes, the vocabulary and the cover import.
  * Their descriptors are the bus's (`projectCommands` in `@caotang/bus`, `descriptors-project.ts`), so a refusal here is
  * never the first place a bad value is caught: the validators have already run on the same snapshot.
  *
@@ -404,7 +404,7 @@ function narrow<P>(apply: ProjectApply<P>): CommandApply<P, unknown> {
 }
 
 /**
- * The m9 registrations, for the store's registry. `project.importAsset` is registered only when the host injects the
+ * The project-export registrations, for the store's registry. `project.importAsset` is registered only when the host injects the
  * asset port, the same way the exporter and the MCP client are: without it the name stays descriptor-only and the bus
  * refuses it as not wired, so an import is never reachable by accident.
  */

@@ -245,7 +245,7 @@ describe('rule 6 - orphan cleanup on eviction', () => {
 
   it('no retained row is ever listed as an orphan', () => {
     // Every stored row is its own last reference in v0.1 (see the file header), so
-    // rule 6's cleanup is exactly the eviction list. When an earlier change makes the activity
+    // rule 6's cleanup is exactly the eviction list. When a later version makes the activity
     // log durable and rows start being shared, this is the tripwire that says the
     // assumption has expired.
     const rows = [row('a', 1, 40), row('a', 2, 2), row('a', 3, 1), row('b', 1, 1), row('b', 2, 99)];

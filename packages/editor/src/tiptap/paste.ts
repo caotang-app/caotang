@@ -52,7 +52,7 @@ const cssValue = (element: Element, property: string): string | null => {
  *
  * A `b` or `strong` that declares normal or 400 weight is not bold, and an `em` or `i` that
  * declares normal style is not italic: Google Docs wraps a whole copied selection in a `b` with
- * `font-weight:normal` (M5 finding 10), and mapping it made every pasted paragraph bold. A `b`
+ * `font-weight:normal`, and mapping it made every pasted paragraph bold. A `b`
  * whose id starts with `docs-internal-guid` is that wrapper, so it carries no mark either.
  */
 const markFor = (element: Element): string | null => {

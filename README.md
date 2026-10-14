@@ -208,6 +208,10 @@ The tools that need a model, `scene.draft`, `synopsis.fill`, `continuity.scan`, 
 - [docs/decisions.md](docs/decisions.md): the standing decisions, one line each, with who decided.
 - [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md): how to contribute, and how to report a vulnerability.
 
+## How Caotang is built
+
+Caotang was built with AI coding agents under the owner's direction. Every decision tagged [owner] in [docs/decisions.md](docs/decisions.md) was made by a person.
+
 ## License
 
 Caotang is released under the MIT License. See [LICENSE](LICENSE). [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) lists the third-party packages in the builds, with their licenses. Run `node tools/third-party-notices.mjs --write` to regenerate it. A test fails when the committed copy no longer matches the lockfile.

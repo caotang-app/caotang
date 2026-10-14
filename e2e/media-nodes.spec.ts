@@ -1,5 +1,5 @@
 /**
- * The media track in the app (media-track M1-M3). A screenplay scene, a storyboard and a dialogue container are made from
+ * The media track in the app (screenplay, dialogue and storyboard). A screenplay scene, a storyboard and a dialogue container are made from
  * the binder, open in their own views, keep what the writer typed across a reload, and compile through the bus from the
  * Compile dialog. media/README.md says what each view does; these tests read the app through its gestures and the hook.
  */

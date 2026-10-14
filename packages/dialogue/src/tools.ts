@@ -5,8 +5,8 @@
  * Each tool is declared in the shape the harness registry reads (`kind`, `meta`, `params` as the harness's
  * `ObjectSpec`, the `schema` the harness derives from `params` with its own `toJsonSchema`, and a port name).
  * The handlers are harness ports: each returns the bus's `Result<ToolValue, CommandError>`, the shape
- * `ToolPort` names, so registration maps each `port` to its handler. Two things are integration work, named
- * in the report: the harness's closed `PortToolName`, `TOOL_NAMES` and `TOOL_METADATA` must widen to take
+ * `ToolPort` names, so registration maps each `port` to its handler. Two things belong to the integration,
+ * not this module: the harness's closed `PortToolName`, `TOOL_NAMES` and `TOOL_METADATA` must widen to take
  * these two names, and the drafted body is written through the bus after approval.
  *
  * The model call that writes the Ink is the agent loop's (the same arrangement as `scene.draft`):

@@ -84,10 +84,15 @@ function wholeLine(text: string): RegExp {
   return new RegExp(`^${text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(Dismiss)?$`);
 }
 
-/** Saves the open project to the folder, and waits for the save to say so. */
-async function saveToFolder(page: Page): Promise<void> {
+/**
+ * Saves the open project to the folder, and waits for the save to say so. The workspace shows one status line, and a save before this one
+ * left "Saved the project to the folder “…”" in it, so a test that saves into a second folder names that folder: the wait then holds
+ * until this save has finished, rather than passing on the line the earlier save left.
+ */
+async function saveToFolder(page: Page, folder?: string): Promise<void> {
   await page.getByRole('button', { name: 'Save to folder' }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Saved the project to the folder' })).toBeVisible();
+  const saved = folder === undefined ? 'Saved the project to the folder' : `Saved the project to the folder “${folder}”`;
+  await expect(page.getByRole('status').filter({ hasText: saved })).toBeVisible();
 }
 
 /** Removes the project from this browser, from the projects list. */
@@ -246,7 +251,7 @@ async function buttonLabels(dialog: ReturnType<Page['getByRole']>): Promise<stri
   return (await dialog.getByRole('button').allTextContents()).map((label) => label.trim());
 }
 
-// The owner's launch board: "The folder question" and "A folder holding another project".
+// The folder question, and a folder holding another project.
 test('documents another program changed are asked about with Save as a new folder…, which takes only an empty folder', async ({ page }) => {
   await switchableFolderPicker(page, 'changed-docs-folder');
   await page.goto('/');
@@ -334,10 +339,11 @@ test('this project’s earlier save in a folder Caotang has no record of asks in
   await switchableFolderPicker(page, 'older-folder');
   await page.goto('/');
   await projectWithWords(page, 'Earlier Save', 'Words in the older folder.');
-  await saveToFolder(page);
-  // The project is then saved to a new, empty folder, which is the one Caotang keeps a record of.
+  await saveToFolder(page, 'older-folder');
+  // The project is then saved to a new, empty folder, which is the one Caotang keeps a record of. The reload waits for that save to say
+  // it finished: a reload part way through it leaves the record naming the older folder, and the save below then goes straight in.
   await pickFolder(page, 'newer-folder');
-  await saveToFolder(page);
+  await saveToFolder(page, 'newer-folder');
   await page.reload();
   await page.getByRole('button', { name: 'Open', exact: true }).first().click();
   await expect(page.getByRole('tree', { name: 'Binder' })).toBeVisible();
@@ -376,7 +382,7 @@ const ordinaryProfile = test.extend<{ page: Page }>({
   },
 });
 
-// The owner's launch board: "Linking a copy to its folder".
+// Linking a copy to its folder.
 ordinaryProfile('a project remembers its folder: Reopen folder opens it in one click, and a folder that differs asks which version to keep', async ({ page }) => {
   await standInFolderPicker(page, 'remembered-folder');
   await page.goto('/');

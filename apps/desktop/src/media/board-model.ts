@@ -1,5 +1,5 @@
 /**
- * The board's header figures (storyboard.md §2.2, media-track M3 "animatic timing"): the timed total of one storyboard's shots,
+ * The board's header figures (storyboard.md §2.2, media-track.md storyboarding, "animatic timing"): the timed total of one storyboard's shots,
  * and how many are left out of it for want of a duration. The engine's arithmetic (`animaticTotals`) decides both; this file
  * only turns them into the words the header shows.
  */

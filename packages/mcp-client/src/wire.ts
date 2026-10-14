@@ -2,7 +2,7 @@
  * The transport seam, and the one real transport behind it — [extensibility.md §3.3](../../../docs/architecture/extensibility.md).
  *
  * **Streamable HTTP only.** The revision is negotiated with the SDK's `auto` mode (§3.3, §12 D17,
- * as amended by this work). The SDK sends `server/discover` first. A server that offers
+ * as amended). The SDK sends `server/discover` first. A server that offers
  * 2026-07-28 answers with its discovery result, and the requests then go out with no `initialize`
  * and no session header. A 2025-era server answers that probe with a JSON-RPC "method not found",
  * which the SDK reads as a legacy server, so it is connected through the plain `initialize`

@@ -13,12 +13,11 @@
  *     the harness pre-validates, next to §2's pure `validate`.
  *   - two maps, one for descriptors and one for implementations — makes the
  *     half-built state easy to create and splits §9's 18 names into two sets
- *     that can disagree. That is the shape a review found leaving §6's load path dead
- *     until `FORMAT_VERSION` 2.
- *   - omitting `export.compile` until M9 — makes §9's closed set a lie in the one
- *     file whose job is to be the closed set. (Both export names are in that
- *     position: `export.compile` and, since 2026-10-01, `export.compileSelection`
- *     — the whole-manuscript / a-part split the owner decided.)
+ *     that can disagree.
+ *   - omitting `export.compile` until an exporter exists — makes §9's closed set a
+ *     lie in the one file whose job is to be the closed set. (Both export names are
+ *     in that position: `export.compile` and `export.compileSelection` — the
+ *     whole-manuscript / a-part split.)
  */
 
 import { err, ok, type CommandError, type Result } from './result.js';
@@ -27,7 +26,7 @@ import * as descriptors from './descriptors.js';
 import * as projectDescriptors from './descriptors-project.js';
 import * as furnitureDescriptors from './descriptors-furniture.js';
 import { coherenceDiscardRun } from './descriptors-coherence.js';
-import * as storyboardR6Descriptors from './descriptors-storyboard-r6.js';
+import * as shotImageDescriptors from './descriptors-shot-image.js';
 import * as scriptDescriptors from './descriptors-script.js';
 import {
   viewSetActiveDocApply,
@@ -50,7 +49,7 @@ import { HINT_READ_TREE } from './params.js';
  * case. **The other fifteen will never have an apply in this file**, and that is
  * a property of the package rather than a phase: §1 says the bus does not own
  * project state, so a project apply needs a `state` the bus cannot be handed.
- * An earlier change put the five `inverse` names in `packages/store/src/commands.ts`
+ * The five `inverse` names live in `packages/store/src/commands.ts`
  * and the store hands them over through `createProjectCommandRegistry()`, which
  * `execute()` takes as its third parameter; the `compensable` text family and
  * The `codex.upsert` + `project.deleteNode` follow the same route. So for those
@@ -88,10 +87,10 @@ export function buildRegistry(): CommandRegistry {
     'coherence.setFindingStatus': { descriptor: descriptors.coherenceSetFindingStatus },
     // The run history's removal. Its descriptor is in descriptors-coherence.ts, its apply in the store (commands-coherence.ts).
     'coherence.discardRun': { descriptor: coherenceDiscardRun },
-    // m8-integration: the external-call command. Descriptor only: its apply reaches a server, so the store
+    // The external-call command. Descriptor only: its apply reaches a server, so the store
     // registry injects it with the client's own descriptor (`ProjectCommandOptions.mcpInvoke`).
     'mcp.invoke': { descriptor: descriptors.mcpInvoke },
-    // m8-integration: the storyboard module's shot commands (storyboard.md §3.1). Descriptors here; the applies are
+    // The storyboard module's shot commands (storyboard.md §3.1). Descriptors here; the applies are
     // the store registry's, injected with the storyboard module's guards (`ProjectCommandOptions.shots`).
     'storyboard.create': { descriptor: descriptors.storyboardCreate },
     'shot.create': { descriptor: descriptors.shotCreate },
@@ -105,15 +104,15 @@ export function buildRegistry(): CommandRegistry {
     'vocabulary.remove': { descriptor: projectDescriptors.vocabularyRemove },
     'recipe.save': { descriptor: projectDescriptors.recipeSave },
     'recipe.delete': { descriptor: projectDescriptors.recipeDelete },
-    // m4-furniture: the saved-filter and project-goal descriptors (binder-filters §5, goals-progress §4). The applies
+    // The saved-filter and project-goal descriptors (binder-filters §5, goals-progress §4). The applies
     // are the store's, injected through `createProjectCommandRegistry`, so these are descriptor-only here.
     'binder.saveFilter': { descriptor: furnitureDescriptors.binderSaveFilter },
     'binder.deleteFilter': { descriptor: furnitureDescriptors.binderDeleteFilter },
     'project.saveGoal': { descriptor: furnitureDescriptors.projectSaveGoal },
     'project.deleteGoal': { descriptor: furnitureDescriptors.projectDeleteGoal },
-    // r6 (storyboard): the shot's image import. Descriptor only; its apply is the store's (`commands-storyboard-r6.ts`).
-    'shot.importImage': { descriptor: storyboardR6Descriptors.shotImportImage },
-    // m6-script: the two imports and the container settings (screenplay.md §2.2, dialogue-narrative.md §2.1, §4). The applies
+    // Storyboard: the shot's image import. Descriptor only; its apply is the store's (`commands-shot-image.ts`).
+    'shot.importImage': { descriptor: shotImageDescriptors.shotImportImage },
+    // The two imports and the container settings (screenplay.md §2.2, dialogue-narrative.md §2.1, §4). The applies
     // are the store's (`commands-script.ts`), injected through `createProjectCommandRegistry`, so these are descriptor-only here.
     'screenplay.import': { descriptor: scriptDescriptors.screenplayImport },
     'dialogue.importInk': { descriptor: scriptDescriptors.dialogueImportInk },

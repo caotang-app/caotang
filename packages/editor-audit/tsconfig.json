@@ -2,8 +2,8 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     // DOM is here for `lib.dom` types only — the audit is headless and runs in
-    // vitest's `node` environment (the root config's default, and M0's exit
-    // criterion is "mock provider importable headless"). Tiptap's extension
+    // vitest's `node` environment (the root config's default, and the
+    // mock provider must be importable headless). Tiptap's extension
     // definitions reference DOM interfaces at the type level; the corpus itself
     // never mounts a view, so nothing here needs a DOM at runtime.
     "lib": ["ES2023", "DOM"],

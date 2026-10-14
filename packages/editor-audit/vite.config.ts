@@ -2,7 +2,7 @@ import { defineConfig } from 'vite';
 import { resolve } from 'node:path';
 
 /**
- * The C16 bundle audit's build config.
+ * The Tiptap preflight bundle audit's build config.
  *
  * A library build of `bundle-entry.ts` — the §10 extension set plus the anchor
  * ladder — so the emitted chunks can be grepped for Tiptap Cloud / Pro network

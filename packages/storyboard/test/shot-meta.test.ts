@@ -117,7 +117,7 @@ describe('readShotMeta: a load keeps what it can, and says what it dropped', () 
     expect(readShotMeta({ action: `${exact}😀` }).notices.join('\n')).toContain('action is 1001 characters');
   });
 
-  it('carries vendorRefs verbatim, because the M4 prompt pack types them and this module must not drop them', () => {
+  it('carries vendorRefs verbatim, because the video prompt pack types them and this module must not drop them', () => {
     const refs = [{ vendor: 'example', seed: 7, nested: { keep: true } }];
     const read = readShotMeta({ vendorRefs: refs });
     expect(read.meta.vendorRefs).toEqual(refs);

@@ -14,7 +14,7 @@ Non-goals: no network in the bus (the gateway owns transport); no cross-worker b
 ```ts
 interface Command {
   id: string;                 // "cmd_" + 10 chars Crockford base32 (same generator family as node ids)
-  name: CommandName;          // from the registry (§9; 42 names on 2026-10-14)
+  name: CommandName;          // from the registry (§9; 42 names)
   params: object;             // flat, enum-constrained, schema-validated
   issuedBy: 'user' | 'agent';
   turnId?: string;            // agent turn this command belongs to (agent-issued only)
@@ -66,15 +66,15 @@ validate → permission gate (§4) → apply → postconditions → undo-group r
 - **One agent turn = one undo group; one user gesture = one undo group.** Compound tools sub-group internally (per-doc compensations inside `synopsis.fill`) but expose a single entry.
 - Undo executes compensations **in reverse order** within the group:
   - `inverse` — the descriptor generates the exact inverse command (meta sets, renames, moves, attach/detach).
-  - `compensable` — the command captured a restore artifact at apply time: doc **body snapshot** before any text mutation (A1 finding made automatic; retention budgets → **§5.1**, C12 resolved 2026-09-15), codex entry prior-state copy, emitted export filename (undo = delete from `exports/`). An undo of a body write puts the snapshot's body back **as a write**: the document's `revision` moves up by one, as it does for any mutation, and is never set back to the number the snapshot recorded (project-format §4). §6's `expectedRevision` therefore cannot match a number the document had before newer text.
+  - `compensable` — the command captured a restore artifact at apply time: doc **body snapshot** before any text mutation (retention budgets → **§5.1**), codex entry prior-state copy, emitted export filename (undo = delete from `exports/`). An undo of a body write puts the snapshot's body back **as a write**: the document's `revision` moves up by one, as it does for any mutation, and is never set back to the number the snapshot recorded (project-format §4). §6's `expectedRevision` therefore cannot match a number the document had before newer text.
 - **Checkpoint framing:** each agent turn renders in the activity log as a checkpoint row — **"restore to before this turn"**. One click = undo the group. Redo = v0.2 nice-to-have (store group inverses; not required for v0.1's promise).
 - **Two-lane undo:** Lane 1 = editor-native `prosemirror-history` for user keystrokes (untouched); Lane 2 = every bus text mutation applied as one transaction batch tagged `tr.setMeta('addToHistory', false)` + the per-turn/autosave snapshot. Agent edits and snapshot restores are **never replayed by the user's Ctrl+Z**; "restore to before this turn" is snapshot-based, so checkpoint rows stay immune to in-editor undo position drift. The restore confirmation states scope explicitly (edits made after the turn are included in the restore). Full contract + fixtures: [editor-engine.md](editor-engine.md) §7. Regression-tested sharp edges: excluded-transaction-then-undo bookkeeping, appended-transactions-during-undo, metadata lost on redo replay.
 
-### 5.1 Snapshot retention budgets (C12 resolved 2026-09-15)
+### 5.1 Snapshot retention budgets
 
 Unbounded checkpoint storage is the failure this prevents: full snapshots only when a body changed, a count cap and an age cap, and each document's first snapshot kept as the baseline. The adopted ladder:
 
-1. **Full body snapshots, not deltas.** Bodies are 1–10k words; delta machinery is complexity without a measured need at this scale. (Revisit only if real corpora show otherwise — the M8 eval suite would surface it.)
+1. **Full body snapshots, not deltas.** Bodies are 1–10k words; delta machinery is complexity without a measured need at this scale. (Revisit only if real corpora show otherwise — the eval suite would surface it.)
 2. **Cap: 100 checkpoints per project** (Claude Code's number, validated at far higher churn than a writing session produces). Oldest evicted first. Config-exposed (`retention.checkpointCap`, default 100).
 3. **Retention: 30 days** (same clock as `cleanupPeriodDays`; a checkpoint past either limit is evicted). Config-exposed (`retention.checkpointDays`, default 30).
 4. **Snapshot-on-write dedupe:** a body unchanged since the last snapshot is not re-stored — the checkpoint references the existing snapshot (Obsidian's changed-files-only rule).
@@ -83,7 +83,7 @@ Unbounded checkpoint storage is the failure this prevents: full snapshots only w
 7. **Storage:** the IndexedDB runtime store, never the artifact (project-format §1 — snapshots are derived, rebuildable, never trusted).
 8. **Surfaced budgets:** Settings › Data shows checkpoint count + estimated size + a one-click "trim to cap now" (the user-visible guarantee that the cap is real).
 
-Determinism: eviction is a pure function of (checkpoint list, cap, days, today-injected) — headless-testable; the M8 eval gains an eviction fixture (100+ checkpoints → cap respected, first-snapshots preserved, zero orphaned snapshots).
+Determinism: eviction is a pure function of (checkpoint list, cap, days, today-injected) — headless-testable; the eval suite holds an eviction fixture (100+ checkpoints → cap respected, first-snapshots preserved, zero orphaned snapshots).
 
 ## 6. Idempotency & concurrency
 
@@ -114,7 +114,7 @@ One entry per executed command:
 interface ActivityEntry {
   at: number; command: string; issuedBy: 'user' | 'agent';
   turnId?: string; callId?: string; undoGroupId?: string;
-  source?: 'native' | 'mcp';                      // reserved 2026-09-14 for the v0.2 MCP client (extensibility.md §2/§6); default 'native' — externals tag 'mcp'
+  source?: 'native' | 'mcp';                      // set for the MCP client (extensibility.md §2/§6); default 'native' — externals tag 'mcp'
   affected: { nodeId: string; title: string }[];   // human titles, not bare ids
   tokensSpent?: number;      // agent turns only (gateway ledger feeds it)
   summary: string;           // digest: "moved 3 scenes into Chapter 4"
@@ -125,7 +125,7 @@ Rendered in the agent panel; exportable as Markdown (agent-harness §5).
 
 ## 9. v0.1 command registry (closed set)
 
-The heading keeps the name the v0.1 table had. On 2026-10-09 the table lists every one of the registry's names, the v0.1 rows and those each module added (their owning specs are named in the notes). On 2026-10-14 it lists all 42, the four last rows included. Reads are **not commands** — modules read the store directly; only mutations route through the bus. Provider/settings mutation is app-level state, never a project command (agentRisk `never`, hard-deny §4). `sessions.jsonl` appends are session-tracker side-effects of doc writes, not commands.
+The heading keeps the name the v0.1 table had. The table lists all 42 of the registry's names: the v0.1 rows and those each module added (their owning specs are named in the notes). Reads are **not commands** — modules read the store directly; only mutations route through the bus. Provider/settings mutation is app-level state, never a project command (agentRisk `never`, hard-deny §4). `sessions.jsonl` appends are session-tracker side-effects of doc writes, not commands.
 
 | Command | Params (essentials) | agentRisk | undo | Notes |
 |---|---|---|---|---|
@@ -174,13 +174,13 @@ The `agentRisk` and `undo` columns are the descriptors' own (`packages/bus/src/d
 
 **The Params column is a closed set, not a minimum.** A key a command does not list is **refused** with `invalid-params`, never accepted-and-dropped. The word in the header above is "essentials"; a reader that picked the fields it knew and ignored the rest is the behaviour §2's "schema-validated" annotation rules out. Two consequences the reader of this table should know:
 
-- **The refusal is what makes D5 enforceable.** `codex.upsert`'s ops are held to their own field set the same way, and `origin` is the load-bearing one: provenance is harness-owned from `context.issuedBy`, so an op naming its own is refused rather than quietly written with the harness's value.
+- **The refusal is what makes the codex provenance rule (codex.md §2) enforceable.** `codex.upsert`'s ops are held to their own field set the same way, and `origin` is the load-bearing one: provenance is harness-owned from `context.issuedBy`, so an op naming its own is refused rather than quietly written with the harness's value.
 - **The refusal names the key and the accepted set** (§7's corrective surface), and a batch is validated as a whole with failures listed per-op (§2), so one bad key costs one round trip rather than one per key.
 - **Scope: the rule above governs the top-level keys of `params`, plus the nested shapes *this table spells out*, and one nested object is outside it.** `binder.setMeta`'s `patch: {status?, label?, …}` is written out here, and `codex.upsert`'s `entries: CodexUpsert[]` names a type whose field contract [codex.md](codex.md) §2 states — so both are held to a closed set (`PATCH_KEYS`, `CODEX_OP_KEYS`), each refused per-op. **`editor.replaceRange`'s `range` is the exception: this table says `range` and nothing more**, so there is no interior set for the code to hold it to, and `{from: 0, to: 3, length: 99}` validates today with `length` silently dropped.
 
 `view.*`'s `various` is the only row this table does not spell out; those three shapes are declared in `packages/bus/src/params.ts` (`DECLARED_PARAMS`) and held to the same rule, and a test asserts the exemption is exactly those three rows.
 
-**`mcp.invoke` (specced 2026-09-14, [extensibility.md](extensibility.md) §6; landed with the MCP client; revised 2026-10-09).** External tool calls ride this row. Its `agentRisk` is the external tool's effectiveRisk, read-auto or write-confirm and never write-auto, so the table's `write-confirm` is the default and the per-call `read` is the exception described in its notes. `undo: 'none'` and `mutates: 'none'`: externals are not project state, and the bus still gates, audits and dedupes the agent action.
+**`mcp.invoke` ([extensibility.md](extensibility.md) §6).** External tool calls ride this row. Its `agentRisk` is the external tool's effectiveRisk, read-auto or write-confirm and never write-auto, so the table's `write-confirm` is the default and the per-call `read` is the exception described in its notes. `undo: 'none'` and `mutates: 'none'`: externals are not project state, and the bus still gates, audits and dedupes the agent action.
 
 ## 10. Evals (headless)
 

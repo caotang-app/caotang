@@ -4,7 +4,7 @@
   "license": "MIT",
   "private": true,
   "type": "module",
-  "description": "M5 editor — the §3 Caotang ProseMirror schema, the §5 Markdown pipeline and the §4 Tiptap adapter (ARCHITECTURE editor-engine.md §3, §4, §5)",
+  "description": "The editor — the §3 Caotang ProseMirror schema, the §5 Markdown pipeline and the §4 Tiptap adapter (ARCHITECTURE editor-engine.md §3, §4, §5)",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {

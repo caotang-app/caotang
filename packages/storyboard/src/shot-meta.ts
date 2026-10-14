@@ -155,7 +155,7 @@ export function readShotMeta(raw: unknown): ShotMetaRead {
       if (isDuration(value)) meta.durationSec = value;
       else notices.push('durationSec is not a finite number of seconds at least zero; dropped, so the shot is left out of animatic totals');
     } else if (key === 'vendorRefs') {
-      // Carried verbatim: the M4 prompt pack types these, and this module must not drop them.
+      // Carried verbatim: the video prompt pack types these, and this module must not drop them.
       if (Array.isArray(value)) meta.vendorRefs = value;
       else notices.push('vendorRefs is not a list; dropped');
     } else {

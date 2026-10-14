@@ -14,11 +14,11 @@ describe('the registry joins every tool to its metadata', () => {
   const harness = makeHarness();
   const listing = harness.tools();
 
-  // m8 grows the table from fifteen rows to nineteen: codex.import (the import verb beside doc.import,
-  // codex.md §2, D5) and the coherence module's three tools (coherence.md §7). Each is its own row.
-  // m8-integration grows it to twenty-four: tool.search (the Tier-2 gateway, extensibility §5), and the storyboard
-  // module's two and the prompt-pack module's two tools (storyboard.md §4, video-prompt-pack.md §6). m8's media track
-  // adds the dialogue module's two (dialogue-narrative.md §7), which register now that the module imports the bus and
+  // Beyond the fourteen and doc.import: codex.import (the import verb beside doc.import,
+  // codex.md §2 provenance) and the coherence module's three tools (coherence.md §7), each its own row;
+  // tool.search (the Tier-2 gateway, extensibility §5), and the storyboard
+  // module's two and the prompt-pack module's two tools (storyboard.md §4, video-prompt-pack.md §6); and
+  // the dialogue module's two (dialogue-narrative.md §7), which register because the module imports the bus and
   // not the harness. The spec's media-track count is twenty-three (14 + coherence 3 + storyboard 2 + prompt-pack 2 +
   // dialogue 2, agent-harness.md §10). The registry also carries doc.import, codex.import and tool.search, which that
   // count leaves out, so it holds twenty-six.
@@ -27,11 +27,11 @@ describe('the registry joins every tool to its metadata', () => {
     expect(listing).toHaveLength(26);
   });
 
-  // m8 wires two of the coherence tools to the engine by default (coherence.scan and
+  // Two of the coherence tools are wired to the engine by default (coherence.scan and
   // coherence.setFindingStatus). coherence.review stays unwired: its model call is async and a port is
   // synchronous, so the review is refused as not wired until an app supplies a provider-backed port.
-  // m8-integration wires tool.search (a read, wired with no server connected) and shots.annotate (wired, because the
-  // store registry carries the shot commands). The three model-backed or proposal-backed tools stay unwired by
+  // tool.search (a read, wired with no server connected) and shots.annotate (wired, because the
+  // store registry carries the shot commands) are wired too. The three model-backed or proposal-backed tools stay unwired by
   // default, as coherence.review does: shots.derive needs a proposal the loop stages, and prompt.draft and
   // prompt.variant need a model. dialogue.draft is the same kind (it writes the loop's staged Ink), and dialogue.table
   // is a read that is wired by default.

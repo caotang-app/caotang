@@ -147,7 +147,7 @@ export function Binder(props: BinderProps): ReactNode {
     if (title === 'Untitled') onRename(id);
   };
 
-  /** A media node (media-track M1-M3): the bus checks the kind and the parent, and the new node is renamed like any other. */
+  /** A media node (screenplay, dialogue and storyboard; media-track.md): the bus checks the kind and the parent, and the new node is renamed like any other. */
   const createMedia = (parentId: string, spec: MediaCreateSpec): void => {
     const outcome = session.dispatch('binder.create', {
       parentId,

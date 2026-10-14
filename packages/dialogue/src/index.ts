@@ -1,6 +1,6 @@
 /**
  * `@caotang/dialogue` — cutscene and game-narrative authoring on Ink, headless
- * ([dialogue-narrative.md](../../../docs/architecture/dialogue-narrative.md), media-track M2).
+ * ([dialogue-narrative.md](../../../docs/architecture/dialogue-narrative.md), the media track's branching dialogue).
  *
  * What is in here, and what is not:
  *  - the container kinds and their metadata (`kinds.ts`), the Ink parse layer (`ink-parse.ts`),
@@ -14,8 +14,8 @@
  * What is not: the UI (the graph view, the inspector, the table dialog), the store's dialogue node
  * types and the bus commands that write a container's body, the exporter's recipe enum and renderer
  * wiring, the harness registration of these tools and the model call that drafts the Ink (the agent
- * loop stages it), the Twee importer (v0.3 candidate), the XLSX stack (deferred with storyboard A4),
- * and the play mode over inkjs's runtime (v0.3 candidate). Each is named in the report.
+ * loop stages it), the Twee importer (v0.3 candidate), the XLSX stack (deferred with storyboard.md's spreadsheet stack),
+ * and the play mode over inkjs's runtime (v0.3 candidate).
  */
 
 export {

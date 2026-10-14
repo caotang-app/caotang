@@ -4,7 +4,7 @@
   "license": "MIT",
   "private": true,
   "type": "module",
-  "description": "The Tiptap pin gate: exact pins, peer resolution, a real bundle audit and the §5 fixture corpus through remark-prosemirror 0.1.5. Audit only; this is not the M5 editor.",
+  "description": "The Tiptap pin gate: exact pins, peer resolution, a real bundle audit and the §5 fixture corpus through remark-prosemirror 0.1.5. Audit only; this is not the editor (@caotang/editor).",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {

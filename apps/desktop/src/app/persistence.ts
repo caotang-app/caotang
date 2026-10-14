@@ -64,7 +64,7 @@ export type PersistenceStatus = 'idle' | 'writing' | 'failed' | 'conflict';
 /**
  * Whether a store refusal means another writer has moved a row this session holds (see the note above). A store another tab has upgraded
  * is one too: this build cannot write its schema, so nothing this session writes can land, and the words are kept as a stopped tab's are
- * until the tab is reloaded (DS-6, `RuntimeStoreStaleError`).
+ * until the tab is reloaded (`RuntimeStoreStaleError`).
  */
 export function isStaleWrite(error: unknown): boolean {
   return error instanceof RevisionConflictError || error instanceof DocumentExistsError || error instanceof RuntimeStoreStaleError;
@@ -162,7 +162,7 @@ export class Persistence {
     } catch (error) {
       if (isStaleWrite(error)) {
         // Another writer moved a row this session holds. Restating would overwrite its text, so this session stops, and the
-        // words it holds are kept in this browser so a reload does not take them. An upgraded store is said as that cause (DS-6).
+        // words it holds are kept in this browser so a reload does not take them. An upgraded store is said as that cause.
         this.stopped = true;
         noteStopCause(error instanceof RuntimeStoreStaleError ? 'updated' : 'newer-text');
         noteStop(this.projectId, this.stopId);

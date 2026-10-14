@@ -17,7 +17,7 @@ import { isFixedRootId, type CommandName, type ValidationNode, type ValidationSn
 export const HINT_READ_TREE = 'use binder.read_tree to list valid ids';
 
 /* ------------------------------------------------------------------ *
- * The closed params surface — an earlier change
+ * The closed params surface
  * ------------------------------------------------------------------ */
 
 /**
@@ -26,15 +26,14 @@ export const HINT_READ_TREE = 'use binder.read_tree to list valid ids';
  *
  * ## What this is for
  *
- * An earlier change closed a review: it reads §9's Params column out of the
- * spec and compares it against the key set of a *successful* `validate` payload.
- * Its own row names the seam it could not close, and this table is that seam
- * closed — the measurement was of what **survived**, so a key a descriptor
- * *accepted and dropped* was invisible to it. Measured on `binder.rename`:
+ * `test/registry.test.ts` reads §9's Params column out of the spec and compares
+ * it against the key set of a *successful* `validate` payload. That measures
+ * what **survived**, so a key a descriptor *accepted and dropped* is invisible
+ * to it; this table closes that seam. Measured on `binder.rename`:
  * `{nodeId, title, order: 99}` came back `{nodeId, title}`, green.
  *
  * A silent drop is the worst outcome available here, and `codex.upsert`'s
- * `origin` is why it is worse than a typo. D5 makes provenance load-bearing —
+ * `origin` is why it is worse than a typo. codex.md §2 makes provenance load-bearing —
  * hand-authored outranks agent-inferred, so a wrong `origin` changes which entry
  * is canon — and the harness owns it from `context.issuedBy`. An agent that
  * passes `origin: 'agent'` and is silently ignored has been *told* it set
@@ -369,12 +368,11 @@ export function optionalBoolean(
  *
  * ## The gap this closes
  *
- * A review measured `includeRootIds: ['']` and
- * `['   ']` as **accepted**: `export.compileSelection` with a list holding one
+ * Without it, `includeRootIds: ['']` and
+ * `['   ']` were **accepted**: `export.compileSelection` with a list holding one
  * blank id validated green, which is "compile a part naming no node and report
  * success" — the refusal on the *empty* list exists for exactly that reason, so
- * the blank twin of `[]` reached the same outcome one token over. The finding
- * named the cause precisely: `requireStringArray` had no blank check.
+ * the blank twin of `[]` reached the same outcome one token over. The cause was that `requireStringArray` had no blank check.
  *
  * ## Why it lives here rather than in one descriptor
  *

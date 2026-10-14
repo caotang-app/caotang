@@ -1,6 +1,6 @@
 /**
  * Canonical JSON and the SHA-256 pins built on it — [extensibility.md §3.2](../../../docs/architecture/extensibility.md)
- * (`ToolPin`) and assumption A4: the hash is SHA-256 over the canonical JSON of
+ * (`ToolPin`): the hash is SHA-256 over the canonical JSON of
  * `{ toolName, description, inputSchema }`.
  *
  * Canonical means one byte string per JSON value: object keys sorted by UTF-16 code
@@ -56,9 +56,9 @@ export interface PinnedAnnotations {
 }
 
 /**
- * The pin hash of one advertised tool: assumption A4, SHA-256 over the canonical JSON of
+ * The pin hash of one advertised tool: SHA-256 over the canonical JSON of
  * `{ toolName, description, inputSchema }`, extended with the four hint keys when the server
- * advertises them (see {@link PinnedAnnotations}). A tool with no hints hashes exactly as A4 says.
+ * advertises them (see {@link PinnedAnnotations}). A tool with no hints hashes exactly as the base rule says.
  *
  * The description and the schema are the server's own text, taken verbatim. The caller normalises an
  * absent description to `''` and an absent schema to `{ type: 'object' }` before it reaches here, so the

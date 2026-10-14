@@ -1,5 +1,5 @@
 /**
- * The §3.3 mdast handler table, built for the C16 preflight.
+ * The §3.3 mdast handler table, built for the Tiptap preflight.
  *
  * ## Why this table is smaller than §3.3
  *

@@ -1,5 +1,5 @@
 /**
- * `@caotang/editor` — M5's headless engine surface.
+ * `@caotang/editor` — the editor's headless engine surface.
  *
  * This is the whole of the editor package's public contract: the §3 schema, the
  * §3.3 handler table (exact class **and** the degrade rows §3.3 assigns a code

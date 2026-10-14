@@ -13,7 +13,7 @@
  *   so they are skipped with a note.
  *
  * **What the round trip reproduces, and what it normalises** (screenplay.md §5.1 — the spec does not yet name
- * these, see the workstream report). For a canonical script the output is byte-identical to the input: one blank
+ * these). For a canonical script the output is byte-identical to the input: one blank
  * line between blocks, a synopsis directly under its heading, LF line endings and one final newline. For a
  * non-canonical script the output is that same script in canonical form: a run of blank lines between blocks
  * becomes one blank line, trailing blank lines are dropped, CRLF becomes LF, and a synopsis that spans several

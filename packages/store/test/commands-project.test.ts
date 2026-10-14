@@ -1,5 +1,5 @@
 /**
- * m9 (project export): the project-block, recipe, vocabulary and cover-import applies, through the shipped bus.
+ * Project export: the project-block, recipe, vocabulary and cover-import applies, through the shipped bus.
  *
  * Each apply is checked for the three things a writer relies on: the change lands, the undo restores exactly what
  * was there, and a refusal writes nothing. The cover import is the one asynchronous apply, so it runs through
@@ -386,7 +386,7 @@ describe('sniffCoverImage and the cover limit', () => {
 });
 
 describe('the new names are registered and typed as the bus describes them', () => {
-  it('resolves every m9 name in the store registry, except the import without its port', () => {
+  it('resolves every project-export name in the store registry, except the import without its port', () => {
     const registry = createProjectCommandRegistry({ clock, assets: bus().ported });
     for (const name of [
       'project.rename',

@@ -1,6 +1,6 @@
 /**
  * The rules the coherence module shares with the bus and the store, and the canon ranking and id
- * minting that are its own (coherence.md §3, §5.2.1, §6.3; codex.md §2, D5).
+ * minting that are its own (coherence.md §3, §5.2.1, §6.3; codex.md §2 provenance).
  *
  * The vocabulary is held twice on purpose: the bus validates with its own copy, because the dependency
  * runs coherence → store → bus. These tests read both copies back, so a timeline mode or a dismissal
@@ -46,7 +46,7 @@ describe('the shared vocabulary matches the coherence model', () => {
   });
 });
 
-describe('canon ranking (codex.md §2 D5; coherence.md §4.3)', () => {
+describe('canon ranking (codex.md §2 provenance; coherence.md §4.3)', () => {
   it('ranks an import equal to the writer’s own hand-authored entry: imported writing is the writer’s canon', () => {
     expect(canonRank('import')).toBe(canonRank('manual'));
     expect(isWriterCanonOrigin('import')).toBe(true);

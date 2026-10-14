@@ -4,7 +4,7 @@ import { radioStep } from '../../apps/desktop/src/components/radio-keys.js';
 
 /**
  * The keys of a radio group (WAI-ARIA radio pattern): the mode switches of the screenplay and the storyboard, and the card size control
- * the corkboard and the shot board share (F-07, ui-modules §0.4). The caller moves the focus with the choice, so this is the key rule only.
+ * the corkboard and the shot board share (ui-modules §0.4). The caller moves the focus with the choice, so this is the key rule only.
  */
 
 const ITEMS = ['Script', 'Source', 'Pages'];

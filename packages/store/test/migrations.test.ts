@@ -278,27 +278,23 @@ describe('§6 wired into the load path', () => {
     expect(report.migrations).toEqual([]);
   });
 
-  // Named for what it does, not for what the slice hoped it did — see the note.
+  // Named for what it does; the note below says what it does not show.
   it('hands back the exact object it validated (at the current version, where that object is the input)', () => {
     const input = at(FORMAT_VERSION);
     const report = validateManifest(input);
     expect(report.manifest).toBe(input);
   });
 
-  // This test used to be named "hands back
-  // the manifest it validated, so load and validation cannot diverge". The name
-  // claimed an invariant spanning *two* files; the body checked one, and checked
-  // it at the one version where the two halves cannot differ. With
-  // `FORMAT_VERSION === 1` and an empty registry, `report.manifest` IS the input
-  // by construction, so this assertion passes whatever `read.ts` does with it.
+  // The test above does not show that load and validation cannot diverge: that
+  // invariant spans *two* files, and the test checks one, at the one version
+  // where the two halves cannot differ. With `FORMAT_VERSION === 1` and an empty
+  // registry, `report.manifest` IS the input by construction, so the assertion
+  // passes whatever `read.ts` does with it.
   //
-  // Proof it is unguarded, not merely weak: reverting `read.ts` to build state
-  // from the raw parse — undoing the fix this commit calls "the substance of this
-  // slice" — leaves all 206 tests green. The divergence is real and correct, and
-  // it is currently held in place by nothing. Guarding it needs a registry the
-  // test can substitute or a `FORMAT_VERSION` above 1, so it is a build slice:
-  // an assertion added here would be either skipped or vacuous, which is the
-  // green lie this test's own name used to be.
+  // `read.ts` building state from the validated manifest rather than the raw
+  // parse is therefore held in place by no test here. Guarding it needs a
+  // registry the test can substitute or a `FORMAT_VERSION` above 1, so it is a
+  // build slice: an assertion added here would be either skipped or vacuous.
 
   it('loads a current project with no migration notice', async () => {
     const fs = new MemoryArtifactFs();
@@ -317,11 +313,9 @@ describe('§6 wired into the load path', () => {
 
 describe('§6 "writers always save at the current version"', () => {
   it('stamps the current version of a manifest that is already current', () => {
-    // Re-cut 2026-10-04. This test used to hand the serializer a
-    // v0 manifest and assert that it came back stamped v1 — i.e. it asserted the
-    // defect a review found, and called it "the writer has no registry, so it cannot
-    // upgrade a stale object". Proving the writer *cannot fix* a stale manifest
-    // is not a reason to mislabel it: §6's parenthetical, "no rolling forward on
+    // A v0 manifest handed to the serializer must not come back stamped v1.
+    // Proving the writer *cannot fix* a stale manifest is not a reason to
+    // mislabel it: §6's parenthetical, "no rolling forward on
     // unrelated edits", is the clause that forbids exactly that, and on a v2
     // build the file it produced would have claimed a shape it did not have.
     // The refusal is the correct answer, and it is asserted in

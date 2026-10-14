@@ -285,7 +285,7 @@ export function goalProgress(goal: ProjectGoal, probe: GoalProbe, today: LocalDa
   }
   if (exceeded) return { current, met: false, state: 'exceeded' };
 
-  // Open question for the spec owner (goals-progress §2.2): an `about` goal below its band aims at
+  // Open question for the spec (goals-progress §2.2): an `about` goal below its band aims at
   // the exact target, but the goal is met from the band's lower edge, 90% of target. So this pace
   // can ask for up to 10% of the target more words than the goal needs. Not decided here.
   const daysLeft = Math.max(1, untilDeadline);

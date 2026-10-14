@@ -71,7 +71,7 @@ export interface CueLine {
  * A character cue: no lower-case letters, at least one capital, once extensions are
  * set aside. The case classes are Unicode (`\p{Lu}`, `\p{Ll}`), so `ИВАН` is a cue as `IVAN` is.
  * A trailing `^` marks the second speaker of a dual-dialogue pair. A script with no letter case
- * (CJK) has no uppercase cue, so its cues are forced with `@` (knownGaps).
+ * (CJK) has no uppercase cue, so its cues are forced with `@` (a known gap).
  */
 export function cueOf(text: string): CueLine | null {
   let t = text.trim();

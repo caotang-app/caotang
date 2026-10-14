@@ -7,7 +7,7 @@ import type { SaveState, WrittenBody } from './session.js';
 
 /**
  * Why this tab's session stopped saving (persistence.ts): another tab stored newer text for the project (`newer-text`), or another tab
- * upgraded Caotang's browser storage, which this tab must reload to use again (`updated`, DS-6). The stopped-tab notice (StaleTabNotice.tsx)
+ * upgraded Caotang's browser storage, which this tab must reload to use again (`updated`). The stopped-tab notice (StaleTabNotice.tsx)
  * and the save indicator (`saveStateWords`) say which, and the cause is read from here, so neither needs the session.
  *
  * It is page state, as the browser's storage is: one page holds one tab, so one stop is current at a time. It is the one piece of state
@@ -42,7 +42,7 @@ export function subscribeStopCause(listener: () => void): () => void {
  * The save indicator's words for each save state (ui-modules §5.3, rule 4). A failure says what is safe right now and the one thing
  * to do about it: the words are in this tab and are written again on the next change, and a backup is the copy that does not depend
  * on the browser. `offersBackup` says whether the indicator carries the Export a backup button. A stop says why (`cause`, `StopCause`):
- * a newer text in another tab, or an upgrade of the browser storage that this tab must reload to use (DS-6).
+ * a newer text in another tab, or an upgrade of the browser storage that this tab must reload to use.
  */
 export function saveStateWords(
   state: SaveState,
@@ -113,7 +113,7 @@ export interface FolderSaveFacts {
 /**
  * The verdict for one save. The lock is checked first, because a locked folder is a different question from a changed one.
  * A folder with no manifest is written only when this session never held one there: a manifest this session did hold, and that another
- * program removed since, is a change (`changed`), so it is asked about rather than recreated (DS-1). Otherwise the folder must hold the
+ * program removed since, is a change (`changed`), so it is asked about rather than recreated. Otherwise the folder must hold the
  * text this session last saw, and then the document and codex files it held, or the writer must have said to replace them. The replaced
  * manifest is kept as a backup by the writer (write.ts rotates it), so a confirmed replacement of the manifest is recoverable. A replaced
  * document is not kept, which is why the question asked about one says so (lifecycle `folderChanges`).

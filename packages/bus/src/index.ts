@@ -58,7 +58,7 @@ export type { ActivityEntry, ActivityLog, ActivitySource } from './activity-log.
 export { createActivityLog } from './activity-log.js';
 export type { CommandError, CommandErrorCode, CommandErrorDetails, PerOpFailure, Result } from './result.js';
 export { ok, err } from './result.js';
-// m8-integration: the param shapes of the two injected families (the external call, and the storyboard shot commands).
+// The param shapes of the two injected families (the external call, and the storyboard shot commands).
 export type {
   McpInvokeParams,
   ShotCreateCommandParams,
@@ -66,10 +66,10 @@ export type {
   ShotSetMetaCommandParams,
   StoryboardCreateCommandParams,
 } from './command.js';
-// r6 (storyboard): the shot image import's descriptor, by name, for the store's registration.
-export * as storyboardR6Commands from './descriptors-storyboard-r6.js';
+// Storyboard: the shot image import's descriptor, by name, for the store's registration.
+export * as shotImageCommands from './descriptors-shot-image.js';
 export * as commands from './descriptors.js';
-// m9 (project export): the project, recipe, vocabulary and cover-import descriptors, by name. The store reads them here.
+// Project export: the project, recipe, vocabulary and cover-import descriptors, by name. The store reads them here.
 export * as projectCommands from './descriptors-project.js';
 export {
   AUTHOR_MAX,
@@ -126,7 +126,7 @@ export {
 } from './view.js';
 export { DECLARED_PARAMS, VARIOUS_PARAM_NAMES } from './params.js';
 export { HINT_READ_TREE } from './params.js';
-// m4-furniture: the saved-filter and project-goal params, named by the store and the harness's tool descriptors.
+// The saved-filter and project-goal params, named by the store and the harness's tool descriptors.
 export type {
   BinderDeleteFilterParams,
   BinderSaveFilterParams,
@@ -166,7 +166,7 @@ export {
 } from './coherence.js';
 // The run discard's descriptor (descriptors-coherence.ts). The store imports it for its registry row.
 export { coherenceDiscardRun } from './descriptors-coherence.js';
-// m6-script: the import and container-settings params and limits (descriptors-script.ts), named by the store, the desktop and
+// The import and container-settings params and limits (descriptors-script.ts), named by the store, the desktop and
 // the dialogue package's parity test.
 export type {
   DialogueImportInkParams,
@@ -207,7 +207,7 @@ export {
   CHAPTERLESS_DOCUMENT_REFUSAL,
 } from './descriptors.js';
 
-// m8-integration: the shapes a tool package declares its tools with, so a media module needs no import of the harness
+// The shapes a tool package declares its tools with, so a media module needs no import of the harness
 // (which imports it). The harness re-exports each of them (schema.ts, errors.ts, types.ts).
 export { param, toJsonSchema } from './tool-schema.js';
 export type {
@@ -225,5 +225,5 @@ export type {
 } from './tool-schema.js';
 export { refusal, type RefusalOptions } from './refusal.js';
 export type { ToolValue } from './tool-value.js';
-// m9 (fix): the name a project with no recipes key holds (exporter.md §4). The exporter names its default recipe with it.
+// The name a project with no recipes key holds (exporter.md §4). The exporter names its default recipe with it.
 export { DEFAULT_RECIPE_NAME } from './recipe-names.js';

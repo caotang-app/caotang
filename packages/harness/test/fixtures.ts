@@ -124,7 +124,7 @@ export function makeHarness(overrides: Partial<HarnessOptions> = {}, state: Proj
   return createHarness({ state, clock: clock.now, ...overrides });
 }
 
-/** A registry whose `export.compile` and `export.compileSelection` applies are fakes, for the apply that M9 will bring. */
+/** A registry whose `export.compile` and `export.compileSelection` applies are fakes, for the real apply that is not built yet. */
 export function registryWithFakeExports() {
   const registry = createProjectCommandRegistry({ clock });
   const fakeApply = (state: unknown, params: Record<string, unknown>, context: ApplyContext) => {

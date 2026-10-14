@@ -109,7 +109,7 @@ export type AgentEvent =
   | { readonly type: 'checkpoint'; readonly turnId: string; readonly undoGroupId: string; readonly label: string; readonly note?: string }
   | { readonly type: 'report'; readonly turnId: string; readonly report: TurnReport };
 
-/** The label every checkpoint row carries (agent-harness §5, an earlier change 2026-09-10). */
+/** The label every checkpoint row carries (agent-harness §5). */
 export const CHECKPOINT_LABEL = 'restore to before this turn';
 
 /**

@@ -44,7 +44,7 @@ export const CODEX_INCLUDE_POLICIES = ['always', 'detected', 'manual', 'never'] 
 /** codex.md §2's closed `type` enum for v0.1 ("custom types = v0.2"). */
 export const CODEX_TYPES = ['character', 'location', 'object', 'lore', 'subplot', 'other'] as const;
 
-/** codex.md §2's closed `origin` enum (D5). */
+/** codex.md §2's closed `origin` enum. */
 export const CODEX_ORIGINS = ['manual', 'agent', 'import'] as const;
 
 /** CodexEntry.origin, kept as a named type so a caller cannot widen it by accident. */
@@ -84,9 +84,9 @@ export function coerceIncludePolicy(raw: unknown): CodexCoercion<CodexIncludePol
  * codex.md §2: "`origin` — unknown value on load → coerce to `'agent'` + warning
  * (enum closed)."
  *
- * `'agent'` and not `'manual'`, which reads backwards until you follow D5: an
- * unrecognised provenance is *not* evidence of a human having written it, and
- * D5 ranks hand-authored above agent-inferred precisely so the ambiguous case
+ * `'agent'` and not `'manual'`, which reads backwards until you follow the provenance
+ * rule: an unrecognised provenance is *not* evidence of a human having written it,
+ * and codex.md ranks hand-authored above agent-inferred precisely so the ambiguous case
  * does not outrank the entry it was found on. §2's absent-value rule is separate
  * and is NOT this function's business — absence is `'manual'` (project-format §2,
  * "missing `origin` = `'manual'`"), which is a stated default, not a coercion.

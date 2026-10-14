@@ -9,7 +9,7 @@
  *
  * Compile errors are not findings. §5's registry has no check id for an unknown divert or a
  * syntax error, and §2.2 adds no new check class, so they come back as `errors`: a blocking
- * list for the export and the draft gates. That is a spec gap, named in the report.
+ * list for the export and the draft gates. That is a spec gap.
  */
 
 import type { Evidence, FindingSeverity } from '@caotang/coherence';

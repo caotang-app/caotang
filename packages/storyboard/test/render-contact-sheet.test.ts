@@ -1,7 +1,7 @@
 /**
  * The contact sheet — storyboard.md §6. The page plan is the part with structure, so most of this file checks
  * positions: what fits on a page, what sits inside the margins, what overlaps, and in what order cards read.
- * The PDF port is exercised with a stand-in emitter, since no library is pinned (the C28 gate).
+ * The PDF port is exercised with a stand-in emitter, since no library is pinned (the PDF-library benchmark has not run).
  */
 
 import { describe, expect, it } from 'vitest';
@@ -292,7 +292,7 @@ describe('the renderer: the page plan, the images, and the PDF port', () => {
     const { fixture, fs } = await project();
     const result = await new ContactSheetPdfRenderer().render(fs, fixture.state, ['board1']);
     expect(result).toMatchObject({ ok: false, refusal: { code: 'pdf-engine-not-wired' } });
-    expect(result.ok === false && result.refusal.message).toContain('C28');
+    expect(result.ok === false && result.refusal.message).toContain('no PDF engine is wired yet');
   });
 
   it('hands the plan and the images to the emitter, and returns what the emitter wrote', async () => {

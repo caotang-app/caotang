@@ -1,10 +1,10 @@
 /**
  * Ids for the coherence module — the same Crockford base32 family as node and
- * codex ids ([project-format.md A4](../../../docs/architecture/project-format.md)),
+ * codex ids ([project-format.md](../../../docs/architecture/project-format.md)),
  * with three prefixes of its own: `f_` finding, `r_` run, `w_` world rule (coherence.md §3, §4.1, §4.3).
  *
  * `@caotang/ids` owns the prefix union, and this module mints through it with its own
- * prefix (the union widened for these three in this work, rather than
+ * prefix (the union carries these three, rather than
  * borrowing `c` and swapping the prefix afterwards). The body is ten Crockford
  * characters from the family's randomness, and the spec's uniqueness rule still
  * applies: `taken` re-rolls on collision, and an exhausted re-roll is a throw.

@@ -1,6 +1,6 @@
 /**
  * The user guide names controls and stops by the words the app shows, so a guide sentence can drift from the code without anything
- * failing. These tests pin the few claims a review found wrong or missing: what a reopened folder can save to, the
+ * failing. These tests pin the claims that are easiest to get wrong: what a reopened folder can save to, the
  * shot board's card sizes and derive offer, and the stop a tab shows when Caotang was updated in another tab. Each reads the source
  * the claim describes too, so a renamed control fails here rather than leaving the guide naming a button that is gone.
  */
@@ -76,7 +76,7 @@ describe('the user guide’s reviewed claims match the code', () => {
 
   it('says focus mode’s status line tells the writer when the panels stay', () => {
     expect(guide).toContain('The status line says so when you turn focus on, and its **Settings › Writing** opens that setting.');
-    // The owner's words, with "Settings › Writing" a link to the section.
+    // The wording, with "Settings › Writing" a link to the section.
     const workspace = read('apps/desktop/src/components/Workspace.tsx');
     expect(workspace).toContain("text: 'Focus mode is on. The binder and inspector stay open, as set in '");
     expect(workspace).toContain("link: { label: 'Settings › Writing', after: '.', onClick: () => setSettingsSection('writing') }");

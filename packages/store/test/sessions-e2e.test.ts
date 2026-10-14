@@ -25,7 +25,7 @@ import {
 
 const NOW = new Date('2026-10-02T15:00:00.000Z');
 
-describe('a writing session reaches sessions.jsonl (B-debt item 5, end to end)', () => {
+describe('a writing session reaches sessions.jsonl (end to end)', () => {
   it('counts a saved write into the session, ends it, and reads back as one line', async () => {
     const state = createProjectState(createEmptyManifest('The Lighthouse Keeper', NOW), { now: NOW });
     const node = addDocument(state, { parentId: 'manuscript', title: 'The Landing', body: 'one two three', now: NOW });

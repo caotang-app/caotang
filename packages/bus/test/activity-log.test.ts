@@ -1,5 +1,5 @@
 /**
- * §8's report surface and the missing-report refusal — an earlier change, pipeline half.
+ * §8's report surface and the missing-report refusal — the pipeline half.
  *
  * ## What the pipeline can enforce, and what only this file can
  *
@@ -20,7 +20,7 @@
  * it holds was read *before* the apply — so a silent default would be either an
  * empty digest (a claim about a change nobody described) or a restatement of the
  * command name (a digest that says nothing the `command` field does not already
- * say). Both are the "row that claimed a digest it had not computed" an earlier change refused
+ * say). Both are the "row that claimed a digest it had not computed" the log refuses
  * to write in the first place. The third option is to say so, loudly, and it is
  * the same shape §5's registration refusal already has.
  *
@@ -396,7 +396,7 @@ describe('§8 — the log itself', () => {
   });
 });
 
-describe('B-debt item 7 — the caller names the source, and a refusal that left an effect is logged', () => {
+describe('the caller names the source, and a refusal that left an effect is logged', () => {
   it('stamps the source the caller names, and native when it names none', () => {
     const { bus, log } = harness();
     const registry = registryWith(reporting({ undo: 'compensable' }, captured));

@@ -5,7 +5,7 @@
     // runtime. `src/runtime/` is browser-targeted (§4/§8) and the test double is
     // typed against the *real* `IDB*` contracts on purpose: a fake that is
     // checked against the genuine interfaces cannot agree with the store about
-    // a misuse of the API. `M0`'s "mock provider importable headless" is a
+    // a misuse of the API. The "mock provider importable headless" guarantee is a
     // runtime property and is unaffected — types are erased.
     "lib": ["ES2023", "DOM"],
     "types": ["node"],

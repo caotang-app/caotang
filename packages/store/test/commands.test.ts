@@ -1,6 +1,6 @@
 /**
  * The eight `inverse`/`compensable` structure applies, end to end through §3's
- * pipeline — an earlier change, and the pair plus the codex batch on top.
+ * pipeline, and the pair plus the codex batch on top.
  *
  * ## What is being tested, and what would pass anyway
  *
@@ -45,11 +45,10 @@
  * asserted, because a store registry that quietly stopped implementing a name and
  * a bus registry that quietly started would each be a silent loss.
  *
- * `binder.create` was asserted **absent** through that change-an earlier change, because its exact
+ * `binder.create` ships together with `project.deleteNode`, because its exact
  * inverse is `project.deleteNode` and a create whose undo is a command the bus
- * refuses is a write-auto command that reports success and cannot be undone. An earlier change
- * ships the pair, and the two tests that pinned the refusal are now the two that
- * pin the pair.
+ * refuses is a write-auto command that reports success and cannot be undone. Two
+ * tests pin the pair.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -559,7 +558,7 @@ describe('binder.move — §2 gap-encoding, and an inverse that is itself a move
   });
 
   it('reorders within the same parent — the moving node is not one of its own target siblings', () => {
-    // A review, finding 1. `siblingOrderAt`'s `movingId` excludes the node being
+    // `siblingOrderAt`'s `movingId` excludes the node being
     // moved from the sibling set it computes an order against, and its own doc
     // gives the reason: *"counting it would shift every index the caller meant."*
     // That exclusion is only observable when the node stays **inside** the parent
@@ -1090,14 +1089,10 @@ describe('project.deleteNode — a subtree, its bodies, and the one artifact', (
   });
 
   it('drops the removed ids’ counts and keeps every surviving one — and the undo puts them back', () => {
-    // **Re-cut 2026-10-07.** This test previously asserted the
-    // opposite, and its reason was not wrong so much as *about a field with no
-    // producer*: "dropping the removed ids' counts while every other count is
-    // just as stale would make the cache less self-consistent, not more, and
-    // nothing reads it as truth before the next rebuild." an earlier change gave `wordCounts`
-    // the writer §9 requires, and all four clauses of that stopped holding at
-    // once. What survives of the original claim is kept as the second half
-    // below: a survivor's stale count really is left exactly as it was.
+    // Keeping the removed ids' counts would only be defensible for a field with
+    // no producer that nothing reads; `wordCounts` has the writer §9 requires.
+    // The second half below pins what does hold: a survivor's stale count is
+    // left exactly as it was.
     const h = harness();
     h.state.manifest.derived.wordCounts = { [LANDING]: 812, [STORM]: 7, [OTHER]: 40 };
     const group = h.run(cmd({ name: 'project.deleteNode', params: { nodeId: CHAPTER_ONE } }))
@@ -1155,12 +1150,12 @@ describe('codex.upsert — one group, every entry compensated inside it', () => 
     const id = (outcome.result as { created: string[] }).created[0]!;
     const entry = (h.state.manifest.codex ?? []).find((e) => e.id === id)!;
 
-    // D5: the harness owns provenance, so `origin` comes from who issued the
+    // codex.md §2: the harness owns provenance, so `origin` comes from who issued the
     // command — the context carries it, not the op.
     expect(entry.origin).toBe('agent');
 
-    // **And the op cannot even name it** (it used to be dropped, which
-    // proved the same thing about the *result* while telling the caller `ok`).
+    // **And the op cannot even name it** (silently dropping it would prove the
+    // same thing about the *result* while telling the caller `ok`).
     // The stronger half is the second assertion below: a command that tries is
     // refused outright, so no entry exists carrying a provenance nobody chose.
     const h2 = harness({ approvedPlan: true });
@@ -1182,7 +1177,7 @@ describe('codex.upsert — one group, every entry compensated inside it', () => 
     expect(h2.state.manifest.codex ?? []).toHaveLength(2);
     expect(h2.state.manifest.codex!.map((e) => e.name)).toEqual(['Elena', 'Kestrel']);
     expect(h2.notified, 'a refused command must not notify an outcome').toHaveLength(0);
-    // D5 also requires sources on an agent entry; the op carries no citations, so
+    // codex.md also requires sources on an agent entry; the op carries no citations, so
     // the list is present and empty rather than absent.
     expect(entry.sources).toEqual([]);
   });
@@ -1256,7 +1251,7 @@ describe('codex.upsert — one group, every entry compensated inside it', () => 
     h.run(
       cmd({
         name: 'codex.upsert',
-        // An agent touching a hand-authored entry: D5 says it appends a source and
+        // An agent touching a hand-authored entry: codex.md says it appends a source and
         // never flips the origin, and an append it cannot express is a gap, not a
         // licence to rewrite what it did not change.
         params: { entries: [{ action: 'update', id: ENTRY, description: 'The keeper, revised.' }] },
@@ -1295,8 +1290,8 @@ describe('codex.upsert — one group, every entry compensated inside it', () => 
   });
 
   it('refuses a bare create before the apply, so no nameless entry is written', () => {
-    // An earlier change kept the apply total for a nameless, typeless create and wrote `name: ''`,
-    // which the next load then refused. codex.md §2 makes the name required, so the
+    // The apply is total: a nameless, typeless create would write `name: ''`,
+    // which the next load would refuse. codex.md §2 makes the name required, so the
     // bus now refuses the op in `validate` (bus validate, "refuses a create with no
     // name"). Nothing reaches the apply, so the apply's `''` default is unreachable
     // from here; the `type` default below is what this test still pins.
@@ -1328,9 +1323,9 @@ describe('codex.upsert — one group, every entry compensated inside it', () => 
     expect(entry.description).toBe('');
   });
 
-  // B-debt item 8. The apply used to write `sources: []` on every create, so the
+  // The apply used to write `sources: []` on every create, so the
   // citations the extraction recorded were checked by nothing and stored nowhere.
-  // A create keeps the ones it carries; an update adds to the entry's own (D5).
+  // A create keeps the ones it carries; an update adds to the entry's own.
   it('stores the citations a create carries, and an update appends to them', () => {
     const h = harness();
     // Verbatim slices of the landing body, "The ferry was late, as always.", at the
@@ -1397,31 +1392,32 @@ describe('the bus/store split these applies depend on', () => {
     }
   });
 
-  it('keeps §9\'s closed set at twenty names, and without an exporter only M9\'s two export names are left', () => {
+  it('keeps §9\'s closed set at twenty names, and without an exporter only the two export names are left', () => {
     const registry = createProjectCommandRegistry({ clock });
     const implemented = Object.values(registry).filter((entry) => entry.apply !== undefined);
     // Five `view.*` (three, `view.setExpanded` and
-    // `view.setCorkboardScope` from M4's shell), the six `inverse` names (An earlier change, and
-    // `binder.create`), the five `compensable` text names, and that change's
+    // `view.setCorkboardScope`), the six `inverse` names (including
+    // `binder.create`), the five `compensable` text names, and
     // `codex.upsert` and `project.deleteNode`. What remains is `export.compile`
-    // and `export.compileSelection`: M9 ships their applies, but they register
+    // and `export.compileSelection`: the exporter ships their applies, but they register
     // only when an exporter is injected (export-commands.test.ts), and none is
     // here. The count is the thing that would move if a slice quietly implemented
     // the wrong names.
     //
-    // m8 adds the coherence module's two names (coherence.md §7.1): `coherence.setSceneMeta` and
+    // The coherence module adds two names (coherence.md §7.1): `coherence.setSceneMeta` and
     // `coherence.setFindingStatus`. Their applies live here with the rest of the project's, so they
     // are implemented without an exporter. Twenty-two names in all, twenty of them implemented.
-    // m8-integration adds `mcp.invoke` (extensibility §6) and the storyboard module's three shot commands. Each is
+    // `mcp.invoke` (extensibility §6) and the storyboard module's three shot commands come next. Each is
     // descriptor-only until its injected half is supplied (`mcpInvoke`, `shots`), so the implemented count is the same.
-    // m9 (project export) adds seven names: 26 + 7 = 33 keys. Six of them have applies that need no injected port
+    // Project export adds seven names: 26 + 7 = 33 keys. Six of them have applies that need no injected port
     // (project.rename, project.setMetadata, vocabulary.upsert, vocabulary.remove, recipe.save, recipe.delete), so the
     // implemented count is 20 + 6 = 26. project.importAsset is implemented only once the asset port is injected.
-    // m4-furniture adds the four furniture names (binder.saveFilter, binder.deleteFilter, project.saveGoal,
+    // Saved filters and goals add four names (binder.saveFilter, binder.deleteFilter, project.saveGoal,
     // project.deleteGoal), whose store applies are always injected here: 33 + 4 = 37 keys, and 26 + 4 = 30 implemented.
-    // m8 (run history) adds `coherence.discardRun` (coherence.md §7.1), implemented without an exporter: 38 names, 31 implemented.
-    // r6 (storyboard) adds `shot.importImage`, descriptor-only until both its ports are injected: 38 + 1 = 39 keys, and the
-    // implemented count stays 31, because the registry here is built with neither. m6-script adds `screenplay.import`,
+    // The run history adds `coherence.discardRun` (coherence.md §7.1), implemented without an exporter: 38 names, 31 implemented.
+    // The storyboard's image import adds `shot.importImage`, descriptor-only until both its ports are injected: 38 + 1 = 39
+    // keys, and the implemented count stays 31, because the registry here is built with neither. The script imports add
+    // `screenplay.import`,
     // `dialogue.importInk` and `dialogue.setMeta`, whose applies are the store's own: 39 + 3 = 42 names, 31 + 3 = 34 implemented.
     expect(Object.keys(registry)).toHaveLength(42);
     expect(implemented).toHaveLength(34);

@@ -282,7 +282,7 @@ function DocumentEditor({
   const ghostFor = snapshot.ghosts.findLast((draft) => draft.docId === docId);
   const ghostHere = ghostFor !== undefined && editor !== null ? editor.ghost : null;
 
-  // A draft that lands is brought into view with its Apply bar, so the writer does not scroll the editor to find it (L3).
+  // A draft that lands is brought into view with its Apply bar, so the writer does not scroll the editor to find it.
   const landed = ghostFor?.callId;
   useEffect(() => {
     if (landed === undefined || ghostHere === null) return;

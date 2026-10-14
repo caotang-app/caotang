@@ -91,14 +91,14 @@ describe('§3 of agent-harness.md, read from the file', () => {
 });
 
 describe('the metadata table as a whole', () => {
-  // m8 adds four extension rows beyond doc.import: codex.import (codex.md §2, D5) and the coherence
+  // Four extension rows follow doc.import: codex.import (codex.md §2 provenance) and the coherence
   // module's three tools (coherence.md §7, registry 14 → 17). The v0.1 surface is still the frozen 14.
   it('keeps agent.plan in the table as the fourteenth row, and marks the extensions as the only rows beyond it', () => {
     expect(metadataFor('agent.plan')?.risk).toBe('meta');
     const extensions = TOOL_METADATA.filter((meta) => meta.surface === 'extension').map((meta) => meta.name);
-    // m8-integration: tool.search (extensibility §5), then the storyboard and prompt-pack modules' tools. Each is an
+    // Then tool.search (extensibility §5), then the storyboard and prompt-pack modules' tools. Each is an
     // extension row, so none can be mistaken for part of the frozen v0.1 surface. The dialogue module's two rows close the
-    // list (dialogue-narrative.md §7), now that the module registers.
+    // list (dialogue-narrative.md §7).
     expect(extensions).toEqual([
       'doc.import',
       'codex.import',

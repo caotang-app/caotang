@@ -27,7 +27,7 @@ export function DialogueMetaSection({ session, node }: { session: ProjectSession
   const report = useReport();
   const meta = readDialogueMeta(node.dialogue).meta;
   // The codex through the hook: the store changes an entry in place, so a memo keyed on the stored array would keep the names it read before
-  // a rename or an alias, and the findings count would go stale (L7, the same fault the dialogue view had).
+  // a rename or an alias, and the findings count would go stale (the same fault the dialogue view had).
   const codex = useCodexEntries(session);
   const characters = codex.filter((entry) => entry.type === 'character');
   // The check runs the Ink compiler, so it is read again only when the body or the codex changes, not on every render of the Inspector.

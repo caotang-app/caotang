@@ -60,7 +60,7 @@ export interface PreparedCommand {
   readonly name: CommandName;
   readonly params: CallParams | ((done: readonly CommandDone[]) => CallParams);
   /**
-   * The provenance the tool gives the command (codex.md §2 D5): `'import'` for codex.import's
+   * The provenance the tool gives the command (codex.md §2): `'import'` for codex.import's
    * `codex.upsert`. It is set by the tool's own code and carried on the bus envelope, never read from
    * the caller's params, so a model cannot name the origin it is stamped with.
    */
@@ -165,14 +165,14 @@ export type PortToolName =
   | 'coherence.scan'
   | 'coherence.review'
   | 'coherence.setFindingStatus'
-  // m8-integration: the Tier-2 gateway (extensibility §5), and the storyboard and prompt-pack modules' tools. The
+  // The Tier-2 gateway (extensibility §5), and the storyboard and prompt-pack modules' tools. The
   // two model-backed kinds stay unwired until an app supplies their ports (see runtime.ts).
   | 'tool.search'
   | 'shots.derive'
   | 'shots.annotate'
   | 'prompt.draft'
   | 'prompt.variant'
-  // m8-integration: the dialogue module's two tools (dialogue-narrative.md §7). `dialogue.table` is a read and is wired
+  // The dialogue module's two tools (dialogue-narrative.md §7). `dialogue.table` is a read and is wired
   // by default; `dialogue.draft` takes the loop's staged Ink, and is wired by the agent ports (`createAgentPorts`).
   | 'dialogue.draft'
   | 'dialogue.table';

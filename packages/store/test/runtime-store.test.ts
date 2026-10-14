@@ -384,7 +384,7 @@ describe('§4/command-bus §6 — the revision guard is inside the write transac
     // invariant exists to prevent, invisible in the body and obvious in the
     // counter.
     //
-    // Mutation-checked 2026-09-30: moving the comparison into a separate
+    // Mutation-checked: moving the comparison into a separate
     // pre-read transaction and deleting it from the write transaction leaves the
     // test above fully green. This one fails — both writes land. That asymmetry is
     // the point: the revision-reaching-2 assertion above proves serialization, not

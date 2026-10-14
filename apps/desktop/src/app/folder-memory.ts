@@ -25,7 +25,7 @@ export function folderKey(projectId: string): string {
  * Whether a folder lives in the origin's private file system (`navigator.storage.getDirectory()`), rather than on the writer's disk. No
  * folder picker hands one out; the end-to-end suite's stand-in picker does. Such a folder is not remembered: Chromium closes the page when
  * it reads one of these handles back from IndexedDB in a private (off-the-record) profile, which is what a test browser runs in (measured
- * 2026-10-14 on Chromium 153, build 1243; a handle read back in an ordinary profile works). The suite turns the guard off, in an ordinary
+ * on Chromium 153, build 1243; a handle read back in an ordinary profile works). The suite turns the guard off, in an ordinary
  * profile, with `caotangRememberPrivateFolders` on the page.
  */
 async function inPrivateFileSystem(folder: DirectoryHandleLike): Promise<boolean> {

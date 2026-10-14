@@ -4,11 +4,10 @@
  *
  * ## Why so much of this file reads `editor-engine.md`
  *
- * The acceptance criterion (a) is *"§4's own sentence as the criterion —
- * `bodyOffsetFromPmPos(pmFromBodyOffset(o)) === o` over whole docs, **quoted
- * rather than restated**"*. A hand-written copy of that identity would only prove
- * the copy still matches itself — the same failure an earlier change refused for §3.1 and an earlier change
- * for §9's registry. So the sentence is read out of the spec file, the two
+ * The claim is §4's own sentence — `bodyOffsetFromPmPos(pmFromBodyOffset(o)) === o`
+ * over whole docs, **quoted rather than restated**. A hand-written copy of that
+ * identity would only prove the copy still matches itself — the same failure the
+ * suites refuse for §3.1 and for §9's registry. So the sentence is read out of the spec file, the two
  * function **names** are parsed out of it, and the identity is then run through
  * whatever the package exports under those names. Deleting the sentence fails the
  * first test; renaming an export fails the second; and the round trip itself is
@@ -19,21 +18,19 @@
  * §4 describes a per-block map and then asserts a round trip that a per-block map
  * cannot deliver — a selection is an offset *inside* a block. So the map also
  * records a run per text leaf, equally long on both sides, and the conversions
- * bisect to a run and fall back to a block. The full argument, the two spec
- * corrections it forced and the
- * 2026-10-04 (21:00x); what this file pins is that the *measurements* behind it
- * hold: every text leaf of the whole corpus is located, no block degrades, and
+ * bisect to a run and fall back to a block. What this file pins is that the
+ * *measurements* behind it hold: every text leaf of the whole corpus is located, no block degrades, and
  * every run is the same length on both sides.
  *
  * ## The three controls, in the direction each can fail
  *
  * 1. **The map is measured against `serialize(doc)`, not against §4's
  *    concatenation.** Two sibling lists are the case that separates them, and
- *    An earlier change measured the alternation that makes it: `- a\n\n- b` is *one* loose
+ *    the alternation that makes it is measured: `- a\n\n- b` is *one* loose
  *    list, `- a\n\n* b` is *two*. A map built from per-block concatenation would
  *    measure offsets against a body this product never writes.
- * 2. **The carrier carries, and `groupLossWarnings` groups.** A planning decision settled both
- *    halves; the controls are in both directions — a matched `<span>` pair becomes
+ * 2. **The carrier carries, and `groupLossWarnings` groups.** Both halves are
+ *    settled; the controls are in both directions — a matched `<span>` pair becomes
  *    one entry reporting 2 nodes, and two *different* codes on one line stay two
  *    entries.
  * 3. **The interface is checked in both directions.** A conforming
@@ -135,9 +132,9 @@ describe('the projection map, measured over the whole §13 corpus', () => {
   });
 
   it('records WHICH locator located each run — asserted per leaf, because a total cannot see a rescue', async () => {
-    // A review measured the split by instrumenting `locate` — 72 of 76 runs on the
-    // first search, 4 on the second, 0 on the third — and then nothing carried
-    // the result, so the suite could only count totals. A total is exactly the
+    // Instrumenting `locate` gives the split — most runs on the first search,
+    // a few on the second, none on the third. Without the per-run field the
+    // suite could only count totals. A total is exactly the
     // shape a silent rescue preserves: a leaf neither of the first two searches
     // finds gets picked up by the fallback and `runs.length` reads the same.
     // `ProjectionRun.matched` carries it per run, and this asserts it per leaf.
@@ -188,15 +185,14 @@ describe('the projection map, measured over the whole §13 corpus', () => {
 
     expect(loaded, 'corpus entries that failed to load').toBe(CORPUS.length);
     // The measured split, kept as a cross-check on the per-leaf assertions above
-    // rather than as the assertion. The figures were 72 / 4 / 0 over 76 runs;
-    // **An earlier change moved it to 77 / 4 / 0 over 81**, and the reason is
-    // measured rather than asserted: five §13 leaves carry an escape in their body
-    // spelling and are now cut at it, so they contribute 2 + 2 + 2 + 3 runs where
+    // rather than as the assertion. The figures are 77 / 4 / 0 over 81 runs
+    // (72 / 4 / 0 over 76 if leaves were not cut at escapes): five §13 leaves carry an
+    // escape in their body spelling and are cut at it, so they contribute 2 + 2 + 2 + 3 runs where
     // they contributed 1 each. Four of the five are `escape-bracket`,
     // `footnote-reference`, `html-raw-block` and `html-raw-inline`; the fifth,
     // `obsidian-heading-spacing`, has no escape left after the cut and is
-    // byte-identical to what a review measured. No leaf changed **which** locator found
-    // it — `raw` is still 4 and `escaped` is still 0 — so the per-leaf assertions
+    // byte-identical uncut. Cutting does not change **which** locator finds a leaf
+    // — `raw` is 4 and `escaped` is 0 either way — so the per-leaf assertions
     // above are unaffected, which is the point of keeping them primary.
     expect({ standalone, raw, escaped }).toEqual({ standalone: 77, raw: 4, escaped: 0 });
     // And the control in the direction the field can lie: a `matched` that was
@@ -243,8 +239,8 @@ describe('the projection map, measured over the whole §13 corpus', () => {
 
 describe('the escape-tolerant locator, which measured zero and had never run', () => {
   // §5 escapes on the way out and the first two locators look for unescaped text,
-  // so the third exists for a leaf that is written with escapes. A review measured it at
-  // **zero over the whole §13 corpus** and proved that by replacing its regexp with
+  // so the third exists for a leaf that is written with escapes. It fires
+  // **zero times over the whole §13 corpus**, proved by replacing its regexp with
   // one that can never match — which left all 234 editor tests green, because the
   // branch never fired. "Never fires" and "would work if it fired" are different
   // claims, and the second one was false: the pattern was built with
@@ -267,8 +263,8 @@ describe('the escape-tolerant locator, which measured zero and had never run', (
     };
   };
 
-  // **An earlier change moved every one of these from 1 to 2**, and the number is a
-  // consequence rather than a choice: a leaf carrying one escape is now **two**
+  // **Each of these is 2, not 1**, and the number is a
+  // consequence rather than a choice: a leaf carrying one escape is **two**
   // runs with the backslash between them, so the count follows the leaf. The
   // `matched` value is per run, so it counts runs, not locators.
   it.each([
@@ -297,17 +293,15 @@ describe('the escape-tolerant locator, which measured zero and had never run', (
     // backtick and the `{b}c` case; the other ten — `-`, `.`, `_`, `?`, `(`,
     // `|`, `{`, `}`, `!` and `+` — resolve on the first or second search, so no
     // pattern is ever constructed for them and they cannot fail for this test's
-    // reason. **The comment this replaces claimed all sixteen were "in the shape
-    // that reaches the third arm", which was false when written and is false
-    // now** — and an earlier change did not narrow the family, because the same six reach
-    // arm 3 at the own commit, measured against the commit before it.
+    // reason. **Not all sixteen are "in the shape
+    // that reaches the third arm"**: only these six reach arm 3.
     //
     // The claim is not "does not throw" (an unexercised branch satisfies that
     // too): it is that each of these documents yields a **complete** map, and
     // the first of them threw out of `buildProjectionMap` before the
     // construction was rebuilt character by character. The six are enough to
     // hold the construction, because it is uniform over characters rather than
-    // per-character — arm 3 made to throw fails 13 tests, and the pre-an earlier change
+    // per-character — arm 3 made to throw fails 13 tests, and the older
     // string-replace chain fails 13.
     const family = [
       '**a\\*b** and 2. c\\*d',
@@ -390,14 +384,13 @@ describe('the escape-tolerant locator, which measured zero and had never run', (
 });
 
 // ---------------------------------------------------------------------------
-// 2b. An earlier change: the run a leaf's body spelling actually occupies
+// 2b. The run a leaf's body spelling actually occupies
 // ---------------------------------------------------------------------------
 
 /**
  * **Every character inside a run is the same character on both sides.**
  *
- * This is the assertion an earlier change exists to make possible, and the one nothing in this
- * file could make before it. §4's retraction is satisfied by a map that is wrong:
+ * This is the assertion the escape-aware runs make possible. §4's retraction is satisfied by a map that is wrong:
  * `pmFromBodyOffset` and `bodyOffsetFromPmPos` compose into a retraction even when
  * a run's body text is `not \[a link` and its PM text is `not [a link]`, because
  * both conversions are consistently wrong about the same characters. §4's own words
@@ -407,9 +400,9 @@ describe('the escape-tolerant locator, which measured zero and had never run', (
  *
  * It asks the **run** what it claims, not the map: a run claims `pmFrom +
  * (o - bodyStart)` at body offset `o`, and §4's equal lengths are what make that
- * the mapping. Asking the map instead would make the control below unfalsifiable —
- * an earlier draft of this file did exactly that, computed `pmFromBodyOffset(map,
- * o)` for a run it had moved one character, and could not fail. The tie between
+ * the mapping. Asking the map instead would make the control below unfalsifiable:
+ * `pmFromBodyOffset(map, o)` computed for a run moved one character cannot fail.
+ * The tie between
  * the two is asserted in the next test, so the predicate cannot silently drift away
  * from the conversion it is supposed to be checking.
  */
@@ -525,7 +518,7 @@ describe('a leaf carrying an escape is cut at it, and every run reads the same o
 
 describe("§4's fixture sentence, read out of the spec and then obeyed", () => {
   it('§4 states the round trip this file asserts — deleting that sentence fails here', () => {
-    // The sentence as shipped, with the two corrections an earlier change measured:
+    // The sentence as shipped, with its two measured corrections:
     // `pmPosFromBodyOffset` was renamed to the shipped `pmFromBodyOffset`, and
     // the identity holds over a located run rather than over every offset of every
     // document — a body character and a PM position are not in bijection once a
@@ -568,11 +561,10 @@ describe("§4's fixture sentence, read out of the spec and then obeyed", () => {
   });
 
   it('pins the retraction over the WHOLE corpus, in both directions — the property §4 A1 states', async () => {
-    // A review measured this and no test asserted it: the retraction is what §4 A1 now
+    // The retraction is what §4 A1
     // claims (`bodyOffsetFromPmPos(pmFromBodyOffset(b)) === bodyOffsetFromPmPos(
-    // pmFromBodyOffset(b))` at **every** offset), and the retraction was pinned on
-    // one hand-built fixture only — so the sentence the suite obeys was the one
-    // A review corrected, and the true one was pinned nowhere.
+    // pmFromBodyOffset(b))` at **every** offset); one hand-built fixture is not
+    // enough to pin it, so it is asserted over the whole corpus.
     //
     // Three claims, kept separate because they are separate:
     //   (a) the **retraction** holds at every body offset and every PM position of
@@ -586,7 +578,7 @@ describe("§4's fixture sentence, read out of the spec and then obeyed", () => {
     //       offsets fail it, because a body character and a PM position stop being
     //       in bijection once the body holds a hard break, an image, a list marker
     //       or a fence. Without (c) a test of (a) alone would also pass on a map
-    //       that *was* the identity everywhere, which is the sentence a review removed.
+    //       that *was* the identity everywhere, which §4 does not claim.
     let bodyOffsets = 0;
     let pmPositions = 0;
     let identityFailures = 0;
@@ -922,7 +914,7 @@ describe('§4 through the in-memory implementation', () => {
     expect(selections[0]).toEqual({ from: 0, to: 5 });
   });
 
-  it('replaceRange reads its text as body Markdown, the way the Tiptap adapter does (M5 finding 8)', async () => {
+  it('replaceRange reads its text as body Markdown, the way the Tiptap adapter does', async () => {
     // The fixture and the product share `insertionOf`, and this pins the result the shared
     // suite could not see: a literal `*` would save as `\*Howdy\*`, which is not what was asked.
     const instance = await mount('Hello.\n');
@@ -930,7 +922,7 @@ describe('§4 through the in-memory implementation', () => {
     expect(instance.getContent()).toBe('_Howdy_.\n');
   });
 
-  it('an offset in a heading’s leading syntax replaces the heading’s text, and adds no block (M5 finding 1)', async () => {
+  it('an offset in a heading’s leading syntax replaces the heading’s text, and adds no block', async () => {
     // Before the fix, offset 0 mapped to `-1`, and the insert was refused by the view.
     const instance = await mount('# Title\n\nSome text.\n');
     expect(() => instance.replaceRange({ from: 0, to: 1 }, 'X')).not.toThrow();

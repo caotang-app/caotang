@@ -32,7 +32,7 @@
 
 - Pane layout is **fixed v0.1** (no user-resizable panes, no movable rails — polish backlog); focus mode (editor-engine §10) hides left rail + inspector, editor keeps state; the hide is the Writing setting's, on by default (§5.2).
 - **Window width.** The shell's minimum is **960 px** (the workspace's `min-width`); below it the page scrolls sideways, and that is not a supported layout. From 1100 px down the rails narrow and the toolbar wraps onto a second line, so 1024 px fits with no sideways scroll (e2e/shell.spec.ts). Focus mode keeps one column: the toolbar on the first row and the centre under it, so the Focus button always leaves the mode.
-- **Focus mode and the Writing setting.** With Settings › Writing's "hide the binder and the inspector" off, focus mode keeps both, and the status line says so when focus mode turns on, in the owner's wording: "Focus mode is on. The binder and inspector stay open, as set in Settings › Writing." "Settings › Writing" is a button inside the sentence, drawn as a link, whose visible words are its name; it opens Settings at the Writing section.
+- **Focus mode and the Writing setting.** With Settings › Writing's "hide the binder and the inspector" off, focus mode keeps both, and the status line says so when focus mode turns on: "Focus mode is on. The binder and inspector stay open, as set in Settings › Writing." "Settings › Writing" is a button inside the sentence, drawn as a link, whose visible words are its name; it opens Settings at the Writing section.
 - The **agent panel** is a bottom drawer in the editor pane (harness §8): plan cards, checkpoint rows, ghost controls live there; it never overlaps the editor's ghost region.
 
 ## 2. Binder (module 2.2)
@@ -71,8 +71,8 @@
 
 ## 3. Corkboard (module 2.4)
 
-**Responsibility:** index-card grid for a container's children; drag-reorder; zoom. Owns view state only. **No commands of its own** — every gesture maps onto binder commands (verified against command-bus §9; media-track M3 later extends cards with shot fields, still no new commands).
-> **Media-track variants (2026-09-19, D2/D4 integration — same doctrine, zero new commands):** folders with `kind: 'storyboard'` render the corkboard in **shot mode** (card = image thumbnail + derived shot-number chip + spec row; gestures unchanged, metadata edits live in the Inspector — [storyboard.md](storyboard.md) §3.1); dialogue containers with `kind: 'branching'` add a **graph-view variant** over the parse-derived projection (view-only, auto-layout, click-through to text — [dialogue-narrative.md](dialogue-narrative.md) §3). Both variants introduce view state only (`view.setGraphFocus`, image lightbox); the command surface stays the binder set.
+**Responsibility:** index-card grid for a container's children; drag-reorder; zoom. Owns view state only. **No commands of its own** — every gesture maps onto binder commands (verified against command-bus §9; the storyboard later extends cards with shot fields, still no new commands).
+> **Media-track variants (same doctrine, zero new commands):** folders with `kind: 'storyboard'` render the corkboard in **shot mode** (card = image thumbnail + derived shot-number chip + spec row; gestures unchanged, metadata edits live in the board's Fields panel — [storyboard.md](storyboard.md) §3.1); dialogue containers with `kind: 'branching'` add a **graph-view variant** over the parse-derived projection (view-only, auto-layout, click-through to text — [dialogue-narrative.md](dialogue-narrative.md) §3). Both variants introduce view state only (`view.setGraphFocus`, image lightbox); the command surface stays the binder set.
 
 ### 3.1 Data binding
 - Scope: the active container (folder selected in binder → corkboard shows its children). `view.setCorkboardScope` (view command).
@@ -105,7 +105,7 @@
 | SceneMeta editor | coherence.md §8.3 | POV picker (codex characters), dayOffset/duration number fields, `after`/`expectedPresent` chip pickers | **Lands with the coherence module** (post-v0.1); the Inspector layout reserves the collapsible section from day one. |
 
 ### 4.2 Folder nodes
-Same panel minus notes (folders carry synopsis + keywords + status/label only — matches manifest fields; A1: folder = act/part card).
+Same panel minus notes (folders carry synopsis + keywords + status/label only — matches manifest fields; a folder is the act/part card).
 
 ### 4.3 Empty state
 No selection: "Select a document" hint + the three demo intents (context-assembly §6 wizard reuses them).
@@ -128,36 +128,36 @@ interface AppSettings {
   context: { totalBudgetTokens: number; /* default 12k */ layerBudgets: Record<'L2'|'L4'|'L5', number>; };  // context-assembly §3 config exposure
   coherence: { enabledChecks: DeterministicCheckId[]; defaultReviewScope: 'doc'|'changed'|'full'; maxFindings: number; };  // lands with coherence module
   mcp: { enabled: boolean; servers: McpServerConfig[]; };  // lands with the v0.2 MCP client (extensibility.md §3.1) — deny-by-default (enabled: false until first connect); server configs are app-level state, never project files
-  data: { projectStoreDir?: string; };  // Phase-3 (Tauri) placeholder; browser v0.1 = not editable, shown read-only
-  storage: { persisted?: boolean; evictionBannerDismissed?: boolean; };  // C25 posture (2026-09-17): browser persistence display state + banner dismissal; browser-API state mirrored here for UI, never authoritative (navigator.storage is)
+  data: { projectStoreDir?: string; };  // placeholder for the desktop app; browser v0.1 = not editable, shown read-only
+  storage: { persisted?: boolean; evictionBannerDismissed?: boolean; };  // §5.3 posture: browser persistence display state + banner dismissal; browser-API state mirrored here for UI, never authoritative (navigator.storage is)
 }
 ```
 
-- All budgets are **config-exposed, not hardcoded** (context-assembly D3); unknown/missing keys load to defaults.
+- All budgets are **config-exposed, not hardcoded** (context-assembly §8); unknown/missing keys load to defaults.
 - Mutation path: settings UI → app-level settings store (not the project bus — command-bus §9 "provider/settings mutation is app-level state"; the agent can never touch any of it, hard-deny class).
 
 ### 5.2 Sections & validation surfaces
 | Section | Contents | Validation |
 |---|---|---|
 | Providers | profile list, add/edit/delete, active radio | `listModels` probe at save (context-assembly §6); URL normalization (strip trailing `/`, versioned-path rule — provider-gateway §2); key field masked, stored AES-GCM (provider-gateway §7); `pricePer1k` optional numeric pair. |
-| Writing | session target, autosave debounce (100–5000 ms clamp), "In focus mode, hide the binder and the inspector" (`focusModeHideRails`, on by default; off, focus mode changes only the Focus button's pressed state; 2026-10-14) | numeric clamps in-form. |
-| Context | total budget + L2/L4/L5 layer budgets | **A total below the sum of the layer caps is a warning, not an error, and the total wins** (2026-10-09: the warn line names the sum); preview bar link. |
-| Coherence | the quick checks the Findings tab's scan runs (one checkbox per deterministic check, coherence.md §5.4), the scope the Findings tab starts with, and the most findings one model review may add (2026-10-09: the field's range is 1 to the cap) | the check list and the scope are the app's own choices, saved with the settings; the model review's plan (its calls, token estimates and first prompt) is shown in the Findings tab before the writer presses (coherence.md §7). |
+| Writing | session target, autosave debounce (100–5000 ms clamp), "In focus mode, hide the binder and the inspector" (`focusModeHideRails`, on by default; off, focus mode changes only the Focus button's pressed state) | numeric clamps in-form. |
+| Context | total budget + L2/L4/L5 layer budgets | **A total below the sum of the layer caps is a warning, not an error, and the total wins** (the warn line names the sum); preview bar link. |
+| Coherence | the quick checks the Findings tab's scan runs (one checkbox per deterministic check, coherence.md §5.4), the scope the Findings tab starts with, and the most findings one model review may add (the field's range is 1 to the cap) | the check list and the scope are the app's own choices, saved with the settings; the model review's plan (its calls, token estimates and first prompt) is shown in the Findings tab before the writer presses (coherence.md §7). |
 | MCP & tools | master switch, server cards (health dot, per-tool toggles, trust flag, remove) — **built with the v0.2 MCP client** (extensibility.md §8 and §3.5 for the model-facing names) | URL validation at save; per-entry-tolerant import; health states surfaced per card |
 | Appearance | theme | — |
 | Data | storage location (read-only in browser), export/import entry points | — |
 
-*(§5.3: the Data section additionally carries the browser-storage persistence row + eviction-risk banner per the C25 posture — adopted 2026-09-17.)*
+*(§5.3: the Data section additionally carries the browser-storage persistence row + eviction-risk banner per the posture below.)*
 
 ### 5.3 Browser-storage persistence
 
-Evidence: Dabble's web app carries a constant *"Data may be evicted"* warning: browser eviction is a real, shipped-competitor failure mode for the IndexedDB working store (C3's documented best-effort risk). The posture, for the **browser build** (the Phase-3 Tauri wrap removes the entire class):
+Evidence: Dabble's web app carries a constant *"Data may be evicted"* warning: browser eviction is a real, shipped-competitor failure mode for the IndexedDB working store (IndexedDB storage is best-effort by design). The posture, for the **browser build** (a native desktop-shell wrap would remove the entire class):
 
 1. **`navigator.storage.persist()` at project open** — called automatically when a project is opened (after the working store has something worth protecting); the result is **not re-asked** if already granted (`navigator.storage.persisted()` checked first). Firefox prompts the user via its own permission UI; Chromium grants per its heuristics. Never a Caotang-side modal for the *request* — the affordance lives in Settings.
 2. **Settings › Data gains a "Storage" row** (typed schema addition, app-level): `persisted: boolean` (from `navigator.storage.persisted()`), `usage`/`quota` (from `navigator.storage.estimate()` — same displayed-estimate honesty as token estimates), rendered as a plain status line: "Browser storage: persistent ✓" / "Browser storage: persistence not granted — the browser may evict this project under storage pressure."
 3. **Eviction-risk banner (persisted === false):** a **dismissible, non-alarming** info banner in the editor pane — Dabble-style constant warning is noise; a one-time dismissible banner with two actions: "Export a backup" (opens the artifact export, project-format §7) and "Learn why" (static explainer: what eviction means, what persistence grants). Never re-shown after dismissal this session; re-appears next session while `persisted === false`.
-4. **Failure-message template (A10 adoption):** any write-path failure surface adopts Dabble's framing — *"your words are waiting on your device, not gone"* class wording (pending writes remain in the runtime store; the artifact export is the recovery path). Concretely: the autosave-flush-failure indicator (editor-engine §9) and any storage-quota error envelope state what is safe *right now* + the one corrective action, never a bare code.
-5. **Not a command, not agent-visible:** persistence is browser-API state, not project state — no bus command, no activity-log entry, agent cannot touch it (app-level class, command-bus §9). Backups remain the real mitigation (C6's rolling snapshots + the artifact round-trip); persistence reduces eviction *risk*, never replaces export.
+4. **Failure-message template:** any write-path failure surface adopts Dabble's framing — *"your words are waiting on your device, not gone"* class wording (pending writes remain in the runtime store; the artifact export is the recovery path). Concretely: the autosave-flush-failure indicator (editor-engine §9) and any storage-quota error envelope state what is safe *right now* + the one corrective action, never a bare code.
+5. **Not a command, not agent-visible:** persistence is browser-API state, not project state — no bus command, no activity-log entry, agent cannot touch it (app-level class, command-bus §9). Backups remain the real mitigation (the manifest's rolling snapshots, project-format §4, + the artifact round-trip); persistence reduces eviction *risk*, never replaces export.
 6. **Evals:** Playwright-mocked `navigator.storage` (persist → true/false, estimate fixtures) — banner shows iff `persisted === false`, hides on grant; Settings row reflects both states; no banner when mocked as persisted.
 
 ### 5.4 First-run wizard entry
@@ -169,7 +169,7 @@ The Project panel is a dialog that opens from the project's name in the toolbar 
 
 ### 5.6 Keyboard chords added since v0.1
 
-- **`Ctrl+Alt+F`** focuses the binder's filter field (binder-filters §5). **`Ctrl+Shift+F`** stays focus mode, which shipped first and is in the user guide. The filter takes the Alt chord, as the 2026-10-09 decision records. The filter chord is supplementary, not part of the §2.5 set (binder-filters §5).
+- **`Ctrl+Alt+F`** focuses the binder's filter field (binder-filters §5). **`Ctrl+Shift+F`** stays focus mode, which shipped first and is in the user guide. The filter takes the Alt chord, as docs/decisions.md records. The filter chord is supplementary, not part of the §2.5 set (binder-filters §5).
 
 ## 6. Playwright traceability (the UI modules' shared eval bar)
 

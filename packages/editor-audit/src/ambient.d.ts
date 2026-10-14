@@ -5,19 +5,16 @@
  * `diff-match-patch` 1.0.5 is a 2012-era CommonJS module with no bundled
  * declarations, and `@types/diff-match-patch` is a separate package. Adding a
  * dev dependency to type one lazy import is a worse trade than 20 lines here,
- * and the surface actually used is a handful of functions wide. If M5 grows the
+ * and the surface actually used is a handful of functions wide. If the editor grows the
  * anchor ladder, this file is the thing to delete in favour of the real types.
  *
- * **Corrected 2026-10-06, and the correction is the reason it is
- * worth reading.** This file previously declared
+ * **The pinned constructor takes no arguments at all** — `diff_match_patch` is
+ * `function () { … }`, and its own comment says *"Redefine these in your program
+ * to override the defaults"*. A declaration of
  * `constructor(options?: DiffMatchPatchOptions)` with `readonly Match_Threshold`
- * / `readonly Match_Distance`. **The pinned constructor takes no arguments at
- * all** — `diff_match_patch` is `function () { … }`, and its own comment says
- * *"Redefine these in your program to override the defaults"* — so the declaration
- * typed a configuration call that **silently does nothing**: no type error, no
- * runtime error, and a search left at the 1 000-character default. The audit's
- * bundle entry never configured anything and so never noticed; the anchor ladder
- * did, in the form of a ±2000 window that behaved like ±500. The fields are
+ * / `readonly Match_Distance` would type a configuration call that **silently
+ * does nothing**: no type error, no runtime error, and a search left at the
+ * 1 000-character default (a ±2000 window would behave like ±500). The fields are
  * mutable below for the same reason the constructor is parameterless: the knobs
  * are assignments.
  *

@@ -4,7 +4,7 @@
  * The limits are the D3 evidence: Seedance 2.5 is text-to-video from reference images only, with no
  * first frame, up to 30 image references, and a duration of 4 to 30 seconds. Every duration in the
  * union that falls inside that range is accepted. The evidence does not give Seedance's aspect ratios,
- * so the template takes the two both the other five vendors document, 16:9 and 9:16, until C29 confirms
+ * so the template takes the two both the other five vendors document, 16:9 and 9:16, until the vendor's documentation confirms
  * the rest. It documents no prompt cap, no seed and no audio, so none is enforced or sent.
  */
 
@@ -15,7 +15,7 @@ import { fieldIf, modelField, refNames, visualSentences } from './shared.js';
 export const SEEDANCE_2_5 = defineTemplate({
   id: 'seedance-2.5',
   displayName: 'Seedance 2.5',
-  provisional: 'The payload field names, the aspect ratios and the best-take fields are unverified until C29 checks them against ByteDance’s Seedance documentation.',
+  provisional: 'The payload field names, the aspect ratios and the best-take fields are unverified until they are checked against ByteDance’s Seedance documentation.',
   limits: {
     modes: ['t2v'],
     durations: [...VIDEO_DURATIONS],

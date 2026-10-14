@@ -29,10 +29,10 @@ test('a demo draft lands with its Apply bar in view above the agent drawer, and 
   const bar = page.getByTestId('ghost-bar');
   await expect(bar).toBeVisible();
   const drawer = page.getByTestId('agent-panel');
-  // The turn is waiting on the writer's decision, so the header says so and does not say the agent is working (L8).
+  // The turn is waiting on the writer's decision, so the header says so and does not say the agent is working.
   await expect(drawer.locator('.agent-busy')).toHaveText('Waiting for you');
 
-  // Without scrolling, the Apply button is inside the editor's visible area and above the drawer (L3).
+  // Without scrolling, the Apply button is inside the editor's visible area and above the drawer.
   const apply = bar.getByRole('button', { name: 'Apply', exact: true });
   const pane = page.locator('.editor-pane:not([hidden])');
   const applyBox = await apply.boundingBox();
@@ -52,7 +52,7 @@ test('an applied draft is named in the writer’s words on the Undo button', asy
   await page.getByTestId('ghost-bar').getByRole('button', { name: 'Apply', exact: true }).click();
   await expect(page.getByTestId('checkpoint')).toBeVisible();
 
-  // The label is the agent's edit to the scene, not the store's own words for the write (L9).
+  // The label is the agent's edit to the scene, not the store's own words for the write.
   await expect(page.getByRole('button', { name: 'Undo', exact: true })).toHaveAttribute('title', 'Undo: the agent’s edit to “The Friend”');
 });
 
@@ -100,12 +100,12 @@ test('Fix with agent on a passage the demo does not script opens the drawer, say
   await fix.click();
 
   // The note under the finding makes no promise of a card: the demo's refusal arrives in the drawer after the note is written, so the
-  // note names where the outcome shows and does not say a card waits for approval (L1).
+  // note names where the outcome shows and does not say a card waits for approval.
   const note = page.getByRole('region', { name: 'Errors' }).locator('article.finding').first().getByRole('status');
   await expect(note).toHaveText('The fix has started in the agent panel. Its outcome shows there.');
   await expect(note).not.toContainText('Approve its card');
 
-  // The drawer opens with the fix's answer in it: the demo's words, and no card for a draft it will not write (L4).
+  // The drawer opens with the fix's answer in it: the demo's words, and no card for a draft it will not write.
   const drawer = page.getByTestId('agent-panel');
   await expect(drawer).toHaveClass(/is-open/);
   await expect(drawer).toContainText('answers only the three demo requests');
@@ -134,7 +134,7 @@ test('a finding on dialogue offers no Fix with agent, because the agent drafts s
   await expect(page.getByRole('button', { name: 'Fix with agent', exact: true })).toHaveCount(0);
 });
 
-test('a screenplay scene’s fix card can be approved, because its draft is read in the card (L2)', async ({ page }) => {
+test('a screenplay scene’s fix card can be approved, because its draft is read in the card', async ({ page }) => {
   await fakeEndpoint(page, (request) => (request.system.startsWith('You are drafting prose') ? 'MARA' : JSON.stringify({ reply: 'Done.' })));
   await useFakeEndpoint(page);
   await createProject(page, 'Lamp Book');
@@ -153,7 +153,7 @@ test('a screenplay scene’s fix card can be approved, because its draft is read
   await expect(finding).toBeVisible();
   await finding.getByRole('button', { name: 'Fix with agent', exact: true }).click();
 
-  // The card holds the screenplay draft, and its Approve is enabled: the draft is read where the card shows it (L2).
+  // The card holds the screenplay draft, and its Approve is enabled: the draft is read where the card shows it.
   const card = page.getByTestId('plan-card');
   await expect(card).toBeVisible();
   const approve = card.getByRole('button', { name: 'Approve', exact: true });

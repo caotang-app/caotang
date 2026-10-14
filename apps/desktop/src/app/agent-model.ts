@@ -285,7 +285,7 @@ export function draftCheckOf(args: {
       const draft = args.ghosts.find((ghost) => ghost.docTitle === ref) ?? null;
       const docId = scene?.docId ?? null;
       // A screenplay scene has no prose editor, so no ghost region can show its draft. The card shows the draft in full instead
-      // (PlanCard, "shown here"), and that is where it has been read, so it counts as previewed there (L2).
+      // (PlanCard, "shown here"), and that is where it has been read, so it counts as previewed there.
       const shownInCard = scene?.kind === 'screenplay';
       return {
         index: step.index,

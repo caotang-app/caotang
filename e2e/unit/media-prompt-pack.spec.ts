@@ -191,7 +191,7 @@ test.describe('the exports', () => {
       [1, 'n_SHOTA00001'],
       [2, 'n_SHOTB00001'],
     ]);
-    expect(pack.provisional).toContain('C29');
+    expect(pack.provisional).toContain('unverified until they are checked against');
   });
 
   test('the CSV has one row per shot under its header, and a prompt that starts like a formula is guarded with a quote', () => {

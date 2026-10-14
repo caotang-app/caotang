@@ -2,7 +2,7 @@
  * Mock provider gateway — [provider-gateway.md §8](docs/architecture/provider-gateway.md).
  *
  * A deterministic, scriptable implementation of `ProviderGateway` used by Vitest
- * headless tests and Playwright runs. This is the M0 exit-criterion artifact:
+ * headless tests and Playwright runs. It meets the requirement
  * "mock provider importable headless".
  *
  * Guarantees:

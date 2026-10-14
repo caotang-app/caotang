@@ -1,30 +1,17 @@
 /**
- * C16's **pin guard** — the thing §2's table says and criterion 1 asserts.
+ * The Tiptap preflight's **pin guard** — the thing §2's table says, asserted.
  *
  * ## Why this file exists
  *
- * An earlier change shipped a test named *"§2 pins prosemirror-changeset 2.4.4, not the deferred
- * 2.4.2"*, inside a `describe` block headed *"criterion 1 — the pin table is what
- * the spec says"*. Its assertion was:
- *
- * ```ts
- * expect(CANONICAL_STRINGIFY_OPTIONS.bullet).toBe('-');
- * ```
- *
- * `bullet` is a **remark-stringify dialect option** — which character a bullet
- * list uses. It has nothing to do with any package version, and it cannot fail
- * because a pin moved. Measured: reverting the real pin from `2.4.4` to the
- * deferred `2.4.2` in `package.json` leaves **all 335 tests green**, this one
- * included, while the neighbouring tests fail the moment `bullet` is touched —
- * the coupling ran the wrong way.
- *
- * That is the ninth instance of a recurring species (*a green
- * suite standing next to a guard that cannot see its subject*), and the first
- * where the guard was the slice's **whole reason to exist**: a gate whose name
- * is "the pin preflight" held no assertion about a pin. §2's row said
- * `prosemirror-changeset` **exact 2.4.4**, and the sentence beside it said
- * *"pinning a known-superseded patch is not a reason"* — a decision no test
- * could catch being undone.
+ * A pin guard has to read a pin. An assertion on a remark-stringify dialect
+ * option (say `CANONICAL_STRINGIFY_OPTIONS.bullet`) has nothing to do with any
+ * package version and cannot fail because a pin moved: reverting
+ * `prosemirror-changeset` from `2.4.4` to the deferred `2.4.2` in
+ * `package.json` would leave such a test green. That is the shape this file
+ * exists to avoid (*a green suite standing next to a guard that cannot see its
+ * subject*). §2's row says `prosemirror-changeset` **exact 2.4.4**, and the
+ * sentence beside it rules out pinning an older patch that a newer one already
+ * replaces — a decision only a test that reads the pin can catch being undone.
  *
  * ## What this guard reads
  *
@@ -41,8 +28,7 @@
  * the claim proves the claim is self-consistent rather than true. The expected
  * versions are written out below as literals, deliberately: if a pin moves, this
  * test fails and someone must make a decision and update *both* §2 and this
- * file — which is exactly the two-place edit criterion 5 performed at the
- * preflight.
+ * file.
  */
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -54,10 +40,10 @@ const auditManifest = join(repoRoot, 'packages', 'editor-audit', 'package.json')
 const lockfile = join(repoRoot, 'pnpm-lock.yaml');
 
 /**
- * §2's pin table, as the numbers an earlier change adopted (criterion 5). Keyed by package.
+ * §2's pin table, as the adopted numbers. Keyed by package.
  * This is the **v0.1 set only** — `@handlewithcare/prosemirror-suggest-changes`
- * is deliberately absent, because §2 marks it v0.2-only and the criterion is
- * an assertion that it is *not* in the tree (asserted below).
+ * is deliberately absent, because §2 marks it v0.2-only, and its absence from
+ * the tree is asserted below.
  */
 const EXPECTED_PINS: Readonly<Record<string, string>> = {
   '@handlewithcare/remark-prosemirror': '0.1.5',
@@ -78,7 +64,7 @@ const EXPECTED_PINS: Readonly<Record<string, string>> = {
   'unified': '11.0.5',
 };
 
-/** §2 marks this v0.2-only. Criterion 1's bullet says it must not be installed. */
+/** §2 marks this v0.2-only, so it must not be installed. */
 const V02_ONLY = '@handlewithcare/prosemirror-suggest-changes';
 
 interface Manifest {
@@ -210,9 +196,8 @@ const edgesFor = (name: string, version: string): Array<[string, string]> | null
 
   // Index of the snapshot's key, then read forward until the next key. Scoping
   // by index rather than by a `break` on "some other key" is what makes this
-  // work for a snapshot anywhere in the section: an earlier version of this
-  // function broke on the *second* key it saw, so it only ever worked when the
-  // requested package happened to be the first entry.
+  // work for a snapshot anywhere in the section: breaking on the *second* key
+  // seen would only work when the requested package is the first entry.
   const keyIndex = body.findIndex((line) => {
     const key = keyOn(line);
     return key !== null && nameOf(key) === name && versionOf(key) === version;
@@ -228,7 +213,7 @@ const edgesFor = (name: string, version: string): Array<[string, string]> | null
   return deps;
 };
 
-describe('C16 · criterion 1 — §2\'s pin table, as declarations and as resolutions', () => {
+describe('pin preflight · §2\'s pin table, as declarations and as resolutions', () => {
   it('every §2 pin is declared at the exact version — no ranges', () => {
     // §2's policy line: "exact pins, single version across `@tiptap/*`,
     // lockfile-enforced". A caret is the failure mode that policy exists to
@@ -259,10 +244,9 @@ describe('C16 · criterion 1 — §2\'s pin table, as declarations and as resolu
   });
 
   it('`prosemirror-changeset` is 2.4.4, not the deferred 2.4.2 — in both surfaces', () => {
-    // The decision criterion 5 records, asserted on its own because it is the
-    // one pin §2's own table carried in *two* states and had to be reconciled.
-    // Both directions are checked because a lockfile-only or manifest-only
-    // disagreement is exactly the state an earlier change shipped in.
+    // Asserted on its own because it is the one pin that has had two candidate
+    // values. Both surfaces are checked because a lockfile-only or manifest-only
+    // disagreement is the failure this guards against.
     expect(manifest.dependencies?.['prosemirror-changeset']).toBe('2.4.4');
     expect(resolved('prosemirror-changeset')).toEqual(['2.4.4']);
     // And the deferred value is named, so the failure message says what it was.
@@ -282,16 +266,15 @@ describe('C16 · criterion 1 — §2\'s pin table, as declarations and as resolu
     expect([...versions]).toEqual(['3.31.4']);
   });
 
-  it('criterion 1\'s exclusion holds — the v0.2 suggestion layer is NOT installed', () => {
-    // §2 marks it v0.2-only and criterion 1 says "**Not**
-    // `@handlewithcare/prosemirror-suggest-changes`". An exclusion asserted
-    // only by the table is not an exclusion.
+  it('the v0.1 exclusion holds — the v0.2 suggestion layer is NOT installed', () => {
+    // §2 marks `@handlewithcare/prosemirror-suggest-changes` v0.2-only. An
+    // exclusion asserted only by the table is not an exclusion.
     expect(declared[V02_ONLY]).toBeUndefined();
     expect(resolved(V02_ONLY)).toEqual([]);
   });
 });
 
-describe('C16 · criterion 2 — peer resolution, proved from the lockfile', () => {
+describe('pin preflight · peer resolution, proved from the lockfile', () => {
   /**
    * §2's residue: "confirm every `prosemirror-*` peer range resolves against the
    * pinned `@tiptap/pm`". The reading that matters is *one version per package*:
@@ -306,7 +289,7 @@ describe('C16 · criterion 2 — peer resolution, proved from the lockfile', () 
   });
 
   it('`@tiptap/pm` 3.31.4 wires the PM set at the versions that resolve', () => {
-    // The claim an earlier change logged as "prosemirror-changeset@2.4.4 satisfies @tiptap/pm's
+    // The claim "prosemirror-changeset@2.4.4 satisfies @tiptap/pm's
     // ^2.4.1" — re-derived here as the snapshot's own edges, so the assertion is
     // about the wiring rather than about a version string in prose. Every edge
     // the snapshot declares must be the *only* version that package resolves to,
@@ -322,10 +305,10 @@ describe('C16 · criterion 2 — peer resolution, proved from the lockfile', () 
   });
 
   it('`prosemirror-model` is the single version remark-prosemirror peers on', () => {
-    // The one peer an earlier change called out by name. §2.1 says "`prosemirror-model@1.25.12`
+    // The one peer called out by name. §2.1 says "`prosemirror-model@1.25.12`
     // satisfies remark-prosemirror's `^1.24.0` peer" — so the *installed* model
     // version is asserted here, and the caret range is checked by the install
-    // having produced no ERESOLVE at all (criterion 1's no-peer-warning claim).
+    // having produced no ERESOLVE at all (the no-peer-warning claim).
     expect(resolved('prosemirror-model')).toEqual(['1.25.12']);
   });
 });

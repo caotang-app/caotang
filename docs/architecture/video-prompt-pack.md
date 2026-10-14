@@ -1,10 +1,10 @@
-# Video prompt pack — shot-prompt authoring & per-vendor export (M4, post-v0.1)
+# Video prompt pack — shot-prompt authoring & per-vendor export (post-v0.1)
 
 > Status: built, except where a section says otherwise.
-> Scope: Boundary (evidence-confirmed, A9-consistent): **Caotang authors and exports the prompt pack + shot list; it never generates video, holds no vendor keys, stores no media, uploads no manuscript.** Generation happens in the user's tool with the user's credentials.
+> Scope: Boundary (evidence-confirmed): **Caotang authors and exports the prompt pack + shot list; it never generates video, holds no vendor keys, stores no media, uploads no manuscript.** Generation happens in the user's tool with the user's credentials.
 > Cross-refs: shot substrate = [storyboard.md](storyboard.md) §2 (the `shot` node + `vendorRefs`) · codex = [codex.md](codex.md) §2 (`attachments` = consistency layer) · context-assembly = [context-assembly.md](context-assembly.md) §2/§3 (shot-scoped stack) · recipes = [exporter.md](exporter.md) §2/§3 · harness registry = [agent-harness.md](agent-harness.md) §3.
 
-## 1. Verdict (D3, adopted)
+## 1. Verdict (adopted)
 
 **The prompt pack contract is concrete: one normalized shot schema + per-vendor templates mapping it down.** No stable prose schema exists to copy — the parameter layer *is* the schema. The codex is the consistency layer (per-entity visual references); the shot is the authoring unit; the vendor-template layer is the exporter mechanism. **In-app generation is rejected permanently** (per-vendor consent systems — Sora's likeness flow — make it not merely wrong but unshippable for a local-first app).
 
@@ -28,7 +28,7 @@ interface VideoShotRef {                    // per-shot prompt record; lives in 
   aspectRatio?: '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '21:9';
   resolution?: '720p' | '1080p';
   seed?: number;                            // 1…4294967294 where the vendor takes one
-  promptExtend?: boolean;                   // default **false** — Caotang's authored prompt is canonical (Wan's LLM rewrite would mutate it; D3 finding; confirm per-vendor at C29)
+  promptExtend?: boolean;                   // default **false** — Caotang's authored prompt is canonical (Wan's LLM rewrite would mutate it; per-vendor confirmation open, §8 A2)
   references: VideoReference[];             // resolved from codex by default (§3), overridable per shot
   notes?: string;                           // writer's per-shot intent note; exported as comment/metadata, never a vendor param
 }
@@ -44,9 +44,9 @@ interface VideoReference {
 
 ## 3. The codex as consistency layer
 
-- **Codex entries gain optional visual-reference attachments:** `CodexEntry.visualRefs?: string[]` (asset ids in `assets/` — storyboard.md §2.2's asset directory; additive field, loaders-tolerant, same rules as `attachments`). Character/location/prop entries are the consistency layer (D3: Runway Gen-4 = single reference image carries a character across scenes; Sora = persistent character id from a ref clip; Kling = first/last frames).
+- **Codex entries gain optional visual-reference attachments:** `CodexEntry.visualRefs?: string[]` (asset ids in `assets/` — storyboard.md §2.2's asset directory; additive field, loaders-tolerant, same rules as `attachments`). Character/location/prop entries are the consistency layer (Runway Gen-4 = single reference image carries a character across scenes; Sora = persistent character id from a ref clip; Kling = first/last frames).
 - **Pack resolution order (deterministic, previewable):** shot-level `references[]` override → else codex `visualRefs` of entries mentioned in the shot's `action`/covered script elements (mention cache, codex.md §4) → else none. The plan/export preview names **which codex entries supplied which references per shot** — the writer sees the consistency payload before export. The Markdown pack writes a **Consistency** block for each shot that names a codex entry, listing the entries that sent references and, for each entry that sent none, the reason it sent none.
-- **Generation metadata (reproducibility, the C29 gap closed provisionally):** after the user generates externally and keeps a take, the shot may record `bestTake?: { seed, model, vendorParams: Record<string,string|number>, note? }` (free-form param record — vendor-specific, never normalized by Caotang; the pack re-exports it in the vendor's own field block so a re-run reproduces the take; Runway's guidance: seed alone is insufficient). **Provenance posture:** `bestTake` is metadata the *user* brings back; Caotang never round-trips generation itself. *(C29 verification — exact per-vendor reproducibility field sets — queued; this shape is format-stable under C29's answer.)*
+- **Generation metadata (reproducibility, provisional — §8 A3):** after the user generates externally and keeps a take, the shot may record `bestTake?: { seed, model, vendorParams: Record<string,string|number>, note? }` (free-form param record — vendor-specific, never normalized by Caotang; the pack re-exports it in the vendor's own field block so a re-run reproduces the take; Runway's guidance: seed alone is insufficient). **Provenance posture:** `bestTake` is metadata the *user* brings back; Caotang never round-trips generation itself. *(The exact per-vendor reproducibility field sets are still to be verified; this shape is format-stable under any answer.)*
 - **Boundary enforcement:** no codex visualRef, asset, or `bestTake` field is ever uploaded anywhere by Caotang; exports embed *paths/names* for image references, and the pack documents "attach these files in your vendor's UI" where vendors require upload (Sora Character clips; Kling ref frames). Where a vendor wants binary references, the pack ships a **manifest of files to attach**, never the upload.
 - **A reference that names no picture is kept and reported missing.** A `visualRefs` id, or a shot's `references[]` entry, that names no file in the project's `assets/` is not dropped at load and not refused on write. The pack names it as missing, in the same way it names a missing shot reference, so the writer sees what to fix. (The loader keeps the list as it was saved; the codex panel and the approval card name a missing picture as one that is no longer in the project.) This is the rule the code follows, and the one codex.md §7 and the store's validator describe.
 
@@ -73,7 +73,7 @@ interface VideoVendorTemplate {
 }
 ```
 
-- **One superset schema, N mapping tables** (D3's consolidating observation: Runway's aggregator surface normalizes ratio/duration/negativePrompt/references across hosted models — the pack mirrors that shape). Templates are **data-shaped, code-honest**: declared in spec, compiled into the module (closed set at first landing: Runway, Veo, Kling, Sora, Wan, Seedance); adding one = a spec change + fixtures, never runtime plugins.
+- **One superset schema, N mapping tables** (the consolidating observation: Runway's aggregator surface normalizes ratio/duration/negativePrompt/references across hosted models — the pack mirrors that shape). Templates are **data-shaped, code-honest**: declared in spec, compiled into the module (closed set at first landing: Runway, Veo, Kling, Sora, Wan, Seedance); adding one = a spec change + fixtures, never runtime plugins.
 - **Export formats (three pack artifacts, one recipe):**
   1. **JSON pack** — machine-consumable: `{vendor, templateId, shots: [{shotNumber, …normalized fields, mapped fields, references[], bestTake?}]}` — the canonical artifact.
   2. **Markdown pack** — human-readable per-shot cards (spec row, mapped prompt, audio, negatives, reference file names, grammar comments) — the reviewable/printable artifact.
@@ -106,8 +106,8 @@ The numbers in the first column are the track's own, as the module's spec gives 
 
 | # | Item | Status |
 |---|---|---|
-| A1 | Export-only boundary is final | Evidence-backed (D3); reopened only if a vendor ships a consent-safe, key-free embed API — not expected. |
-| A2 | `promptExtend: false` default for Wan-class vendors | Provisional from D3 evidence (Alibaba Cloud documents the flag); per-vendor confirmation at **C29**. |
-| A3 | `bestTake` reproducibility shape | Provisional (§3); C29 verifies the exact metadata set against vendor guidance before implementation. |
+| A1 | Export-only boundary is final | Evidence-backed (§1); reopened only if a vendor ships a consent-safe, key-free embed API — not expected. |
+| A2 | `promptExtend: false` default for Wan-class vendors | Provisional from vendor evidence (Alibaba Cloud documents the flag); per-vendor confirmation still open. |
+| A3 | `bestTake` reproducibility shape | Provisional (§3); the exact metadata set is still to be verified against vendor guidance. |
 | A4 | Six templates at first landing (Runway/Veo/Kling/Sora/Wan/Seedance) | Explicit; the parameter layer is documented and stable enough; adding a template = spec change. |
 | A5 | Codex `visualRefs` field | Additive (same rule as `attachments`); UI = asset picker on the codex entry (v0.2-of-track polish). |

@@ -1,6 +1,6 @@
 /**
- * r6 (storyboard): the store's apply of `shot.importImage` (storyboard.md §3.1), the import a card's image slot makes.
- * Its descriptor is the bus's (`storyboardR6Commands` in `@caotang/bus`, `descriptors-storyboard-r6.ts`), so a refusal here
+ * Storyboard: the store's apply of `shot.importImage` (storyboard.md §3.1), the import a card's image slot makes.
+ * Its descriptor is the bus's (`shotImageCommands` in `@caotang/bus`, `descriptors-shot-image.ts`), so a refusal here
  * is never the first place a bad value is caught.
  *
  * The apply does three things in order, and only the last one is the shot's. It checks the shot exists and is a shot, so
@@ -15,7 +15,7 @@
 import { newId } from '@caotang/ids';
 import {
   ApplyRefusal,
-  storyboardR6Commands,
+  shotImageCommands,
   type ApplyContext,
   type Command,
   type CommandApply,
@@ -130,11 +130,11 @@ function narrow<P>(apply: ImportApply<P>): CommandApply<P, unknown> {
 }
 
 /**
- * The r6 registration, for the store's registry. `shot.importImage` is registered only when the host injects both ports: the
+ * The image-import registration, for the store's registry. `shot.importImage` is registered only when the host injects both ports: the
  * asset port (the bytes) and the storyboard port (the shot's write). Without either the name stays descriptor-only, and the bus
  * refuses it as not wired, so an import is never reachable by accident.
  */
-export function storyboardR6CommandRegistrations(options: {
+export function shotImageCommandRegistrations(options: {
   readonly clock: ApplyClock;
   readonly assets?: ProjectAssetPort;
   readonly shots?: ShotCommandPort;
@@ -142,7 +142,7 @@ export function storyboardR6CommandRegistrations(options: {
   if (options.assets === undefined || options.shots === undefined) return {};
   return {
     'shot.importImage': {
-      descriptor: storyboardR6Commands.shotImportImage,
+      descriptor: shotImageCommands.shotImportImage,
       apply: narrow(shotImportImageApply(options.clock, options.assets, options.shots)),
     },
   };

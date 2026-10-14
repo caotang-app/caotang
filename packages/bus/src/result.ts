@@ -11,7 +11,7 @@
  * depend on — `binder.move`'s row requires a cycle check, and a cycle reported
  * as a plain `validation` is correct but lossy.
  *
- * **The two fields §7 requires and M1 did not ship were added, and
+ * **The two fields §7 requires are both here, and
  * they are the two that carry behaviour: §4 requires a refusal to name "the
  * corrective path" and §7 forbids "a bare code", which is exactly what
  * `correctiveHint` is; `details` is where §2's per-op batch failures go — and,
@@ -29,7 +29,6 @@
  * §7 already names. The ninth code's own docs/decisions.md had already ruled
  * `internal` out for this case: of a `resolveCommand` refusal it says "not a
  * validation failure … and **not a postcondition**".
- * 2026-10-02 (13:0x).
  */
 
 export interface CommandError {

@@ -157,11 +157,11 @@ Any change that breaks one of these needs a strong case:
 
 Caotang covers games, video and film as well as prose. The full inventory lives in [architecture/media-track.md](architecture/media-track.md); the summary:
 
-| # | Capability | One-line scope | Attaches to | Spec |
-|---|---|---|---|---|
-| M1 | **Screenwriting & script formatting** | screenplay layout (scene headings, dialogue, parentheticals, transitions); Fountain and Final Draft import and export | `document.kind`, editor layout, `exporter` | [screenplay.md](architecture/screenplay.md) |
-| M2 | **Cutscenes & game narrative** | branching dialogue in Ink, choices, conditions, variables, VO cues, loc-ready line ids | new binder node kinds, `exporter` (Ink / JSON / loc CSV) | [dialogue-narrative.md](architecture/dialogue-narrative.md) |
-| M3 | **Storyboarding & shot planning** | scene → shot breakdown: frame, camera, action, dialogue covered, duration; shot list exports | `shot` node kind, corkboard variant with image fields, `inspector` | [storyboard.md](architecture/storyboard.md) |
-| M4 | **AI video prompt packs** | per-shot prompt packs for several video models. **Caotang writes prompts; it does not render video** — generation stays in the writer's own tool with their own account | `context-assembly`, `codex`, `exporter` (vendor templates), harness tools | [video-prompt-pack.md](architecture/video-prompt-pack.md) |
-| M5 | **Plot coherence & continuity** | deterministic checks (structure + codex, no model call) and model-judged findings (evidence-cited reports, never silent edits) | `coherence` module over `codex` + `context-assembly` | [coherence.md](architecture/coherence.md) |
-| M6 | **One story, many outputs** | a single narrative source compiled to prose, screenplay, game dialogue, storyboard, prompt pack and report targets — media targets are **export recipes**, not separate apps | the `exporter` contract and per-kind renderers | [media-track.md](architecture/media-track.md) §1 |
+| Capability | One-line scope | Attaches to | Spec |
+|---|---|---|---|
+| **Screenwriting & script formatting** | screenplay layout (scene headings, dialogue, parentheticals, transitions); Fountain and Final Draft import and export | `document.kind`, editor layout, `exporter` | [screenplay.md](architecture/screenplay.md) |
+| **Cutscenes & game narrative** | branching dialogue in Ink, choices, conditions, variables, VO cues, loc-ready line ids | new binder node kinds, `exporter` (Ink / JSON / loc CSV) | [dialogue-narrative.md](architecture/dialogue-narrative.md) |
+| **Storyboarding & shot planning** | scene → shot breakdown: frame, camera, action, dialogue covered, duration; shot list exports | `shot` node kind, corkboard variant with image fields, `inspector` | [storyboard.md](architecture/storyboard.md) |
+| **AI video prompt packs** | per-shot prompt packs for several video models. **Caotang writes prompts; it does not render video** — generation stays in the writer's own tool with their own account | `context-assembly`, `codex`, `exporter` (vendor templates), harness tools | [video-prompt-pack.md](architecture/video-prompt-pack.md) |
+| **Plot coherence & continuity** | deterministic checks (structure + codex, no model call) and model-judged findings (evidence-cited reports, never silent edits) | `coherence` module over `codex` + `context-assembly` | [coherence.md](architecture/coherence.md) |
+| **One story, many outputs** | a single narrative source compiled to prose, screenplay, game dialogue, storyboard, prompt pack and report targets — media targets are **export recipes**, not separate apps | the `exporter` contract and per-kind renderers | [media-track.md](architecture/media-track.md) §1 |

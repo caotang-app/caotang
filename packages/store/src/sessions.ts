@@ -43,12 +43,12 @@
  * ## Why the word counts come in as numbers
  *
  * §9 of editor-engine pins the counting rule to the ProseMirror document
- * ("words = block text split on whitespace"), and M1 has no ProseMirror document:
- * the editor is M5. So the tracker is told `{wordsBefore, wordsAfter}` by the
+ * ("words = block text split on whitespace"), and the store has no ProseMirror
+ * document: the editor does. So the tracker is told `{wordsBefore, wordsAfter}` by the
  * caller that *does* have the count, rather than counting bodies itself. A local
  * word counter over Markdown would count front matter, `***` separators and `#`
  * headings, and that number would then be in the log forever — the same
- * two-rules drift an earlier change refused for the body write path. What the tracker owns is
+ * two-rules drift the body write path refuses. What the tracker owns is
  * the *aggregation* rule, which is where the ambiguity actually lives.
  */
 
@@ -109,7 +109,7 @@ export function isSessionRecord(value: unknown): value is SessionRecord {
  */
 export function assertSessionRecord(record: SessionRecord, what: string): void {
   if (isSessionRecord(record)) return;
-  throw new Error(`${what}: not a sessions.jsonl record (A5: {startedAt, endedAt, wordsWritten, docIds[]})`);
+  throw new Error(`${what}: not a sessions.jsonl record (expected {startedAt, endedAt, wordsWritten, docIds[]})`);
 }
 
 // ---------------------------------------------------------------------------
@@ -298,33 +298,26 @@ export interface WriteSessionsReport {
  *  3. **It never creates a file with nothing in it.** A project with no recorded
  *     sessions has no session history, and an empty file would claim otherwise.
  *
- * ## The write is an append onto the file's own bytes, and that is what closes a review
+ * ## The write is an append onto the file's own bytes
  *
- * Rule 1 used to be `existing.records.length > records.length` — a **count**
- * standing in for a claim about **history**, and it failed three times for the
- * same reason: a count of what the *parser* understood says nothing about what is
- * on disk. The finding 2 (2026-10-01) was the lossy half and it was reproduced:
- * a file holding two readable lines and one damaged one, offered those same two
- * records, is not seen as a shrink, so the write went ahead and **destroyed the
- * damaged line** while the report said `existingSkipped: 1` as it happened; and a
- * file holding only unparseable lines was **emptied outright** by
- * `writeSessionsFile(fs, [])`. The third instance is the same guard and was not
- * in the finding: two histories of *equal* length that are not the *same*
- * history pass a count-only guard and replace recorded history with a different
- * one.
+ * Rule 1 is not a **count** (`existing.records.length > records.length`): a
+ * count of what the *parser* understood says nothing about what is on disk, so it
+ * cannot stand in for a claim about **history**. Under a count, a file holding two
+ * readable lines and one damaged one, offered those same two records, is not a
+ * shrink, and the write would **destroy the damaged line**; a file holding only
+ * unparseable lines would be **emptied outright** by `writeSessionsFile(fs, [])`;
+ * and two histories of *equal* length that are not the *same* history would let
+ * recorded history be replaced with a different one.
  *
- * Both are fixed by one change to what this function composes, and it is the
- * change §4 asks for rather than a patch around the guard:
+ * What this function composes rules all three out, as §4 asks:
  *
  * - **The bytes already on disk are the head of the next write, and are never
  *   re-serialized.** A line no reader accepts therefore keeps its exact bytes
  *   *and its exact position* — the knowledge the parser does not have is not
- *   thrown away by the writer that lacks it too. It also means a hand-written
- *   line carrying a field A5 does not name is no longer silently normalised away
- *   on the next export, which was a third loss the count-only guard could not see
- *   either.
- * - **The refusal compares the histories**, line for line, so equal length is no
- *   longer mistaken for sameness.
+ *   thrown away by the writer that lacks it too. A hand-written line carrying a
+ *   field A5 does not name is likewise not normalised away on the next export.
+ * - **The refusal compares the histories**, line for line, so equal length is
+ *   not mistaken for sameness.
  *
  * **Preserve, not refuse — and the corpus had already taken this position.**
  * {@link ParsedSessionsLog}'s `skipped` says a corrupt line "is not worth

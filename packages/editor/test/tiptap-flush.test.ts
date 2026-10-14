@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * A flush needs the body, and only the body (M5 finding 6). This file counts the offset map's
+ * A flush needs the body, and only the body. This file counts the offset map's
  * builds: a keystroke and the write it leads to must build none, and the first offset-based
  * call after the edit must build exactly one.
  *
@@ -29,7 +29,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('a flush builds no offset map (M5 finding 6)', () => {
+describe('a flush builds no offset map', () => {
   it('a keystroke and the write it leads to serialize the body and build no map', async () => {
     vi.useFakeTimers();
     const write = vi.fn<DocumentWriter>(async (request) => ({ revision: request.expectedRevision + 1, changed: true }));

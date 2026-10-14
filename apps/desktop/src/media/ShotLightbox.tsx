@@ -2,7 +2,7 @@
  * The lightbox over a shot card's image (storyboard.md §3.1): the picture at full size, over the board, for the writer to look at
  * closely. It is view state: it changes nothing in the project. Escape and the Close button both dismiss it. Focus moves to Close when
  * it opens, stays inside the dialog while it is open (Tab and Shift+Tab wrap around it), and goes back to the element that opened it
- * when it closes (F-05).
+ * when it closes.
  */
 
 import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';

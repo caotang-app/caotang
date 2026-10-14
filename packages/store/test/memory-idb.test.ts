@@ -33,7 +33,7 @@ describe('a transaction is scoped to the stores it was opened with', () => {
     // reached a store outside its own transaction would be a second mutation
     // wearing one name — the torn-write class §4 says cannot occur here.
     //
-    // Mutation-checked 2026-09-30: resolving the store regardless of scope
+    // Mutation-checked: resolving the store regardless of scope
     // leaves the whole store suite green (190 tests), because every store list in
     // the package happens to be complete. This test is what makes the check
     // load-bearing rather than incidentally true.

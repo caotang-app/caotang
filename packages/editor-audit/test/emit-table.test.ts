@@ -2,7 +2,7 @@
  * Emits §2's per-construct result table from a live run.
  *
  * Run: `pnpm vitest run packages/editor-audit/test/emit-table.test.ts`
- * with `C16_TABLE=1` set. Deliberately inert by default — the table in §2 is
+ * with `EDITOR_AUDIT_TABLE=1` set. Deliberately inert by default — the table in §2 is
  * committed prose, and a test that rewrote a spec file on every `pnpm verify`
  * would be a surprising side effect for a gate. The measurement is in
  * `trace.ts`; this only formats it.
@@ -13,9 +13,9 @@ import { describe, it } from 'vitest';
 import { CORPUS } from '../src/corpus.js';
 import { measure } from '../src/trace.js';
 
-describe('C16 table emitter', () => {
-  it('writes the per-construct table when C16_TABLE=1', async () => {
-    if (process.env.C16_TABLE !== '1') return;
+describe('result table emitter', () => {
+  it('writes the per-construct table when EDITOR_AUDIT_TABLE=1', async () => {
+    if (process.env.EDITOR_AUDIT_TABLE !== '1') return;
 
     const rows: string[] = [];
     for (const group of [...new Set(CORPUS.map((entry) => entry.group))]) {

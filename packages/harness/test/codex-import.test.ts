@@ -1,6 +1,6 @@
 /**
  * `codex.import` — the writer's own worldbuilding comes in as canon, not as the agent's drafts
- * (codex.md §2, D5; the `origin: 'agent'` defect a large worldbuilding import found).
+ * (codex.md §2 provenance: an import through `codex.write` would be stamped `origin: 'agent'`, and ranked below the writer's canon).
  *
  * What is pinned here, and what would fail without it:
  * - each entry is created with origin `import`, attached to the document it cites, and cites a verbatim

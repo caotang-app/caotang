@@ -104,7 +104,7 @@ const stripEdges = (text: string): string => {
  * scheme and no network-path prefix. The browser cleans a URL before it reads it, in this
  * order: tabs and newlines are removed, C0 controls and spaces are stripped from both ends,
  * and backslashes read as slashes. The stripping used to be the JavaScript `trim`, which
- * removes neither NUL nor SOH, so a leading SOH made a remote source look local (M5 finding 2).
+ * removes neither NUL nor SOH, so a leading SOH made a remote source look local.
  * The test runs on the cleaned form, so it agrees with the browser about which references
  * leave the document.
  *

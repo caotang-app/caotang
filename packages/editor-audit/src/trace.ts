@@ -1,8 +1,8 @@
 /**
  * The preflight's measuring instrument.
  *
- * A preflight that only asserts "it worked" measures nothing (C19: the
- * library's own suite is 5 shapes). What the sixth acceptance criterion asks
+ * A preflight that only asserts "it worked" measures nothing (the
+ * library's own suite is 5 shapes). What the preflight asks
  * for is a **per-construct result table**, so this module records, for one
  * corpus entry: the mdast types the parse actually saw, the PM node/mark
  * types it produced, the round-trip bytes, and whether the outcome was stable.

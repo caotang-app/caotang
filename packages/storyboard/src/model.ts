@@ -187,7 +187,7 @@ export interface ShotMeta {
   /** Seconds, finite and at least zero. Missing means the shot is left out of animatic totals. */
   durationSec?: number;
   transition?: Transition;
-  /** Reserved for the M4 prompt pack (video-prompt-pack.md §4). Carried verbatim here, typed there. */
+  /** Reserved for the video prompt pack (video-prompt-pack.md §4). Carried verbatim here, typed there. */
   vendorRefs?: unknown[];
 }
 

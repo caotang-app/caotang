@@ -27,7 +27,7 @@ export const SESSIONS_FILE = 'sessions.jsonl';
  */
 export const LEGACY_SNAPSHOT_FILE = `${MANIFEST_FILE}.bak`;
 
-/** Rolling snapshot depth — C6: recovery depth should be automatic and boring. */
+/** Rolling snapshot depth (project-format §9 A3): recovery depth should be automatic and boring. */
 export const SNAPSHOT_COUNT = 3;
 
 export function snapshotFile(n: number): string {

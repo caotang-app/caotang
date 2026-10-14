@@ -1,5 +1,5 @@
 /**
- * The Tier-2 gateway and the external call, end to end through the harness (m8-integration; extensibility §5, §6),
+ * The Tier-2 gateway and the external call, end to end through the harness (extensibility §5, §6),
  * and the storyboard port that the store registry's shot commands make wired (storyboard.md §4).
  *
  * The external server is the MCP client's own mock wire, connected and reviewed the way a person would connect it.

@@ -755,7 +755,7 @@ test.describe('a folder whose caotang.json will not load is offered its recovery
 // The sample a demo run opens
 // ---------------------------------------------------------------------------
 
-test.describe('a folder recovery is checked against the documents the offer read, and names what changed (DS-1)', () => {
+test.describe('a folder recovery is checked against the documents the offer read, and names what changed', () => {
   test('a document another program changed after the offer is named by its title, and the recovery writes nothing', async () => {
     const root = await damagedFolder();
     const store = await openRuntimeStore(new MemoryIndexedDb());
@@ -779,7 +779,7 @@ test.describe('a folder recovery is checked against the documents the offer read
   });
 });
 
-test.describe('a folder whose project another tab holds is refused, as the list refuses it (DS-2)', () => {
+test.describe('a folder whose project another tab holds is refused, as the list refuses it', () => {
   test('the folder open is refused while another tab holds the project, and no second copy of the book is made', async () => {
     test.setTimeout(20_000);
     const state = project();
@@ -800,7 +800,7 @@ test.describe('a folder whose project another tab holds is refused, as the list 
   });
 });
 
-test.describe('a folder of a project this browser keeps is that project, whatever order the two copies’ keys were made in (DS-2)', () => {
+test.describe('a folder of a project this browser keeps is that project, whatever order the two copies’ keys were made in', () => {
   test('the folder opens as the stored project, not as a copy, when the stored copy orders its node keys differently', async () => {
     const state = project();
     const root = memoryFolder('Fixture Book');
@@ -844,7 +844,7 @@ test.describe('a manifest another program wrote in a newer format is refused, no
   });
 });
 
-test.describe('the folder copy a session holds carries the digests and titles of the folder (DS-1)', () => {
+test.describe('the folder copy a session holds carries the digests and titles of the folder', () => {
   test('a folder opened holds the digest of each document and codex file it has, and their titles', async () => {
     const { session } = await folderSession();
     const baseline = session.folderBaseline();
@@ -1082,7 +1082,7 @@ async function folderSession(): Promise<{ session: ProjectSession; root: Directo
   const state = project();
   const root = memoryFolder('Fixture Book');
   await writeProject(folderArtifactFs(root), state);
-  // The session is opened from the folder as the lifecycle opens one, so its folder copy holds the digests and titles a folder open takes (DS-1).
+  // The session is opened from the folder as the lifecycle opens one, so its folder copy holds the digests and titles a folder open takes.
   const opened = await openFolder(await openRuntimeStore(new MemoryIndexedDb()), root);
   if (opened.kind !== 'opened') throw new Error('the fixture folder should open as a project');
   return { session: opened.opened.session, root, state: opened.opened.session.state };
@@ -1111,7 +1111,7 @@ test.describe('saving to a folder: what is written, and what is left alone', () 
     await session.close();
   });
 
-  test('an external edit to a document makes the save refuse, and the file keeps the bytes the other program wrote (DS-1)', async () => {
+  test('an external edit to a document makes the save refuse, and the file keeps the bytes the other program wrote', async () => {
     const { session, root } = await folderSession();
     const fs = folderArtifactFs(root);
     const otherText = `---\nid: ${IDS.sceneA}\ntitle: Scene A\n---\n\nEdited by another program.\n`;
@@ -1175,7 +1175,7 @@ test.describe('saving to a folder: what is written, and what is left alone', () 
     state.documents.delete(IDS.sceneB);
     state.manifest.tree = state.manifest.tree.filter((node) => node.id !== IDS.sceneB);
 
-    // A document file another writer added is a change this copy does not hold: the save is refused, and the file is kept (DS-1).
+    // A document file another writer added is a change this copy does not hold: the save is refused, and the file is kept.
     const fs = folderArtifactFs(root);
     expect(await saveFolder(session, root)).toEqual({
       kind: 'refused',
@@ -1214,13 +1214,13 @@ test.describe('saving to a folder: what is written, and what is left alone', () 
 });
 
 // ---------------------------------------------------------------------------
-// The data-safety rules of a folder save, end to end over an in-memory folder (DS-1, DS-2, DS-3, DS-5, DS-6)
+// The data-safety rules of a folder save, end to end over an in-memory folder
 // ---------------------------------------------------------------------------
 
 /** A dialogue container the folder tests add: a body file of its own, `docs/<id>.ink`, which a save must remove with the container. */
 const DIALOGUE = 'n_DRAMA00001';
 
-test.describe('a document file the load declined is kept by the folder writer (DS-1)', () => {
+test.describe('a document file the load declined is kept by the folder writer', () => {
   test('a copy of a state carries the document files the load declined, and the text they hold', () => {
     const state = project();
     state.declinedDocFiles.add('n_DECLINED01.md');
@@ -1282,7 +1282,7 @@ test.describe('a document file the load declined is kept by the folder writer (D
   });
 });
 
-test.describe('a folder reopened in this browser keeps its project id (DS-2)', () => {
+test.describe('a folder reopened in this browser keeps its project id', () => {
   test('a copy opened from the folder cannot be saved into it, in words, and the folder keeps its id', async () => {
     const state = project();
     const root = memoryFolder('Fixture Book');
@@ -1343,7 +1343,7 @@ test.describe('a folder reopened in this browser keeps its project id (DS-2)', (
   });
 });
 
-// The owner's launch board, "A folder holding another project": whose project a folder holds decides the question.
+// A folder holding another project: whose project a folder holds decides the question.
 test.describe('a save into a folder holding a project: another project, the original of a copy, or this project’s own earlier save', () => {
   test('the route: no id, this project, the book a copy was made from, and any other project', () => {
     expect(folderProjectRoute({ folderId: undefined, ownId: 'p_A', copiedFrom: null })).toBe('none');
@@ -1497,7 +1497,7 @@ function handleDb(): AppDb {
   };
 }
 
-// The owner's launch board, "Linking a copy to its folder": a reopened folder whose book differs from the stored
+// Linking a copy to its folder: a reopened folder whose book differs from the stored
 // project asks, rather than copying without a word.
 test.describe('a folder whose version differs from this browser\'s asks which to keep', () => {
   test('the route: a project this browser does not keep opens new, the same book opens as its own, and a different one asks', () => {
@@ -1648,7 +1648,7 @@ test.describe('a folder whose version differs from this browser\'s asks which to
   });
 });
 
-test.describe('a folder saved to, closed and reopened is still its own project (DS-2)', () => {
+test.describe('a folder saved to, closed and reopened is still its own project', () => {
   test('the save stamps only the folder, so the reopened folder opens the same project and saves into it again', async () => {
     const state = project();
     const root = memoryFolder('Saved Book');
@@ -1688,7 +1688,7 @@ test.describe('a folder saved to, closed and reopened is still its own project (
   });
 });
 
-test.describe('a dialogue container deleted from the tree leaves no file behind (DS-3)', () => {
+test.describe('a dialogue container deleted from the tree leaves no file behind', () => {
   test('its .ink file goes with the save, and the container does not come back on the next open', async () => {
     const state = project();
     addDocument(state, {
@@ -1723,7 +1723,7 @@ test.describe('a dialogue container deleted from the tree leaves no file behind 
   });
 });
 
-test.describe('a project another tab has open is not removed from this one (DS-5)', () => {
+test.describe('a project another tab has open is not removed from this one', () => {
   test('the removal is refused while another tab holds the project, and goes once that tab lets go', async () => {
     test.setTimeout(20_000);
     const state = project();
@@ -1775,7 +1775,7 @@ test.describe('a project another tab has open is not removed from this one (DS-5
   });
 });
 
-test.describe('a store another tab has upgraded stops this tab, and the words are kept (DS-6)', () => {
+test.describe('a store another tab has upgraded stops this tab, and the words are kept', () => {
   test('a stopped session makes no later write attempt: no writing status, the store keeps its text, and the words are kept for this tab', async () => {
     // The unsent copy is kept in the browser's local storage (unsent-copy.ts), which this test stands in for. The session reads that storage
     // when it is made, so the stand-in is in place before the session is.
@@ -1822,7 +1822,7 @@ test.describe('a store another tab has upgraded stops this tab, and the words ar
   });
 });
 
-test.describe('a store another tab has upgraded does not reject into the page (DS-6)', () => {
+test.describe('a store another tab has upgraded does not reject into the page', () => {
   test('the words written today keep the last total this page read, and do not reject', async () => {
     const store = await openRuntimeStore(new MemoryIndexedDb());
     const day = Date.now();

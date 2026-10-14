@@ -3,8 +3,8 @@
 The agent: the tool registry (agent-harness.md §3) and the interaction loop built on it (§2).
 
 - **Registry** (`src/metadata.ts` for the rows, `src/runtime.ts` and `src/tools/` for the calls): the frozen fourteen
-  of v0.1 (`agent.plan` is the fourteenth, the protocol row) and twelve extension rows, 26 in all on 2026-10-09
-  (agent-harness §10, revised 2026-10-09 by this work). Every call is validated against a closed-set schema,
+  of v0.1 (`agent.plan` is the fourteenth, the protocol row) and twelve extension rows, 26 in all
+  (agent-harness §10). Every call is validated against a closed-set schema,
   prepared through the bus's own `validate`, gated, and dispatched.
 - **Loop** (`src/agent/`): intent → context → model → plan or confirm → bus → verify ladder → report.
 - **Evals** (`src/agent/eval.ts`, `test/eval/`): scenarios with strict and unordered matchers and token ceilings.
@@ -54,7 +54,7 @@ The two system prefixes (`PLANNER_SYSTEM_PREFIX`, `DRAFT_SYSTEM_PREFIX`) are dup
 | `src/agent/inputs.ts` | The budgeted inputs of `synopsis.fill` (25,000 characters a document) and `continuity.scan` (the last 1,000 characters) |
 | `src/agent/drafting.ts` | Generation for the three model-backed tools, streamed through the gateway, with each finish reason read |
 | `src/agent/ports.ts` | `codex.read` (via `@caotang/codex`), `scene.draft`, `synopsis.fill`, `continuity.scan`, and previews |
-| `src/agent/cards.ts` | Status cards (An earlier change lifecycle), grouping, plan cards, edits, the dependency badge, the steps that have run |
+| `src/agent/cards.ts` | Status cards (their lifecycle), grouping, plan cards, edits, the dependency badge, the steps that have run |
 | `src/agent/loop.ts` | `createAgentSession`: the turn, the decisions, the ladder, the conflict re-show, the bound, the report, the restore |
 | `src/agent/events.ts` | The event stream (§8), the report, the trace, the checkpoint label |
 | `src/agent/eval.ts` | The scenario format, the runner, the matchers, the undo-replay check |
@@ -190,15 +190,9 @@ is typed there, and the harness program has to see it.
 
 ## Open items and known gaps
 
-- **The lockfile.** `pnpm-lock.yaml`'s `packages/harness` importer records the new workspace links
-  (`@caotang/codex`, `@caotang/editor`, `@caotang/gateway`). They were written by hand in the importers' own format and
-  have not been checked by a real install. Run `pnpm install --frozen-lockfile` to confirm them.
-- **Verification environment.** The workspace links for the new dependencies were not installed in the
-  authoring worktree, so the suites were run with a scratch configuration that maps `@caotang/*` to each package's
-  source, outside the repository. The repository's own `pnpm exec vitest` needs the install above.
 - **Context.** Only L1, L2 and L5 are produced. L3 (structural synopses) and L4 (prior-scene synopses) belong to
-  `@caotang/context`. The codex layer's budget is a single pool, not the reserved two-phase budgeting of
-  context-assembly A3.
+  `@caotang/context`. The codex layer's budget is a single pool, not the reserved two-phase budgeting
+  context-assembly §8 lists for v0.2.
 - **`continuity.scan` context.** Its per-tool expansion (context-assembly §3: the codex layer at 2.5k and the
   story-so-far at 6k) is not built. It sends the scope's document tails and nothing else, so its preview has no
   codex or story-so-far section.

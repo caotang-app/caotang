@@ -11,7 +11,7 @@
  * already holds, refused.
  *
  * The word counts in here are supplied by the caller, because §9's counting rule
- * belongs to the editor's ProseMirror document and M1 has no editor. A local
+ * belongs to the editor's ProseMirror document, which the store does not have. A local
  * `countWords` over Markdown would count front matter and `#` headings, and that
  * number would be in the log forever.
  */
@@ -336,9 +336,9 @@ describe('§4 — append-only, never rewritten', () => {
     // do it silently".
     //
     // Nothing else in this suite can see that choice, because the next index is
-    // the highest one plus one and so can never collide. **Verified 2026-10-01
-    // reverting `add` to `put` leaves all 328 tests green** — every other
-    // guard in this file survives its mutation, and this one did not.
+    // the highest one plus one and so can never collide. **Verified: without
+    // this test, reverting `add` to `put` leaves the suite green** — every other
+    // guard in this file catches its own mutation, and none catches this one.
     //
     // A collision needs a row whose stored `index` disagrees with its compound
     // key, which is exactly the shape a partially-seeded import or a
@@ -528,7 +528,7 @@ describe('§4 — the file is a projection, and it never shortens', () => {
 });
 
 // ---------------------------------------------------------------------------
-// §4 — the finding 2, closed: a count is not a history
+// §4 — a count is not a history
 // ---------------------------------------------------------------------------
 
 describe('§4 — the guard compares histories, and no byte already written is rewritten', () => {
@@ -760,8 +760,8 @@ describe('editor-engine §9 / command-bus §9 — a side-effect of doc.write, no
     // §9: "Session-target progress reads sessions.jsonl (appender side-effect of
     // doc.write)". The test composes the two halves the way the app will: the
     // scheduler flushes, the caller tells the tracker what the store committed,
-    // and the tracker produces one line. The word count stands in for M5's
-    // per-revision count — this slice is the subscriber, not the counter.
+    // and the tracker produces one line. The word count stands in for the editor's
+    // per-revision count — the tracker is the subscriber, not the counter.
     const { store } = await freshStore();
     const state = fixtureProject();
     state.documents.set(SCENE, { id: SCENE, body: '', revision: 0 });

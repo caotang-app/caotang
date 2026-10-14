@@ -1,4 +1,4 @@
-/* The offer of a stopped tab's kept words, in the binder footer (m4 polish). It uses the footer's own tokens, so both themes read correctly. */
+/* The offer of a stopped tab's kept words, in the binder footer. It uses the footer's own tokens, so both themes read correctly. */
 
 .unsent-words {
   border: 1px solid var(--line-strong, currentColor);

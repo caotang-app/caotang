@@ -67,7 +67,7 @@ export function isTransientFileError(error: unknown): boolean {
 
 /**
  * The digest of one file, or `undefined` when the folder does not hold it. A transient sharing error is retried a few times with a short
- * pause, so another program's brief hold on a file is not read as a change or as a failed save (DS-1). Any other read failure is thrown,
+ * pause, so another program's brief hold on a file is not read as a change or as a failed save. Any other read failure is thrown,
  * and so is a transient one that outlasts the retries.
  */
 export async function digestOfFile(fs: ArtifactFs, path: string): Promise<string | undefined> {

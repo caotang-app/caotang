@@ -1,5 +1,5 @@
 /**
- * The dialogue module's entries, read by the harness that registers them (media-track M2; dialogue-narrative.md §7).
+ * The dialogue module's entries, read by the harness that registers them (cutscenes and interactive narrative; dialogue-narrative.md §7).
  *
  * The dialogue package's own spec-parity test checks the entries against the spec's table. The checks here need the
  * harness's own validator and schema derivation, and the harness's `ToolPort` type, so they live where those live. The

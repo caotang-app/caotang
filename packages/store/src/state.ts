@@ -406,16 +406,10 @@ export interface RemovedNode {
  * for the obvious property rather than for speed, because this is the function where
  * a wrong-but-fast parent chase silently orphans a whole scene.
  *
- * `derived.wordCounts` **drops the removed ids** — corrected in place 2026-10-07 by
- * which is what made this the wrong call rather than a debatable one.
- * The clause below is preserved because its *reason* is the finding. It said:
- * "deliberately untouched … dropping the removed ids' counts while every other
- * count is just as stale would make the cache *less* self-consistent, not more,
- * and nothing reads it as truth before the next rebuild." Every clause of that
- * was true and all four stopped being true together, when an earlier change gave the field the
- * producer it had never had: the counts are no longer uniformly stale (they are
- * maintained per revision), and something now reads them. Measured consequence
- * of leaving them: a `project.deleteNode` whose compensation recreates the
+ * `derived.wordCounts` **drops the removed ids.** Leaving them untouched would
+ * only be defensible if every count were equally stale and nothing read them as
+ * truth; neither holds — the counts are maintained per revision, and something
+ * reads them. Measured consequence of leaving them: a `project.deleteNode` whose compensation recreates the
  * subtree cannot return the manifest to its pre-command bytes, because the undo
  * of the *create* removes the node and leaves an entry keyed to an id the tree
  * no longer holds — `exit-gate.test.ts`'s §5.1 "snapshotOf(state) === before"
@@ -474,7 +468,7 @@ export function removeNode(state: ProjectState, id: string): RemovedNode[] {
 
 /**
  * Reparent or reorder a node. This is a *structure* operation: §2's contract is
- * that structure ops deliberately do not bump `updatedAt` (assumption C26).
+ * that structure ops deliberately do not bump `updatedAt`.
  * The body's revision is untouched too — a drag is not a content edit.
  */
 export function moveNode(

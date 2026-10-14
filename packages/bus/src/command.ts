@@ -31,8 +31,7 @@ import type {
  * test that notices a week later. `test/registry.test.ts` reads §9's table out
  * of the spec and asserts the two agree, which is the other half.
  *
- * **What that test covers, stated exactly (corrected, and again
- *):** it compares the name set and **two** of §9's columns —
+ * **What that test covers, stated exactly:** it compares the name set and **two** of §9's columns —
  * `agentRisk` and `undo` — plus, the **Params (essentials)** column
  * against the keys each `validate` emits, plus §9's one nested literal
  * (`binder.setMeta`'s `patch` fields) against `PATCH_KEYS`.
@@ -44,7 +43,7 @@ import type {
  * back `{nodeId, title}` and stays green. Refusing it is that change's
  * decision, and this comment claims nothing about it either way.
  *
- * **A second limit, measured 2026-10-07 06:0x.** The comparison's
+ * **A second limit, measured.** The comparison's
  * payload is built from §9's own parse, so a key that *leaves* §9 is invisible
  * to it whenever the descriptor treats that key as optional — the two sides
  * shrink together. A key §9 *gains* reds it; a key §9 *loses* does not, unless
@@ -53,9 +52,8 @@ import type {
  *
  * `CodexUpsertOp` is **still** a code-side statement of codex.md §2's entry
  * fields, held by no spec-parity test. §9 does not expand `entries:
- * CodexUpsert[]`, so the gap sits outside the column an earlier change reads and it has its own
- * build row rather than being folded in here. Both obligations are logged in
- * docs/decisions.md; the first is closed there 2026-10-06.
+ * CodexUpsert[]`, so the gap sits outside the column the parity test reads. Both
+ * obligations are logged in docs/decisions.md, where the first is closed.
  *
  * Reads are not commands (§9): modules read the store directly. `sessions.jsonl`
  * appends are session-tracker side-effects of doc writes, not commands.
@@ -79,7 +77,7 @@ export const COMMAND_NAMES = [
   'view.setSelection',
   'view.setActiveDoc',
   'view.setScroll',
-  // M4 (2026-10-08): the two view names ui-modules §1 and §3.1 require. §9 tabulates them with the other view rows.
+  // The two view names ui-modules §1 and §3.1 require. §9 tabulates them with the other view rows.
   'view.setExpanded',
   'view.setCorkboardScope',
   // The coherence module's two mutations (coherence.md §7.1). §9 tabulates them, with coherence.md named in their notes.
@@ -87,17 +85,17 @@ export const COMMAND_NAMES = [
   'coherence.setFindingStatus',
   // The run history's one removal (coherence.md §7.1, §8). It joins the module's rows the same way the two above do.
   'coherence.discardRun',
-  // m8-integration: the one command an external tool call rides (extensibility.md §6). It is a v0.2 addition, and §9
+  // The one command an external tool call rides (extensibility.md §6). It is a v0.2 addition, and §9
   // tabulates it with its reason. Its descriptor is the one `@caotang/mcp-client` builds, and its apply reaches a server,
   // so the store registry takes both as an injected option (`ProjectCommandOptions.mcpInvoke`). Without that, the name is refused.
   'mcp.invoke',
-  // m8-integration: the storyboard module's three shot commands (storyboard.md §3.1 and §4). They are the bus shape
+  // The storyboard module's three shot commands (storyboard.md §3.1 and §4). They are the bus shape
   // `@caotang/storyboard`'s `commands.ts` was written against, and §9 tabulates them. Their applies come from the store
   // registry, injected (`ProjectCommandOptions.shots`), because the guards they run belong to the storyboard module.
   'storyboard.create',
   'shot.create',
   'shot.setMeta',
-  // m9 (project export): the project block (epub-metadata.md), the saved export recipes (exporter.md §2), the
+  // Project export: the project block (epub-metadata.md), the saved export recipes (exporter.md §2), the
   // vocabulary (project-format.md §2) and the cover import. §9 tabulates them.
   'project.rename',
   'project.setMetadata',
@@ -106,17 +104,17 @@ export const COMMAND_NAMES = [
   'vocabulary.remove',
   'recipe.save',
   'recipe.delete',
-  // m4-furniture: the saved-filter and project-goal commands (binder-filters §5, goals-progress §4). §9 tabulates them.
+  // The saved-filter and project-goal commands (binder-filters §5, goals-progress §4). §9 tabulates them.
   // Their applies are the store's (`commands-furniture.ts`), because the lists they write are the manifest's `filters[]` and `goals[]`.
   'binder.saveFilter',
   'binder.deleteFilter',
   'project.saveGoal',
   'project.deleteGoal',
-  // r6 (storyboard): one shot's image, written from a staged file and set as its `image` in one undo group (storyboard.md
-  // §3.1). Its apply is the store's (`commands-storyboard-r6.ts`), and its descriptor is `descriptors-storyboard-r6.ts`.
+  // Storyboard: one shot's image, written from a staged file and set as its `image` in one undo group (storyboard.md
+  // §3.1). Its apply is the store's (`commands-shot-image.ts`), and its descriptor is `descriptors-shot-image.ts`.
   'shot.importImage',
-  // m6-script: the whole-script Fountain and FDX import (screenplay.md §2.2), the whole-story Ink import (dialogue-narrative.md
-  // §4) and a dialogue container's settings (dialogue-narrative.md §2.1). §9 tabulates them (2026-10-14), after shot.importImage.
+  // The whole-script Fountain and FDX import (screenplay.md §2.2), the whole-story Ink import (dialogue-narrative.md
+  // §4) and a dialogue container's settings (dialogue-narrative.md §2.1). §9 tabulates them, after shot.importImage.
   // Their applies are the store's (`commands-script.ts`).
   'screenplay.import',
   'dialogue.importInk',
@@ -141,7 +139,7 @@ export interface Command<P = Record<string, unknown>> {
   /**
    * Set by the harness, never by a caller's params: the flow that gave this command its
    * provenance when the envelope's `issuedBy` cannot say it. `'import'` is codex.import's
-   * (codex.md §2, D5): the entries a `codex.upsert` creates from it are stamped `origin:
+   * (codex.md §2): the entries a `codex.upsert` creates from it are stamped `origin:
    * 'import'`. A param naming it would be refused by the op's closed key set, so the only
    * route to the field is the tool that built the command. See {@link CommandProvenance}.
    */
@@ -151,7 +149,7 @@ export interface Command<P = Record<string, unknown>> {
 /**
  * The provenance an envelope can carry beyond `issuedBy` (codex.md §2). A closed set:
  * `import` is the one a codex entry's `origin` is stamped from, and the rule that a
- * caller cannot name its own origin (D5) is why it travels on the envelope.
+ * caller cannot name its own origin is why it travels on the envelope.
  */
 export type CommandProvenance = 'import';
 
@@ -171,8 +169,8 @@ export interface Postcondition {
  * `packages/store/test/bus-snapshot.test.ts` pins that assignability so the
  * direction is checked rather than assumed.
  *
- * §2 leaves `snapshot` untyped in the signature. M0 shipped it as `unknown`,
- * which leaves every validator free to guess a shape; this is the narrowing
+ * §2 leaves `snapshot` untyped in the signature. Typing it as `unknown`
+ * would leave every validator free to guess a shape; this is the narrowing
  * that makes the §2 invariant ("a command that passes validation cannot fail
  * mid-apply for validation reasons") checkable — a validator that reads a
  * document body needs a documented way to read it.
@@ -271,7 +269,7 @@ export interface CommandDescriptor<P = Record<string, unknown>> {
    * **A flag, not something `validate` works out**, and that is the whole design
    * decision. `validate` is pure, total and reads a snapshot; a revision check
    * there would be a *second* place that knows which commands guard a document,
-   * and an earlier change deliberately left the comparison out (`descriptors.ts`'s
+   * and the comparison is deliberately left out of it (`descriptors.ts`'s
    * `expectedRevision()` parses it and does not compare it) so there would be one.
    * `mutates: 'view'` is the existing precedent for a descriptor field switching
    * pipeline behaviour; this is the same shape for §6.
@@ -321,7 +319,7 @@ export interface CommandDescriptor<P = Record<string, unknown>> {
  * implementation narrows it at its own definition site. For the three `view.*`
  * names it is `ViewState`, which the bus *does* own — see `CommandStateFor`.
  *
- * The third argument is that change's (2026-10-02): §3's pipeline context, which is
+ * The third argument is §3's pipeline context, which is
  * what lets an apply hand §5's compensation back to the pipeline instead of
  * promising it in a comment. It is `unknown`-free by design — a struct of four
  * fields, three of them the command's own identity.
@@ -373,8 +371,7 @@ export interface ViewState {
  * and asserts this list is exactly the `view` set. A view command that is not in
  * this list fails that test rather than being handed a project state.
  *
- * `view.setExpanded` and `view.setCorkboardScope` joined on 2026-10-08 (M4). They
- * are the two view names ui-modules §1 and §3.1 require, and command-bus §9 tabulates
+ * `view.setExpanded` and `view.setCorkboardScope` are the two view names ui-modules §1 and §3.1 require, and command-bus §9 tabulates
  * them with the other view rows; `test/registry.test.ts` checks that against this list.
  */
 export type ViewCommandName =
@@ -446,8 +443,8 @@ export interface ApplyContext {
    * Who dispatched it (§2's `issuedBy`). **The command's identity, not a permission
    * detail** — which is why it is here and not left to an apply to be told.
    *
-   * An earlier change added it because `codex.upsert` cannot do its job without it.
-   * codex.md §2 types `CodexEntry.origin` as required, and D5 requires an
+   * It is here because `codex.upsert` cannot do its job without it.
+   * codex.md §2 types `CodexEntry.origin` as required, and requires an
    * agent-created entry to carry `origin: 'agent'` — but §9's closed `codex.upsert`
    * params carry no `origin` field, and `codex.write` (§9: "Backs `codex.write`")
    * reaches the manifest only *through* this command, so the command is the only
@@ -462,7 +459,7 @@ export interface ApplyContext {
    */
   readonly issuedBy: 'user' | 'agent';
   /**
-   * The envelope's provenance (codex.md §2 D5), handed over unchanged: `'import'` when
+   * The envelope's provenance (codex.md §2), handed over unchanged: `'import'` when
    * the tool that built the command is codex.import. `codex.upsert` reads it to stamp an
    * entry's `origin`, and `issuedBy` alone cannot say that. Absent for every other command.
    */
@@ -491,9 +488,8 @@ export interface CommandRegistration<P = Record<string, unknown>, S = unknown> {
   readonly descriptor: CommandDescriptor<P>;
   /**
    * **Optional on purpose.** §9's closed set contains `export.compile` and
-   * `export.compileSelection`, whose effects land with the exporter in M9, and
-   * the half-built state is exactly what a review found left §6's load path dead
-   * until `FORMAT_VERSION` 2. Optional is what makes it representable;
+   * `export.compileSelection`, whose effects come from the exporter, and a
+   * registry without one would otherwise hold a half-built entry. Optional is what makes it representable;
    * `resolveCommand` is what makes it safe.
    */
   readonly apply?: CommandApply<P, S>;
@@ -576,7 +572,7 @@ export type ShotSetMetaCommandParams = {
 };
 
 /**
- * `shot.importImage` (storyboard.md §3.1, r6): a staged image written into `assets/` and set as the shot's `image`. The
+ * `shot.importImage` (storyboard.md §3.1): a staged image written into `assets/` and set as the shot's `image`. The
  * bytes are not params (they would travel as JSON and be copied into the undo group), so the host stages them and names
  * the staging id. The shot is named by its node id, and an apply on a node that is not a shot is refused before any write.
  */
@@ -638,7 +634,7 @@ export type MetaPatch = {
  * manuscript document that an entry's content was extracted from.
  *
  * `sources` is the one provenance field an op may carry. `origin` is not: it is
- * harness-owned from who issued the command (D5), and an op naming it is refused.
+ * harness-owned from who issued the command (codex.md §2), and an op naming it is refused.
  * The citations are the extraction's own record, so the harness supplies them, and
  * the command checks their shape and that each names a real document.
  */
@@ -721,17 +717,13 @@ export type CodexAttachParams = { entryId: string; attachTo: string[]; detachFro
 
 /**
  * `format` is a bare string here on purpose. exporter.md §2's format enum joins
- * the media track post-v0.1, and a planning decision prohibited an exporter row for
- * exactly that reason; the enum is M9's to define. Validating against a
- * three-member list here would either ship a post-v0.1 list or refuse formats
+ * the media track post-v0.1, so the enum is the exporter's to define. Validating
+ * against a fixed list in this type would either freeze it or refuse formats
  * the exporter will accept.
  *
- * **No `selection` field (2026-10-01).** This row once read
- * `{selection: string, format, templateId?}`, and three specs stated the scope
- * three incompatible ways — §9 said a string, exporter §5 said a flat
- * `includeRootIds?`, and the shipped descriptor's own refusal told a caller
- * who had read exporter §2 correctly that an object "must be a string".
- * The owner settled it: **one tool for the whole manuscript, one for a part.** So
+ * **No `selection` field.** A single command carrying a scope would need one
+ * shape for it, and the specs settle it differently: **one tool for the whole
+ * manuscript, one for a part.** So
  * this is the whole manuscript and carries no scope at all, and
  * `export.compileSelection` below is the part.
  */
@@ -794,8 +786,8 @@ export type CoherenceDiscardRunParams = { runId: string };
  *
  * **Duplicated deliberately.** The canonical copy is `packages/store`'s
  * `FIXED_ROOT_IDS`, and the bus cannot import it: the dependency runs store →
- * bus. A later slice can move the list here and have the store re-export it;
- * doing that would edit shipped M1 code in a slice about the command set.
+ * bus. The list could move here and have the store re-export it; until then
+ * the two copies are kept equal by hand.
  */
 export const FIXED_ROOT_IDS = ['root', 'manuscript', 'research'] as const;
 
@@ -804,7 +796,7 @@ export function isFixedRootId(id: string): boolean {
 }
 
 /*
- * m9 (project export) param shapes. Each is the closed key set its descriptor in `descriptors-project.ts` accepts.
+ * Project export param shapes. Each is the closed key set its descriptor in `descriptors-project.ts` accepts.
  */
 
 /** `project.rename`: the project's title. The root node carries the same title, and the apply keeps them equal. */

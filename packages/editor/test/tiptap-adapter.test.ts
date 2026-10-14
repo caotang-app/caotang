@@ -102,7 +102,7 @@ describe('mounting', () => {
     expect(instance.getContent()).toBe('');
   });
 
-  it('the focus document ships with spellcheck off, at the size of a realistic scene (D9, M5 finding 6)', async () => {
+  it('the focus document ships with spellcheck off, at the size of a realistic scene (D9)', async () => {
     const { host } = await mountInto(SCENE);
     expect(focusDom(host).getAttribute('spellcheck')).toBe('false');
   });
@@ -345,7 +345,7 @@ describe('an agent apply does not replace the user’s unsaved keystrokes (§8, 
     expect(instance.getContent()).toBe('Agent.\n');
   });
 
-  it('a restore that discards unsaved edits through a store also discards them in the store (M5 finding 3)', async () => {
+  it('a restore that discards unsaved edits through a store also discards them in the store', async () => {
     // The restore rebases the store onto the body it puts in the editor (`reseat`), so the keystroke
     // it replaced is not written after the debounce, and nothing is left unsaved.
     const { autosave, write } = scheduler();
@@ -476,7 +476,7 @@ describe('an agent apply does not replace the user’s unsaved keystrokes (§8, 
   });
 });
 
-describe('the unsaved state is a status, not one flag (§9, M5 finding 8)', () => {
+describe('the unsaved state is a status, not one flag (§9)', () => {
   beforeEach(() => {
     vi.useFakeTimers();
   });
@@ -560,7 +560,7 @@ describe('the unsaved state is a status, not one flag (§9, M5 finding 8)', () =
   });
 });
 
-describe('a mount does not show a body the store has moved past (M5 finding 4)', () => {
+describe('a mount does not show a body the store has moved past', () => {
   beforeEach(() => {
     vi.useFakeTimers();
   });
@@ -756,7 +756,7 @@ describe('captureAnchor (edit-anchors §2)', () => {
     expect(anchor && resolveAnchor(anchor, body, 7)).toMatchObject({ status: 'ok', method: 'exact' });
   });
 
-  it('returns null for a selection longer than the anchor bound, because such an anchor could never resolve (M5 finding 5)', async () => {
+  it('returns null for a selection longer than the anchor bound, because such an anchor could never resolve', async () => {
     const body = `${'x'.repeat(2100)}\n`;
     const { instance } = await mountInto(body, { revision: 7 });
     instance.revealRange({ from: 0, to: 2001 });
@@ -914,7 +914,7 @@ describe('autosave (§9): the store’s clock, and the editor forwards to it', (
     });
   });
 
-  it('never sends a second write while one is unacknowledged, even on a page hide or an explicit flush (M5 finding 7)', async () => {
+  it('never sends a second write while one is unacknowledged, even on a page hide or an explicit flush', async () => {
     let release!: (result: { revision: number; changed: boolean }) => void;
     const write = vi.fn<DocumentWriter>(
       () =>
@@ -1035,7 +1035,7 @@ describe('autosave (§9): the store’s clock, and the editor forwards to it', (
   });
 });
 
-describe('the primitives read their text as body Markdown (§4, M5 finding 8)', () => {
+describe('the primitives read their text as body Markdown (§4)', () => {
   it('emphasis inserts as emphasis, and saves in the body dialect rather than as escaped asterisks', async () => {
     const { instance } = await mountInto('Hello.\n');
     instance.replaceRange({ from: 0, to: 5 }, '*Howdy*', { historyExcluded: true });
@@ -1070,7 +1070,7 @@ describe('the primitives read their text as body Markdown (§4, M5 finding 8)', 
     expect(instance.getContent()).toBe('Howdy.\n');
   });
 
-  it('a trailing newline in the text ends a paragraph, and is not a character of one (M5 finding 9)', async () => {
+  it('a trailing newline in the text ends a paragraph, and is not a character of one', async () => {
     // The measured failure: the newline was kept as text and saved as `&#xA;`.
     const { instance } = await mountInto('');
     instance.replaceRange({ from: 0, to: 0 }, 'Hi\n', { historyExcluded: true });
@@ -1096,7 +1096,7 @@ describe('the primitives read their text as body Markdown (§4, M5 finding 8)', 
     expect(instance.getContent()).toBe('Hello.\n');
   });
 
-  it('a replacement at offset 0 neither throws nor adds a block, in every block-first shape (M5 finding 1)', async () => {
+  it('a replacement at offset 0 neither throws nor adds a block, in every block-first shape', async () => {
     for (const body of ['# Title\n\nSome text.\n', '- one\n- two\n', '> quoted\n\nAfter.\n', '***\n\nSome text.\n']) {
       const { host, instance } = await mountInto(body);
       const editor = tiptapOf(focusDom(host));

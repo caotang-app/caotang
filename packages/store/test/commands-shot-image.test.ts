@@ -1,5 +1,5 @@
 /**
- * r6 (storyboard): `shot.importImage` through the shipped bus. The image is written into `assets/`, the shot's `image` is set
+ * Storyboard: `shot.importImage` through the shipped bus. The image is written into `assets/`, the shot's `image` is set
  * through the storyboard module's own write, and both are one undo group. A refusal writes no file, so a shot that cannot
  * take the picture leaves nothing behind.
  */
@@ -113,7 +113,7 @@ function bus(state: ProjectState = project(), withPorts = true): Bus {
 let ordinal = 0;
 function command(name: CommandName, params: Record<string, unknown>): Command {
   ordinal += 1;
-  return { id: `cmd_R6IMPORT${String(ordinal).padStart(3, '0')}`, name, params, issuedBy: 'user', createdAt: 1_000 };
+  return { id: `cmd_SHOTIMAGE${String(ordinal).padStart(3, '0')}`, name, params, issuedBy: 'user', createdAt: 1_000 };
 }
 
 async function importImage(b: Bus, nodeId: string, bytes: Uint8Array) {

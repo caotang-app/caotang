@@ -1,8 +1,8 @@
 /**
- * C16's bundle audit — §2's zero-cloud claim, measured.
+ * The Tiptap preflight's bundle audit — §2's zero-cloud claim, measured.
  *
  * §2 says: "MIT core, fully offline, zero cloud calls confirmed at the policy
- * level (C16: paid surface = Cloud/AI-Toolkit/Tracked-Changes — none in our
+ * level (paid surface = Cloud/AI-Toolkit/Tracked-Changes — none in our
  * stack)". That is a claim about a *policy*, and a policy is not evidence. The
  * gate's job is to turn it into a measurement: build the §10 extension set for
  * real, then look at the bytes.
@@ -74,9 +74,9 @@ const YJS_NEEDLES = [/\by-?js\b/i, /\bYjs\b/];
  * A needle that names an **npm package** has to be matched where a package would
  * actually be referenced, not as bare text.
  *
- * Measured 2026-10-02: after the Vite-8 toolchain slice this test failed on
+ * Under Vite 8 a bare-text match fires on
  * `@tiptap/extension-collaboration` — a **paid** extension, and precisely what
- * criterion 3 exists to catch. It is not in the bundle. The string sits inside
+ * the bundle audit exists to catch. It is not in the bundle. The string sits inside
  * Tiptap's own JSDoc on `undo-redo`:
  *
  * > **Important**: If the `@tiptap/extension-collaboration` package is used, make
@@ -135,7 +135,7 @@ beforeAll(async () => {
   }));
 }, 180_000);
 
-describe('C16 · criterion 3 — the bundle audit', () => {
+describe('preflight · the bundle audit', () => {
   it('the §10 extension set actually builds', () => {
     expect(existsSync(distDir)).toBe(true);
     expect(bundleFiles.length).toBeGreaterThan(0);

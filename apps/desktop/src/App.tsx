@@ -112,7 +112,7 @@ export function App(): ReactNode {
     setSession(null);
     setStartIntent(null);
     // The workspace goes at once, so nothing is typed into a session that is closing. The projects list does not take the lease this
-    // close still holds for another tab's (lifecycle `openElsewhere`, DS-5).
+    // close still holds for another tab's (lifecycle `openElsewhere`).
     if (previous !== null) closeSession(previous);
   };
 
@@ -183,7 +183,7 @@ export function App(): ReactNode {
 function noticeFor(opened: Opened): string | null {
   const lines: string[] = [];
   if (opened.copiedFrom !== null) {
-    // A copy of a folder's project may differ from the folder, and cannot be saved back into it (lifecycle `saveFolder`, DS-2).
+    // A copy of a folder's project may differ from the folder, and cannot be saved back into it (lifecycle `saveFolder`).
     lines.push(
       opened.session.folderBaseline() !== null
         ? 'That project is already in this browser, so the folder opened as a separate copy. This copy may differ from the folder, and saving it into that folder is refused. The original is in the projects list.'

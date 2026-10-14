@@ -8,8 +8,8 @@
  *   structure a contact sheet has (page count, capacity, reading order, what sits inside the page), and
  *   the tests check it directly.
  * - The **emitter** turns a plan into PDF bytes. It is an injected port. storyboard.md §6 gives this
- *   renderer the screenplay PDF's pattern, and screenplay.md §5.3 leaves that library's pick to the C28
- *   benchmark gate. So no library is pinned here. {@link ContactSheetPdfRenderer.render} refuses with
+ *   renderer the screenplay PDF's pattern, and screenplay.md §5.3 leaves that library's pick to the
+ *   PDF-library benchmark. So no library is pinned here. {@link ContactSheetPdfRenderer.render} refuses with
  *   that reason until an emitter is supplied; {@link ContactSheetPdfRenderer.build} works without one,
  *   and returns the plan and the image bytes an emitter would be given.
  *
@@ -401,7 +401,7 @@ export class ContactSheetPdfRenderer {
     if (this.emitter === undefined) {
       return refuse(
         'pdf-engine-not-wired',
-        'the contact sheet is laid out, but no PDF engine is wired yet: the library is chosen by the C28 benchmark. Use the shot list CSV for now.',
+        'the contact sheet is laid out, but no PDF engine is wired yet: the PDF library will be chosen after it is measured against real contact sheets. Use the shot list CSV for now.',
       );
     }
     const document = await this.build(fs, state, selection, options);

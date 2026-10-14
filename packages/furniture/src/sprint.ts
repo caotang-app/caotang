@@ -1,6 +1,6 @@
 /**
  * The sprint timer as a pure state machine — [goals-progress.md §10](docs/architecture/goals-progress.md)
- * (A15(d), priced 2026-09-15); §9 item 4 places it in the v0.2 menu with zero architecture impact.
+ * (A15(d)); §9 item 4 places it in the v0.2 menu with zero architecture impact.
  *
  * A sprint is a countdown that counts the words written while it runs. The machine
  * owns no clock and no timer. Every event carries the instant it happened, as epoch
@@ -13,7 +13,7 @@
  * caller as a view, and the session log already records the writing.
  */
 
-/** The defaults and bounds of the duration, which the spec does not fix (an assumption, recorded in the report). */
+/** The defaults and bounds of the duration, which the spec does not fix (an assumption). */
 export const SPRINT_DEFAULT_MINUTES = 25;
 export const SPRINT_MIN_MINUTES = 1;
 export const SPRINT_MAX_MINUTES = 480;

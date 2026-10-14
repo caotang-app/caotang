@@ -14,9 +14,9 @@ import type { ProjectState } from '@caotang/store';
 
 /**
  * The formats this build compiles. The prose formats are exporter.md §2 and §3 (`epub` is §3a's). The rest
- * are the media-track formats of media-track M6, each compiled from its own package's renderer: the
+ * are the media-track formats of the one-source compile, each compiled from its own package's renderer: the
  * screenplay Fountain and FDX, the dialogue table and compiled Ink, the storyboard shot list and the video
- * prompt pack. The screenplay PDF is not here: its engine waits on the C28 benchmark.
+ * prompt pack. The screenplay PDF is not here: its engine waits on the PDF-library benchmark.
  */
 export const EXPORT_FORMATS = [
   'md',
@@ -29,7 +29,7 @@ export const EXPORT_FORMATS = [
   'dialogue-csv',
   'shot-list-csv',
   'promptpack',
-  // m8 (media-track M6, Review): the coherence report, as Markdown and as JSON. Appended, so the order above holds.
+  // The one-source compile's Review row: the coherence report, as Markdown and as JSON. Appended, so the order above holds.
   'coherence-md',
   'coherence-json',
 ] as const;

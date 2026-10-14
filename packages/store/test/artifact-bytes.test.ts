@@ -1,5 +1,5 @@
 /**
- * Binary files through the artifact port — B-debt item 8.
+ * Binary files through the artifact port.
  *
  * The DOCX and EPUB renderers write their output under `exports/` through
  * `ArtifactFs`, so the port has to carry bytes. The contract is the text

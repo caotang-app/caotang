@@ -1,5 +1,5 @@
 /*
- * The media views (media-track M1–M4). Every colour is a token from styles.css, so dark mode follows the shell.
+ * The media views (screenplay, dialogue, storyboard and prompt pack; media-track.md). Every colour is a token from styles.css, so dark mode follows the shell.
  * The classes that match the shell's own (`.card`, `.chip`, `.segmented`, `.empty-state`, `.findings`, `.badge`) are
  * reused as they are; what is new here is prefixed `sp-` (screenplay), `sb-` (storyboard), `pp-` (prompt pack) or
  * `dlg-` (dialogue), so nothing in the shell's stylesheet is changed by loading this one.
@@ -601,7 +601,7 @@
   stroke-dasharray: 5 4;
 }
 
-/* A choice's label on its edge (M2). The halo is the panel's own colour, so the words read over the arrow and over another edge. */
+/* A choice's label on its edge (dialogue graph). The halo is the panel's own colour, so the words read over the arrow and over another edge. */
 .dlg-edge-label {
   font-size: 11.5px;
   fill: var(--ink);
@@ -783,7 +783,7 @@
 }
 
 /* ------------------------------------------------------------------ *
- * r6 (storyboard): the image slot, the lightbox, the card drag, the notices, and the sections under a shot's fields
+ * Storyboard: the image slot, the lightbox, the card drag, the notices, and the sections under a shot's fields
  * ------------------------------------------------------------------ */
 
 .sb-card[draggable='true'] {
@@ -980,7 +980,7 @@
 }
 
 /* ------------------------------------------------------------------ *
- * m6-script: the source fields, the paginated preview and the import
+ * Script: the source fields, the paginated preview and the import
  * and container actions. The Source tab and the Ink source are drawn
  * over a decoration layer (SourceField.tsx, source-decor.ts). The input
  * and the layer take the same view class, so they share one set of

@@ -3,7 +3,7 @@
  *
  * The limits are the D3 evidence: durations 4, 6 and 8; 16:9 and 9:16; a negative prompt up to 1000
  * characters (pack-wide 500 still applies); native audio. Resolution is 720p and 1080p, which the
- * evidence does not state for Veo, so it is provisional until C29. Veo's practical prompt ceiling is
+ * evidence does not state for Veo, so it is provisional until they are checked against the vendor's documentation. Veo's practical prompt ceiling is
  * about 175 words, and it is a warning and never a rejection.
  *
  * Two rules sit with the template and not in the limits. Audio cues go first, because the vendor reads
@@ -57,7 +57,7 @@ function veoRules(shot: VideoShotRef, context: AcceptContext): ValidationIssue[]
 export const VEO_3_1 = defineTemplate({
   id: 'veo-3.1',
   displayName: 'Veo 3.1',
-  provisional: 'The payload field names, the 1080p resolution and the best-take fields are unverified until C29 checks them against Google’s Veo documentation.',
+  provisional: 'The payload field names, the 1080p resolution and the best-take fields are unverified until they are checked against Google’s Veo documentation.',
   limits: {
     modes: ['t2v', 'i2v'],
     durations: [4, 6, 8],

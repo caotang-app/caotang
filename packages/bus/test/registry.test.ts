@@ -10,8 +10,8 @@
  * comparing it column by column.
  *
  * A guard whose subject is a document has to read that document. A hand-copied
- * duplicate of §9's table would only prove the copy still matches itself — which
- * is exactly how the 2026-09-29/30 pin passes reported a stale number as current.
+ * duplicate of §9's table would only prove the copy still matches itself — and a
+ * stale number would still pass as current.
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -46,9 +46,9 @@ const specPath = resolve(__dirname, '../../../docs/architecture/command-bus.md')
 const descriptorsPath = resolve(__dirname, '../src/descriptors.ts');
 
 /**
- * Every name the registry holds beyond §9's table. **Empty since 2026-10-14:** §9 tabulates all 42 names in `COMMAND_NAMES`.
- * The arithmetic, stated once: the 36 table rows name 38 commands (the view row names three), and the four rows §9 gained on
- * 2026-10-14 (`shot.importImage` from r6, and `screenplay.import`, `dialogue.importInk`, `dialogue.setMeta`-script)
+ * Every name the registry holds beyond §9's table. **Empty:** §9 tabulates all 42 names in `COMMAND_NAMES`.
+ * The arithmetic, stated once: 36 table rows name 38 commands (the view row names three), and four more rows
+ * (`shot.importImage`, and the script imports `screenplay.import`, `dialogue.importInk`, `dialogue.setMeta`)
  * make 40 rows and **42 names**. A name added to `COMMAND_NAMES` must get its §9 row in the same change. The stale check below
  * stays: a name listed here that §9 also tabulates fails it.
  */
@@ -271,7 +271,7 @@ const ROW_SAMPLE: Partial<Record<CommandName, Record<string, unknown>>> = {
   'binder.deleteFilter': { filterId: FILTER_ID },
   'project.saveGoal': { goal: { nodeId: MANUSCRIPT, comparator: 'at-least', target: 50000, deadline: '2026-12-31' } },
   'project.deleteGoal': { goalId: GOAL_ID },
-  // The four rows §9 gained on 2026-10-14. Each carries only the keys its own row declares (the inverse tripwire below).
+  // The four newest rows of §9. Each carries only the keys its own row declares (the inverse tripwire below).
   'shot.importImage': { nodeId: SHOT_ID, stagingId: 'stg_ABCDEF0123' },
   'screenplay.import': { format: 'fountain' },
   'dialogue.importInk': { containers: [{ title: 'The Harbour', body: 'Mara: The boats are in.' }] },
@@ -322,7 +322,7 @@ describe('§9 the closed v0.1 registry', () => {
   const specRows = readSpecRegistry();
 
   it('parses all 42 command names out of §9 — so a broken parse fails, not passes', () => {
-    // 42 since 2026-10-14: the 38 names of the 36 rows as of 2026-10-09, and the four rows that day added. The count is a
+    // 42: the 38 names of the first 36 rows, and the four rows after them. The count is a
     // claim about the parse, not about the registry — if §9's table loses a row this fails, which is the whole point of asserting
     // it separately.
     expect(specRows).toHaveLength(42);
@@ -363,7 +363,7 @@ describe('§9 the closed v0.1 registry', () => {
 
   it('marks the five view commands as ephemeral, and the other thirty-six as project state', () => {
     // §9's view rows say these commands are never persisted and carry no undo, which is `mutates: 'view'` and
-    // `undo: 'none'`. The five view commands are the three original ones and the two M4 names (2026-10-08), ephemeral
+    // `undo: 'none'`. The five view commands are the three original ones and the two binder/corkboard names, ephemeral
     // UI state by the same definition. `mutates: 'none'` is the v0.2 `mcp.invoke` row's (extensibility §6: externals
     // are not project state), so it is held apart. The arithmetic is asserted, not implied: 42 names are
     // 5 view + 1 mcp.invoke + 36 project mutations.
@@ -400,7 +400,7 @@ describe('§9 the closed v0.1 registry', () => {
     expect(isCommandName('export.compile')).toBe(true);
     expect(isCommandName('export.compileSelection')).toBe(true);
     expect(isCommandName('binder.restructure')).toBe(false);
-    // `mcp.invoke` is in the closed set since m8-integration, as the v0.2 exception above, so it narrows true.
+    // `mcp.invoke` is in the closed set as the v0.2 exception above, so it narrows true.
     expect(isCommandName('mcp.invoke')).toBe(true);
     expect(isCommandName('')).toBe(false);
   });
@@ -439,8 +439,7 @@ describe('§9 the closed v0.1 registry', () => {
  * is the one a reader would have trusted in between.
  *
  * **Measured before the guard existed, when §9 had eighteen names and fifteen literals: all fifteen rows already agreed.** So this
- * is not a fix for a live drift — it is the missing half of a closed set, and the
- * finding is the one a review recorded: the code conformed and nothing would have said
+ * is not a fix for a live drift — it is the missing half of a closed set: the code conformed and nothing would have said
  * so. The mutations below are what make it more than a comment.
  */
 describe("§9's Params column against the code's accepted keys", () => {
@@ -583,9 +582,9 @@ describe("§9's Params column against the code's accepted keys", () => {
  * expectation would prove only that the table matches itself. §9 is read out of
  * the file by the same `readSpecRegistry` / `specParamKeys` pair the suite above
  * already uses, so **the authority is the document** and the table is the thing
- * held to it. That is the same discipline an earlier change established, and it is why this is
+ * held to it. That is the same discipline as the suite above, and it is why this is
  * an extension of that parser rather than a new one — a fifth copy of §9's column
- * is exactly the trap a review named.
+ * would be one more copy to drift.
  *
  * ## What each assertion is for, because three of them can pass vacuously
  *
@@ -606,7 +605,7 @@ describe("§9's closed key set, and the refusal that enforces it", () => {
   const exempt = specRows.filter((r) => specParamKeys(r.params) === undefined);
 
   it('declares a key set for all 42 names — the closed set cannot have a hole', () => {
-    // 42 = every name §9 tabulates, since 2026-10-14 (see UNTABULATED_NAMES above, which is empty).
+    // 42 = every name §9 tabulates (see UNTABULATED_NAMES above, which is empty).
     expect(Object.keys(DECLARED_PARAMS).sort()).toEqual([...COMMAND_NAMES].sort());
     for (const name of COMMAND_NAMES) {
       expect(DECLARED_PARAMS[name].length, `${name} declares no keys`).toBeGreaterThan(0);
@@ -675,7 +674,7 @@ describe("§9's closed key set, and the refusal that enforces it", () => {
   });
 
   it('names the accepted keys in the hint, and the command in the message', () => {
-    // The exact case a review measured: `binder.rename` used to answer `ok` with
+    // The exact case this guards: `binder.rename` used to answer `ok` with
     // `{nodeId, title}` and no complaint at all.
     const refused = COMMAND_REGISTRY['binder.rename'].descriptor.validate(
       { nodeId: THE_LANDING, title: 'A New Name', order: 99 },
@@ -779,7 +778,7 @@ describe("§9's closed key set, and the refusal that enforces it", () => {
  *
  * `codex.upsert`'s ops went through `narrowCodexOp`, which **dropped** an
  * undeclared op key on the floor. That was the most consequential silent drop in
- * the package: D5 makes `origin` harness-owned and load-bearing (hand-authored
+ * the package: codex.md §2 makes `origin` harness-owned and load-bearing (hand-authored
  * outranks agent-inferred, so it decides which entry is canon), so an agent
  * passing `origin: 'agent'` was told `ok` about an entry stamped from
  * `context.issuedBy` — a success reported for a write that did not happen.
@@ -852,7 +851,7 @@ describe('codex.upsert — an undeclared op key is a per-op refusal', () => {
   it('keeps narrowCodexOp in place as defence in depth, not as the enforcement', () => {
     // The emitted op is still narrowed to the declared fields. If the key check
     // above were deleted, this narrowing would still hold — and the payload would
-    // still be *silently* missing the field, which is the defect an earlier change exists to
+    // still be *silently* missing the field, which is the defect the key check exists to
     // remove. Asserting only the narrowing is asserting the old behaviour.
     const result = COMMAND_REGISTRY['codex.upsert'].descriptor.validate(
       { entries: [{ action: 'create', name: 'Someone New' }] },
@@ -894,12 +893,10 @@ describe('one lookup, and the half-built state', () => {
   it('a registered name with no implementation is refused, and refuses to throw', () => {
     // docs/decisions.md acceptance criterion.
     //
-    // **Corrected 2026-10-02.** This looped over all 18 names and
-    // asserted each was refused, which was true while the whole registry was
-    // half-built and stopped being true the moment the three `view.*` applies
-    // landed. The claim that matters is not "everything is refused" — it is "**a
-    // name without an implementation is refused**" — so the set is now derived
-    // from the registry rather than asserted as a round number, and the control
+    // The claim that matters is not "everything is refused" — the `view.*`
+    // applies are in the bus — it is "**a name without an implementation is
+    // refused**", so the set is derived from the registry rather than asserted
+    // as a round number, and the control
     // below keeps the derivation from passing on an empty set.
     const withoutApply = COMMAND_NAMES.filter((name) => COMMAND_REGISTRY[name].apply === undefined);
     expect(withoutApply.length).toBeGreaterThan(0);
@@ -915,7 +912,7 @@ describe('one lookup, and the half-built state', () => {
 
   it('the unimplemented set is exactly the thirty-seven names that are not the view family', () => {
     // The control for the test above: the five view names are the only ones the bus's own registry gives an apply, so the
-    // refused set is exactly the other 37 (42 less five). The view family is five since M4 (2026-10-08).
+    // refused set is exactly the other 37 (42 less five).
     const withApply = COMMAND_NAMES.filter((name) => COMMAND_REGISTRY[name].apply !== undefined);
     expect(withApply).toHaveLength(5);
     expect(new Set(withApply)).toEqual(new Set(VIEW_COMMAND_NAMES));
@@ -938,7 +935,7 @@ describe('one lookup, and the half-built state', () => {
   });
 
   it('export.compile is registered with a real descriptor and still no effect', () => {
-    // Delegated 3: the name ships now, the effect with the exporter in M9, and
+    // Delegated 3: the name ships now, the effect with the exporter, and
     // omitting the row would make §9's closed set a lie.
     const found = lookupCommand('export.compile');
     expect(found.ok).toBe(true);

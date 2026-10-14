@@ -1,11 +1,11 @@
 /**
  * Which codex entries are the writer's canon, and which an agent inferred — the canon-outranking
- * rule of [codex.md §2](../../../docs/architecture/codex.md) (D5, 2026-09-12), consumed by
+ * rule of [codex.md §2](../../../docs/architecture/codex.md), consumed by
  * [coherence.md §4.3](../../../docs/architecture/coherence.md).
  *
  * When a finding names both a hand-authored entry and an agent-inferred one, the hand-authored entry
- * is canon. The rule is about who wrote the entry, not how it reached the project, so the owner's
- * decision (2026-10-08, this work) puts an `import` entry with `manual`: imported writing is
+ * is canon. The rule is about who wrote the entry, not how it reached the project, so an
+ * `import` entry ranks with `manual`: imported writing is
  * the writer's own canon, and an import that ranked below an agent entry would lose to the model's
  * guess about the writer's own worldbuilding. `agent` is the only origin an inference can carry.
  *

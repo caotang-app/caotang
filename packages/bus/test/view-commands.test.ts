@@ -1,5 +1,5 @@
 /**
- * The two M4 view commands (2026-10-08) — `view.setExpanded` and
+ * The two binder/corkboard view commands — `view.setExpanded` and
  * `view.setCorkboardScope`, the binder's expansion overrides and the corkboard's
  * container.
  *

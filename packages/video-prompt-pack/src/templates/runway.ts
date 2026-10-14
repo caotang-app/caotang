@@ -5,7 +5,7 @@
  * the prompt at 512 characters, which is the floor of Runway's documented 512–1000 range, so a pack
  * is valid on every model the template names; durations 5 and 10; the 16:9 and 9:16 ratios the
  * evidence documents for the platform; one seed; and reference images as the consistency mechanism.
- * The payload field names and the Gen-4 ratio set are provisional until C29 verifies them.
+ * The payload field names and the Gen-4 ratio set are provisional until they are checked against the vendor's documentation.
  */
 
 import type { VideoShotRef } from '../model.js';
@@ -26,7 +26,7 @@ function runwayText(shot: VideoShotRef): string {
 export const RUNWAY_GEN4 = defineTemplate({
   id: 'runway-gen4',
   displayName: 'Runway Gen-4',
-  provisional: 'The payload field names, the Gen-4 ratio set and the best-take fields are unverified until C29 checks them against Runway’s documentation.',
+  provisional: 'The payload field names, the Gen-4 ratio set and the best-take fields are unverified until they are checked against Runway’s documentation.',
   limits: {
     modes: ['t2v', 'i2v'],
     durations: [5, 10],

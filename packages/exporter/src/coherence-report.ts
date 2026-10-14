@@ -1,5 +1,5 @@
 /**
- * The coherence report — media-track M6's Review row (media-track.md §1: "Coherence report (MD/JSON)"), the findings
+ * The coherence report — the one-source compile's Review row (media-track.md §1: "Coherence report (MD/JSON)"), the findings
  * export that is the standard report path (coherence.md §8).
  *
  * It reads the findings file the store holds and writes what it says: every finding with its status, grouped as the

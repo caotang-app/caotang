@@ -49,16 +49,12 @@ describe('the zero-key demo intents, end to end', () => {
           { system: DRAFT_PREFIX, includes: ['Brief: The friend arrives by boat', '## Elena (character)'] },
         ],
         // Two model calls: the planner (which carries every callable, wired tool's schema) and the drafter. The ceiling
-        // holds that budget. 6000 -> 7000 when the registry grew by codex.import, coherence.scan and
-        // coherence.setFindingStatus (measured 6022): three wired tools the planner should see, not prompt bloat.
-        // 7000 -> 7100 when scene.draft gained its include_forward_outline param (measured 6964 without it, 7018 with it: the
-        // planner sees the schema of every callable tool on each request, so one boolean costs 54 tokens there).
-        // 7100 -> 7900 when shots.derive, prompt.draft and prompt.variant were wired: the planner lists every wired
-        // tool, so the three add their descriptions and schemas to each planner call (about 750 tokens: 7018 before, 7773 here).
-        // 7900 -> 8200 when dialogue.draft was wired to the agent ports (agent-coherence): the planner lists every wired tool,
-        // so its description and schema add about 350 tokens to the one planner call (measured 8124 here, 7773 before). m10's
-        // export.compile description and recipeName parameter add to it (measured 8246 here), so the ceiling moves to 8300. With
-        // codex.write's `visualRefs` from the other m8 merged beside it, the planner call carries both (measured 8314), so 8400.
+        // holds that budget. The planner sees the description and schema of every callable, wired tool on each request, so
+        // the wired set is what the ceiling tracks, not prompt bloat: codex.import, coherence.scan and
+        // coherence.setFindingStatus; scene.draft's include_forward_outline param (one boolean costs 54 tokens there);
+        // shots.derive, prompt.draft and prompt.variant (about 750 tokens); dialogue.draft wired to the agent ports (about
+        // 350 tokens); export.compile's description and recipeName parameter; and codex.write's `visualRefs`. Measured at
+        // 8314 with all of them, so 8400.
         maxTokens: 8400,
         maxModelCalls: 2,
         state: (state) => {

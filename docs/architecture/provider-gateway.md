@@ -25,7 +25,7 @@ interface ProviderProfile {
 
 - **Multiple named profiles, one active.** Per-call model override is a parameter of `complete()` (harness chooses, e.g. cheap model for synopses), not a profile property.
 - `settings` module owns profile CRUD UI; gateway owns validation. URL normalized on save: strip trailing `/`, reject URL not ending in a pathless-or-versioned base (accept `/v1`, reject full endpoint paths — provider differences are handled by the versioned path rule: we always POST `{baseUrl}/chat/completions`).
-- **Adapters (planned, the owner's provider decision of 2026-10-14):** this build ships one adapter, OpenAI Chat Completions, behind the `ProviderAdapter` interface (§3). Three internal adapters are planned — Anthropic Messages, OpenAI Responses and OpenAI Chat Completions — with presets for the major providers and one generic OpenAI-compatible kind; writers never pick an API family. See [decisions.md](../decisions.md) § Providers.
+- **Adapters:** this build ships one adapter, OpenAI Chat Completions, behind the `ProviderAdapter` interface (§3). Planned: native Anthropic Messages, OpenAI Responses and OpenAI Chat Completions adapters, with presets for the major providers and one generic OpenAI-compatible kind; writers never pick an API family. See [decisions.md](../decisions.md) § Providers.
 
 ## 3. Public API (gateway surface)
 
@@ -108,7 +108,7 @@ interface MockScript {
 
 | # | Item | Status |
 |---|---|---|
-| D1 | One adapter (OpenAI Chat Completions) in this build, behind the adapter seam | The owner's provider decision (2026-10-14) plans three adapters and provider presets (§2); being built. |
+| D1 | One adapter (OpenAI Chat Completions) in this build, behind the adapter seam | Planned: native Anthropic Messages, OpenAI Responses and OpenAI Chat Completions adapters, with provider presets (§2). |
 | D2 | `response_format` via probe-gated json_object + schema-in-system | Explicit assumption — verify against popular providers (openrouter/local) in practice; the open question is which OpenAI-compatible providers accept `response_format` json_object / json_schema, and whether the fallback system-message approach holds. |
 | D3 | Keys: IndexedDB + AES-GCM non-extractable key | Delegated; the threat model is stated in §7. |
 | D4 | Usage display-only, no quota enforcement | Display only: Caotang is free and BYOK, so there is no quota logic. An optional `pricePer1k` per profile powers pre-approval cost estimates on plan cards (context-assembly §5); still display-only. |

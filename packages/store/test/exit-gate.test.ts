@@ -1,5 +1,5 @@
 /**
- * **M2's exit gate — §10's assertion families, headless.** An earlier change.
+ * **The command bus's exit gate — §10's assertion families, headless.**
  *
  * ## What this file is
  *
@@ -10,7 +10,7 @@
  * > permission-matrix assertions → error-shape assertions → callId-replay dedupe
  * > assertions.
  *
- * The milestone's exit criteria turn two of those clauses into
+ * The exit criteria turn two of those clauses into
  * ("Scripted 20-command sequence → final state asserted; undo-all ⇒ byte-equal
  * pre-script snapshot"). This file is the gate: **one scripted sequence of exactly
  * twenty commands**, dispatched through the shipped `execute()` over the store's
@@ -19,15 +19,14 @@
  * the two error codes that *cannot* be produced through a correct apply need, and
  * they are named as such where they appear.
  *
- * ## The count in the row is ambiguous, and the gate answers every shape
+ * ## The count is ambiguous, and the gate answers every shape
  *
- * §10's chain names **five** assertion shapes; the row calls them "four assertion
- * families". The reading implemented here: the scripted sequence's final state is
- * the **baseline** the rest are measured against, so the four are the ones standing
- * on top of it (undo-replay, permission-matrix, error-shape, callId-replay). The
- * alternative reading — final-state is a fifth family and the row undercounts — is
- *.md](docs/decisions.md) 2026-10-03 (21:0x) rather than
- * settled here, because **the choice does not change what this file asserts**: all
+ * §10's chain names **five** assertion shapes; the exit criteria call them "four
+ * assertion families". The reading implemented here: the scripted sequence's final
+ * state is the **baseline** the rest are measured against, so the four are the ones
+ * standing on top of it (undo-replay, permission-matrix, error-shape, callId-replay).
+ * The alternative reading — final-state is a fifth family — is logged in
+ * [docs/decisions.md](docs/decisions.md) rather than settled here, because **the choice does not change what this file asserts**: all
  * five are asserted either way, and an exit gate that ships with a hole is not a
  * gate.
  *
@@ -44,7 +43,7 @@
  *   reverse creation order and refuses any that reports a failure, because §5's
  *   promise is about the whole session, and because the ordering is load-bearing:
  *   undoing out of order restores a state the script never had.
- * - **Permission matrix.** An earlier change derived its matrix from the **bus's own**
+ * - **Permission matrix.** `permission.test.ts` derives its matrix from the **bus's own**
  *   `COMMAND_REGISTRY`, where every name is a descriptor with no apply. That is the
  *   right subject for the *gate's* logic and the wrong subject for the *matrix*:
  *   a name with no effect cannot be "allowed for a user" in any observable sense.
@@ -225,7 +224,7 @@ function snapshotOf(state: ProjectState): string {
 
 /**
  * The instrument's own test. **§10's byte-equal criterion is exactly as strong as
- * `canonical`,** and `canonical` is the function that found M2's one real defect
+ * `canonical`,** and `canonical` is the function that found the bus's one real defect
  * — the `updatedAt` stamp two families down. So it is the one function in this
  * file that is load-bearing for the *finding* rather than for the assertion.
  *
@@ -471,8 +470,8 @@ function runScript(h: Harness): Scripted {
   run(cmd({ name: 'editor.insert', params: { docId: LANDING, offset: body(state, LANDING).length, text: ' Kestrel watched from the tower.', expectedRevision: revision(state, LANDING) } }));
   run(cmd({ name: 'editor.replaceRange', params: { docId: LANDING, range: { from: 0, to: 3 }, text: 'That', expectedRevision: revision(state, LANDING) } }));
 
-  // 12 — a codex batch of two ops of different kinds, in one call: the case an earlier change
-  // measured a per-entry compensation loop against.
+  // 12 — a codex batch of two ops of different kinds, in one call: the case a per-entry
+  // compensation loop would get wrong.
   run(
     cmd({
       name: 'codex.upsert',
@@ -956,7 +955,7 @@ describe('§10 — every refusal carries a code and a corrective path, not a bar
 
   it('reports a name with no implementation as internal, without reading a snapshot', () => {
     // The bus's own registry is the subject: §9's two export rows are registered
-    // with real descriptors and no effect until M9, and §7's shape for that is
+    // with real descriptors and no effect without an exporter, and §7's shape for that is
     // the one §1's "the bus does not own project state" produces.
     const h = scriptedHarness();
     const result = h.dispatch(
@@ -1016,9 +1015,9 @@ describe('§10 — every refusal carries a code and a corrective path, not a bar
   it('declares io-error and has no producer for it — the one code no v0.1 path can emit', () => {
     // **Measured, not asserted from the enum.** §7's list is a contract, and a
     // code nothing can emit is either dead surface or a mis-coded failure — so
-    // this test reads the sources and says which it is. It passed on 2026-10-03
-    // with zero producers across both packages; if a future slice adds one, this
-    // test fails and that slice has to move the finding with it.
+    // this test reads the sources and says which it is. It passes with zero
+    // producers across both packages; if a future change adds one, this test
+    // fails and that change has to move the finding with it.
     const producers = sourceFiles()
       .flatMap((file) => readFileSync(file, 'utf8').split('\n'))
       .filter((line) => line.includes("code: 'io-error'"))

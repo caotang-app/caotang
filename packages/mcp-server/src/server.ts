@@ -61,7 +61,7 @@ export function createToolRuntime(session: ProjectSession): ToolRuntime {
 }
 
 /**
- * The stateless revision this server is built for (extensibility.md §9, E8). The SDK
+ * The stateless revision this server is built for (extensibility.md §9). The SDK
  * only selects a 2026 revision through `server/discover`, and only when the server
  * lists it, so it is listed ahead of the 2025 entries. Those stay, so a 2025-era client
  * still negotiates the handshake it knows.

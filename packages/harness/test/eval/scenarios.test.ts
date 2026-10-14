@@ -35,19 +35,12 @@ const scenarios: Scenario[] = [
       status: 'applied',
       cards: { matcher: 'strict', items: [{ kind: 'auto', tools: ['meta.set'], decision: 'auto' }] },
       trace: { matcher: 'strict', calls: [{ tool: 'meta.set', outcome: 'ok', params: { label: 'act-2' } }] },
-      // 6000 before m8-integration. The planner's tool list grew by the two wired rows it now carries, tool.search and
-      // shots.annotate (about 550 tokens a planner call, measured at 6399 here), so the ceiling moved by that growth to
-      // 6500. The media track's wired read, dialogue.table, adds its description and schema to every planner call
-      // (measured at 6602 here, about 200 tokens), so the ceiling moves by that growth too. The three drafting tools are wired
-      // now (shots.derive, prompt.draft, prompt.variant), and the planner lists every wired tool, so each planner call carries
-      // their descriptions and schemas (about 810 tokens: 6602 before, 7411 here), and the ceiling moves to 7500.
-      // dialogue.draft, wired to the agent ports (agent-coherence), joins the planner's list the same way: about 350 tokens
-      // on its one planner call (measured 7763 here, 7411 before), so the ceiling moves to 7800.
-      // codex.write's schema gained `visualRefs` (video-prompt-pack §3): the planner lists that schema too, so the one planner
-      // call grows by about 70 tokens (measured 7830 here, 7763 before), and the ceiling moves to 7900. m10 grows export.compile's
-      // description and adds recipeName (a saved recipe, with the selection optional when one names the nodes) and the prompt
-      // pack's template text: the planner lists that tool on every call (measured 7884 with it and without visualRefs).
-      // With both merged the planner call carries both schemas (measured 7952 here), so the ceiling moves to 8000.
+      // The planner lists every wired tool's description and schema on each call, so the ceiling tracks the wired set:
+      // tool.search and shots.annotate (about 550 tokens), dialogue.table (about 200), the three drafting tools
+      // shots.derive, prompt.draft and prompt.variant (about 810), dialogue.draft wired to the agent ports (about 350),
+      // codex.write's `visualRefs` (video-prompt-pack §3, about 70), and export.compile's description with its recipeName
+      // parameter (a saved recipe, with the selection optional when one names the nodes) and the prompt pack's template
+      // text. Measured at 7952 with all of them, so the ceiling is 8000.
       maxTokens: 8000,
       state: (state) => (state.manifest.tree.find((node) => node.id === FRIEND)?.label === 'act-2' ? [] : ['The Friend is not labelled act-2']),
     },
@@ -114,16 +107,11 @@ const scenarios: Scenario[] = [
           { tool: 'synopsis.fill', outcome: 'ok' },
         ],
       },
-      // Three model calls (a read's planner, a plan's planner, a synopsis), each carrying the tool schemas. The ceiling
-      // was 12000 before m8-integration; the planner's two new wired rows add to each planner call (measured 13115). The
-      // media track's wired read, dialogue.table, adds to each of the three calls (measured 13523 here), so the ceiling
-      // moves by that growth as well. The three drafting tools, now wired, add to each of the two planner calls (about 810 tokens
-      // a planner call: 13523 before, 15141 here), so the ceiling moves to 15250. Round 5's merge then lengthened three wired
-      // descriptions (export.compile's format enum, project.overview's goal shape, the coherence rows): measured 15271, so 15500.
-      // dialogue.draft, wired (agent-coherence), adds about 290 tokens to each of its two planner calls (measured 15843
-      // here, 15271 before), so the ceiling moves to 16000. m10's export.compile description and recipeName parameter add to each of
-      // the two planner calls (measured 16087 here), so the ceiling moves to 16100. With codex.write's `visualRefs` from the
-      // other m8 merged beside it, both planner calls carry both schemas (measured 16223 here), so the ceiling moves to 16300.
+      // Three model calls (a read's planner, a plan's planner, a synopsis), each carrying the tool schemas. Each wired tool
+      // adds its description and schema to both planner calls: tool.search and shots.annotate, dialogue.table, the three
+      // drafting tools (about 810 tokens a planner call), the longer export.compile, project.overview and coherence
+      // descriptions, dialogue.draft (about 290 tokens a planner call), export.compile's recipeName parameter, and
+      // codex.write's `visualRefs`. Measured at 16223 with all of them, so the ceiling is 16300.
       maxTokens: 16300,
       maxModelCalls: 3,
       state: (state) => {

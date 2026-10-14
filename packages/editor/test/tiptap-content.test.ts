@@ -96,7 +96,7 @@ const REMOTE = [
   ['mixed-case scheme', 'HtTpS://example.test/a.png'],
 ] as const;
 
-describe('a control character in front of a remote source does not make it local (§2.1, A2, M5 finding 2)', () => {
+describe('a control character in front of a remote source does not make it local (§2.1, A2)', () => {
   it.each(
     REMOTE.flatMap(([name, src]) => IN_DOCUMENT_CONTROLS.map((control) => [`${name} behind ${code(control)}`, control, src] as const)),
   )('a %s source is not loaded, and the image is still in the document', async (_label, control, src) => {
@@ -179,7 +179,7 @@ describe('a paste keeps plain paragraphs and the §3.2 marks (§10)', () => {
         '<p dir="ltr"><span>Second paragraph</span></p></b>',
       'Plain text here\n\nSecond paragraph\n',
     ],
-  ])('a wrapper that declares plain weight pastes as plain text, with %s (§10, M5 finding 10)', async (_label, html, expected) => {
+  ])('a wrapper that declares plain weight pastes as plain text, with %s (§10)', async (_label, html, expected) => {
     const { host, instance } = await mountInto('');
     paste(host, html);
     expect(instance.getContent()).toBe(expected);

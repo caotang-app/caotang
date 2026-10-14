@@ -4,26 +4,25 @@
  * ## Why a guard whose subject is a document has to read that document
  *
  * A hand-copied duplicate of §3.1's table would only prove the copy still
- * matches itself — the same failure that let the 2026-09-29/30 pin passes
- * report a stale number as current, and the shape an earlier change refused for §9's registry.
+ * matches itself — the failure that lets a pin check
+ * report a stale number as current, and the shape refused for §9's registry.
  * So this file reads `docs/architecture/editor-engine.md` and compares it to the
  * schema **column by column**: names, groups, content expressions, attrs, and
  * the required/optional distinction the table spells out.
  *
- * ## What it found on its first run
+ * ## What it holds
  *
- * Four cells of §3.1 were wrong, and all four are now corrected in the spec
- * with the measurement.md] 2026-10-04 (05:0x) — the `doc`
- * row's Group and Content transposed, `code_block: text` unbuildable,
- * `paragraph`/`heading: inline+` lossy. Two *code* divergences came the other
- * way and were fixed in the schema: `list_item` had no group, and `image.src` /
- * `link.href` carried defaults although both tables mark them **required**.
+ * Four §3.1 cells rest on measurements — the `doc` row's Group and Content,
+ * `code_block`'s content (`text` is unbuildable), and `paragraph`/`heading`
+ * (`inline+` is lossy). In the schema, `list_item` carries a group, and
+ * `image.src` / `link.href` carry no default because both tables mark them
+ * **required**.
  *
- * A correction is only worth making if it cannot be quietly reversed, so the
+ * A decision is only worth making if it cannot be quietly reversed, so the
  * second half of this file re-derives the two load-bearing measurements from the
  * schema itself. The rejected readings are held here as **pinned
  * counterexamples**: if a future ProseMirror makes `inline+` safe, these fail
- * and say so, rather than the correction quietly becoming the code's own
+ * and say so, rather than the decision quietly becoming the code's own
  * opinion.
  */
 import { readFileSync } from 'node:fs';
@@ -289,7 +288,7 @@ describe('§3.2 Marks', () => {
   });
 });
 
-describe('the two corrected cells, re-derived so the correction cannot become an opinion', () => {
+describe('the two load-bearing cells, re-derived so the decision cannot become an opinion', () => {
   it("§3.1's rejected `code_block: text` is not a schema ProseMirror can build", () => {
     expect(() =>
       rebuild((nodes) => {

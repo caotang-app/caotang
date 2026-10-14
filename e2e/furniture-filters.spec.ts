@@ -3,7 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { binderRow, createProject } from './support.js';
 
 /**
- * The furniture's UI behaviour that this work closed: the keyword and date criteria in the filter bar, the filter
+ * The furniture's UI behaviour: the keyword and date criteria in the filter bar, the filter
  * chord, a saved filter's delete clearing the bar, the sprint starting again after it finished, the goals section of a folder,
  * and the Alt+arrow reorder in the binder. Each assertion is on what the writer sees.
  */

@@ -4,7 +4,7 @@
  * The limits are the D3 evidence: a prompt up to 2500 characters, a negative prompt up to 500, durations
  * 5 and 10, and the 16:9, 9:16 and 1:1 ratios. Kling takes first and last frames, and up to four
  * multi-image references (v1.6+). It documents no seed in the evidence, so none is sent. The payload
- * field names are provisional until C29.
+ * field names are provisional until they are checked against the vendor's documentation.
  *
  * The `cfg_scale` adherence control is noted in the grammar hints but not set here. It is the vendor's
  * own parameter, and a writer who wants it records it in the best take.
@@ -17,7 +17,7 @@ import { defineTemplate } from '../template.js';
 export const KLING_2_6 = defineTemplate({
   id: 'kling-2.6',
   displayName: 'Kling 2.6',
-  provisional: 'The payload field names, the reference-frame fields and the best-take fields are unverified until C29 checks them against Kling’s documentation.',
+  provisional: 'The payload field names, the reference-frame fields and the best-take fields are unverified until they are checked against Kling’s documentation.',
   limits: {
     modes: ['t2v', 'i2v'],
     durations: [5, 10],

@@ -1,5 +1,5 @@
 /**
- * `@caotang/storyboard` — storyboard and shot planning (storyboard.md, M3), headless.
+ * `@caotang/storyboard` — storyboard and shot planning (storyboard.md), headless.
  *
  * What is in here:
  *  - the shot node kind, the `storyboard` folder kind and the closed v1 vocabulary (`model`), and the
@@ -16,9 +16,9 @@
  *
  * What is not: the corkboard and Inspector (the app, which renders this module's views), the
  * `script.shot-coverage` check (coherence's registry), the harness registration of the `shots.*` tools
- * (the app supplies their ports), the PDF library (gated on C28), and the animatic MP4 and EDL exports
+ * (the app supplies their ports), the PDF library (gated on the PDF-library benchmark), and the animatic MP4 and EDL exports
  * (parked by the spec). The store carries the `kind` and `shot` node fields, so a shot's metadata is saved
- * with the project; the image import is the store's `shot.importImage` (commands-storyboard-r6.ts).
+ * with the project; the image import is the store's `shot.importImage` (among the store's storyboard commands).
  */
 
 export * from './model.js';

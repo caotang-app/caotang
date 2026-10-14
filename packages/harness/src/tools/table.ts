@@ -73,14 +73,14 @@ const DEFINITIONS: Readonly<Record<ToolName, Definition>> = {
   'coherence.scan': coherenceDefinition('coherence.scan'),
   'coherence.review': coherenceDefinition('coherence.review'),
   'coherence.setFindingStatus': coherenceDefinition('coherence.setFindingStatus'),
-  // m8-integration: the Tier-2 gateway, read from the MCP client's entry (extensibility §5).
+  // The Tier-2 gateway, read from the MCP client's entry (extensibility §5).
   'tool.search': { kind: 'port', port: 'tool.search', params: TOOL_SEARCH_ENTRY.params as unknown as ObjectSpec },
-  // m8-integration: the storyboard and prompt-pack modules' tools, read from each module's own entries.
+  // The storyboard and prompt-pack modules' tools, read from each module's own entries.
   'shots.derive': extensionDefinition(STORYBOARD_TOOL_ENTRIES, 'shots.derive'),
   'shots.annotate': extensionDefinition(STORYBOARD_TOOL_ENTRIES, 'shots.annotate'),
   'prompt.draft': extensionDefinition(PROMPT_PACK_TOOL_ENTRIES, 'prompt.draft'),
   'prompt.variant': extensionDefinition(PROMPT_PACK_TOOL_ENTRIES, 'prompt.variant'),
-  // m8-integration: the dialogue module's two tools (dialogue-narrative.md §7), read from the module's own entries.
+  // The dialogue module's two tools (dialogue-narrative.md §7), read from the module's own entries.
   'dialogue.draft': extensionDefinition(DIALOGUE_TOOL_ENTRIES, 'dialogue.draft'),
   'dialogue.table': extensionDefinition(DIALOGUE_TOOL_ENTRIES, 'dialogue.table'),
 };

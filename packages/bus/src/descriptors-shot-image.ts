@@ -1,6 +1,6 @@
 /**
- * r6 (storyboard): the descriptor of `shot.importImage`, the one command this round adds to the storyboard. Its apply is
- * the store's (`packages/store/src/commands-storyboard-r6.ts`), reached through the same registry as the rest of the
+ * Storyboard: the descriptor of `shot.importImage`, the storyboard's image import. Its apply is
+ * the store's (`packages/store/src/commands-shot-image.ts`), reached through the same registry as the rest of the
  * closed set (`registry.ts`).
  *
  * The apply is asynchronous, because the image is written to `assets/` before the shot names it, so the descriptor

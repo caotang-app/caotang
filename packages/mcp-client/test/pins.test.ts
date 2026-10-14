@@ -66,7 +66,7 @@ describe('sha256Hex and pinHash', () => {
     expect(await pinHash({ ...base, annotations: { readOnlyHint: true } })).not.toBe(await pinHash({ ...base, annotations: { readOnlyHint: false } }));
   });
 
-  it('hashes a tool with no hints exactly as assumption A4 says, and ignores anything but the four hint keys', async () => {
+  it('hashes a tool with no hints exactly as the base pin rule says, and ignores anything but the four hint keys', async () => {
     const plain = { toolName: 't', description: 'd', inputSchema: { type: 'object' } };
     expect(await pinHash(plain)).toBe(await sha256Hex(canonicalJson({ toolName: 't', description: 'd', inputSchema: { type: 'object' } })));
     expect(await pinHash({ ...plain, annotations: {} })).toBe(await pinHash(plain));

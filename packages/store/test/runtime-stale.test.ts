@@ -1,5 +1,5 @@
 /**
- * A runtime store whose connection another tab's upgrade has closed (DS-6). The browser fires `versionchange` on this tab's connection
+ * A runtime store whose connection another tab's upgrade has closed. The browser fires `versionchange` on this tab's connection
  * when a newer build opens the database; from then on this tab's writes must say why they fail, and say what to do (reload), rather
  * than surface the browser's `InvalidStateError` from a closed connection.
  */
@@ -67,7 +67,7 @@ describe('a runtime store another tab has upgraded', () => {
     await expect(readProjectState(store, state.manifest.project.id)).rejects.toBeInstanceOf(RuntimeStoreStaleError);
   });
 
-  it('the snapshot retention sweep is refused by the same name, not by the browser’s closed-connection error (DS-6)', async () => {
+  it('the snapshot retention sweep is refused by the same name, not by the browser’s closed-connection error', async () => {
     const store = await openRuntimeStore(new MemoryIndexedDb());
     upgradeFromAnotherTab(store);
 

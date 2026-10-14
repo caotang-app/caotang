@@ -1,6 +1,6 @@
 /**
  * Section 5.1's retention ladder - [command-bus.md](docs/architecture/command-bus.md) 5.1,
- * walked over the `snapshots` object store an earlier change created.
+ * walked over the `snapshots` object store (`store.ts`).
  *
  * ## Why this file is a pure function first and a store call second
  *
@@ -55,17 +55,17 @@
  * thing, and rule 6 ("deleting a checkpoint removes any snapshot no remaining
  * checkpoint references") only does work where references are shared.
  *
- * In v0.1 the only durable checkpoint artifact *is* the row. An earlier change made rule 4's
+ * In v0.1 the only durable checkpoint artifact *is* the row. `store.ts` makes rule 4's
  * dedupe a property of the `[projectId, docId, revision]` key, so an unchanged
  * body cannot be stored twice and its second capture surfaces as
  * `SnapshotExistsError`, which the compensable applies treat as the success they
  * are. Undo groups themselves are in memory and per session (undo.ts says so, and
- * A3 is the source for it), and the durable activity log that will reference
+ * command-bus A3 is the source for it), and the durable activity log that will reference
  * checkpoints is the row, not this one.
  *
  * So the ladder counts rows, and `orphans` equals `evict` - each stored row is
  * its own last reference, so deleting it *is* rule 6's cleanup. That equality is
- * asserted in the suite with its reason attached, so that when an earlier change makes the
+ * asserted in the suite with its reason attached, so that when a later version makes the
  * activity log durable and rows start being shared, the assertion fails loudly
  * instead of quietly outliving the assumption that made it true.
  */
@@ -274,7 +274,7 @@ export function evictSnapshots(
 ): Promise<EvictionPlan> {
   const resolved = resolveRetentionConfig(config);
   return new Promise<EvictionPlan>((resolve, reject) => {
-    // A store another tab upgraded refuses the sweep by name (RuntimeStoreStaleError), as every other write does (DS-6).
+    // A store another tab upgraded refuses the sweep by name (RuntimeStoreStaleError), as every other write does.
     requireLiveConnection(store);
     const tx = store.db.transaction(SNAPSHOT_STORE, 'readwrite');
     let plan: EvictionPlan | undefined;
@@ -326,7 +326,7 @@ export interface SnapshotBudget {
  * property of a *plan*, so it costs a second pass (`planSnapshotEviction` over
  * the same rows, or the plan `evictSnapshots` already returns) to get, and
  * folding it in here would mean this function either deletes or duplicates the
- * sweep's work. **Recorded so the M4 surface author reads the two together.**
+ * sweep's work. **A surface that shows the budget should read the two together.**
  */
 export async function snapshotBudget(
   store: RuntimeStore,

@@ -47,7 +47,7 @@ export interface ArtifactFs {
   /**
    * Atomic binary write, with the same temp-then-rename contract as
    * {@link writeAtomic}. The DOCX and EPUB renderers write their output under
-   * `exports/` through this (B-debt item 8); nothing else in the store writes bytes.
+   * `exports/` through this; nothing else in the store writes bytes.
    */
   writeBytesAtomic(path: string, bytes: Uint8Array): Promise<void>;
 }

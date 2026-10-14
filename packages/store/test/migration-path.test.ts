@@ -10,10 +10,9 @@
  * manifest is already current, so the branch is not merely untested but
  * *unenterable*.
  *
- * That is the finding a review recorded on 2026-09-30 and the reason this file
- * exists rather than a `FORMAT_VERSION` bump: three real behaviours sat behind a
- * branch no test could enter, and the bump that would enter it belongs to a
- * milestone nobody has scheduled. The seam is the substitution of
+ * That is the reason this file exists rather than a `FORMAT_VERSION` bump: three
+ * real behaviours sit behind a branch no test could otherwise enter, and no
+ * format change is due that would enter it. The seam is the substitution of
  * {@link FormatContext} — a registry and the version it targets — defaulted
  * everywhere in the package to the frozen production value.
  *
@@ -22,8 +21,8 @@
  * "nothing migrated" control, the vocabulary test would pass on a manifest whose
  * vocabulary happened to lack `draft` for an unrelated reason, and without the
  * "no step" control the loader test would pass on a `read.ts` that ignored the
- * report entirely. The mutations are.md` an earlier change — reverting
- * each of the three fixes fails exactly the test written for it.
+ * report entirely. Reverting each of the three fixes fails exactly the test
+ * written for it.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -55,7 +54,7 @@ const DOC_ID = 'n_3W8RN2TQ6C';
 /**
  * v1 → v2, renaming the `draft` status term to `wip` **in the vocabulary only**.
  *
- * That is the counterfactual a review named, and the shape of the defect is what makes
+ * That is the counterfactual worth testing, and the shape of the defect is what makes
  * it a real one rather than a contrivance: a term rename is exactly the migration
  * a format bump contains, and the nodes keep pointing at the old id afterwards.
  * §2's tolerance ("unknown value on load → keep string, surface as chip, never
@@ -269,13 +268,11 @@ describe('§6 "writers always save at the current version"', () => {
     // `caotang.json` into `bak.1` and then decline to write — a write that changed
     // the recovery ladder (§4's whole purpose) and produced no manifest.
     //
-    // **The folder is seeded first, and that is the load-bearing detail.** The
-    // first draft of this test wrote into an empty fs and asserted `bak.1` did
-    // not exist — which passed with the rotation moved back in front of the
-    // serialization, because a folder with no `caotang.json` has nothing to rotate.
-    // A test whose name claims the ladder was not disturbed, checking a folder
-    // where the ladder does not exist, is the green lie this repo keeps meeting;
-    // measured: with the ordering reverted, all 427 tests were green.
+    // **The folder is seeded first, and that is the load-bearing detail.** Written
+    // into an empty fs, asserting `bak.1` does not exist would pass with the
+    // rotation moved back in front of the serialization, because a folder with no
+    // `caotang.json` has nothing to rotate. A test whose name claims the ladder was
+    // not disturbed has to check a folder where the ladder exists.
     const fs = new MemoryArtifactFs();
     const seeded = createProjectState(createEmptyManifest('K', T));
     await writeProject(fs, seeded, { snapshotCount: 3 });
@@ -301,10 +298,9 @@ describe('§6 "writers always save at the current version"', () => {
     // directories, written every document body whose text changed, rewritten
     // codex files and **pruned** codex files, and created `.gitignore`. Deleted
     // documents' files are not among those: they are pruned after the manifest
-    // (step 5, DS-4), so a refusal never reaches them.
-    // `write.ts` says the refusal "has to cost nothing at all, so it is the first
-    // thing that can fail" — it is not the first thing that can fail, and it does
-    // not cost nothing: in one call, below, a body reaches disk and a file is
+    // (step 5), so a refusal never reaches them.
+    // The refusal is not the first thing that can fail, and it does not cost
+    // nothing: in one call, below, a body reaches disk and a file is
     // deleted, and only then does the manifest go unwritten.
     //
     // The rotation half of the ordering fix is real and is pinned above; this is
@@ -316,8 +312,8 @@ describe('§6 "writers always save at the current version"', () => {
     // which is the right direction for a change that widens the guarantee.
     const fs = new MemoryArtifactFs();
     await writeProject(fs, staleState('The ferry was late, as always.'), { snapshotCount: 3 });
-    // A codex file the writer has no entry for — the shape an earlier change spent a
-    // slice protecting, and the shape a prune removes.
+    // A codex file the writer has no entry for — the shape the loader recovers
+    // rather than drops, and the shape a prune removes.
     fs.putFile('codex/c_VANSHED002.md', 'front matter gone wrong\n');
 
     const stale = staleState('The ferry was late, and the light was late with it.');

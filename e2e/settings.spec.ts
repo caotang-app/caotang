@@ -142,7 +142,7 @@ test('with the Writing setting off, focus mode keeps the binder and the inspecto
   await expect(page.getByRole('navigation', { name: 'Project panels' })).toBeVisible();
   await expect(page.getByRole('complementary', { name: 'Inspector' })).toBeVisible();
   // The status line says why the panels stayed: the pressed button alone does not.
-  // The owner's words, with "Settings › Writing" a button whose visible words are its name.
+  // The wording, with "Settings › Writing" a button whose visible words are its name.
   const status = page.getByRole('status').filter({ hasText: 'Focus mode is on.' });
   await expect(status).toContainText('Focus mode is on. The binder and inspector stay open, as set in Settings › Writing.');
 

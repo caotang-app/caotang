@@ -59,7 +59,7 @@ export function DialogueView({ session, node, reveal = null, onRevealHandled = N
   const stored = getBody(session.state, docId);
   const revision = getRevision(session.state, docId);
   // The codex is read through the hook: a memo keyed on the store's array would keep the speakers it read before a rename or an alias
-  // (L7). The model reads the same entries the Findings scan reads, through the same speaker resolution.
+  // The model reads the same entries the Findings scan reads, through the same speaker resolution.
   const codex = useCodexEntries(session);
   const autoLineIds = readDialogueMeta(node.dialogue).meta.autoLineIds === true;
   // What the writer has typed (`draft`), and the text the graph and findings are read from (`live`). `live` catches up

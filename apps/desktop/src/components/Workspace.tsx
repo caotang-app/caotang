@@ -201,7 +201,7 @@ export function Workspace({
     const on = !focusMode;
     setFocusMode(on);
     if (on && !settingsNow.editor.focusModeHideRails) {
-      // The owner's words, with the setting's place a link that opens it.
+      // The wording, with the setting's place a link that opens it.
       report({
         text: 'Focus mode is on. The binder and inspector stay open, as set in ',
         tone: 'info',

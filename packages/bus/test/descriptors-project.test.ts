@@ -1,5 +1,5 @@
 /**
- * m9 (project export): the validators of the project block, the recipes, the vocabulary and the cover import
+ * Project export: the validators of the project block, the recipes, the vocabulary and the cover import
  * (`descriptors-project.ts`). Each refusal is checked for its code and for the field it names, and each accepted value
  * for the normalized form the apply will store. A validator is pure, so the snapshot is built here and never written.
  */
@@ -18,7 +18,7 @@ import {
 } from '../src/index.js';
 import { makeSnapshot, MANUSCRIPT } from './fixtures.js';
 
-/** The base snapshot, with the m9 parts the validators read: the vocabulary's names, the recipes, and the project name. */
+/** The base snapshot, with the project-export parts the validators read: the vocabulary's names, the recipes, and the project name. */
 function snapshot(extra: { recipes?: { name: string; includeRootIds?: readonly string[] }[] } = {}): ValidationSnapshot {
   const base = makeSnapshot();
   return {

@@ -301,7 +301,7 @@ describe('binder.setMeta — §9: "Vocabulary-validated"', () => {
     expect(validate('binder.setMeta', { nodeId: THE_LANDING, patch: { keywords_add: ['SEA'] } }).ok).toBe(true);
   });
 
-  // A review, finding 2. The case-insensitive dedupe is what makes the 32-keyword
+  // The case-insensitive dedupe is what makes the 32-keyword
   // cap mean *"32 distinct tags"* rather than *"32 strings"*, and the cap is the only
   // place the rule is observable: at two keywords the count is the same either way.
   // This was unpinned — `resultingKeywords` made case-sensitive leaves **all 500
@@ -427,7 +427,7 @@ describe('doc.write and the editor primitives', () => {
   });
 
   it('accepts a body write to a dialogue container, because its Ink body is written the same way', () => {
-    // gap m2-no-ink-editing-surface: the Ink editor saves through session.autosave, which is doc.write.
+    // The Ink editor saves through session.autosave, which is doc.write.
     const dialogue = { id: 'n_DIALOGUE01', parentId: CHAPTER_ONE, type: 'dialogue', kind: 'branching', title: 'Duel' };
     const withDialogue = makeSnapshot({
       tree: [...snapshot.manifest.tree, dialogue as never],
@@ -437,10 +437,8 @@ describe('doc.write and the editor primitives', () => {
   });
 
   it('does NOT compare expectedRevision here — §6 landed in the pipeline, and this pins that boundary', () => {
-    // An earlier change wrote this before the comparison existed and pointed for it. An earlier change
-    // put the comparison in `pipeline.ts`, between the §4 gate and `apply` — so
-    // this assertion is now a *standing* claim about where the rule does NOT live,
-    // not a note about work still to do. A `validate` that started comparing would
+    // The comparison is in `pipeline.ts`, between the §4 gate and `apply` — so
+    // this assertion is a *standing* claim about where the rule does NOT live. A `validate` that started comparing would
     // give §6 two implementations of "which commands guard a revision", and this
     // is the test that would say so.
     expect(validate('doc.write', { docId: THE_LANDING, body: 'x', expectedRevision: 999 }).ok).toBe(true);
@@ -536,7 +534,7 @@ describe('codex.upsert — codex.md §7, validated as a whole before execution',
     expect(validate('codex.upsert', { entries: create({ description: repeat('d', 2000) }) }).ok).toBe(true);
     expect(refusal(validate('codex.upsert', { entries: create({ description: repeat('d', 2001) }) })).details?.failures?.[0]?.message)
       .toContain('limit 2000');
-    // An earlier change changed which rule carries the alias **lower** edge. The 1–64 ceiling
+    // The alias **lower** edge is carried by the blank rule. The 1–64 ceiling
     // still holds on the upper edge, and the empty string is still refused — but
     // it is now refused as the blank it is, by `requireStringArray`, with a
     // message naming the index. Both edges stay tested, because a limit tested
@@ -562,9 +560,9 @@ describe('codex.upsert — codex.md §7, validated as a whole before execution',
       .toContain('an update needs the id');
   });
 
-  // An earlier change was cut as "validateCodexOp requires nothing of a create — not a name".
+  // A create must carry a name.
   // codex.md §2 says a name is "Required, non-empty after trim", and a create
-  // with no name wrote `name: ''`, which the next load then refused. The apply
+  // with no name would write `name: ''`, which the next load would refuse. The apply
   // is still total, so a refusal here is the only thing standing between a
   // nameless op and a nameless entry.
   it('refuses a create with no name, and a blank one, and says which op', () => {
@@ -584,7 +582,7 @@ describe('codex.upsert — codex.md §7, validated as a whole before execution',
 
   // A create that names an id is refused whether or not the id is taken. The
   // store mints every new id, so an id the caller sends on a create was being
-  // accepted and then dropped — the silent drop an earlier change closed for every other
+  // accepted and then dropped — the silent drop the closed params surface refuses for every other
   // field. Refusing it is the one answer that does not lie about what was written.
   it('refuses a create that carries an id, naming the entry when the id is taken', () => {
     const taken = refusal(validate('codex.upsert', { entries: [{ action: 'create', id: CODEX_ENTRY, name: 'Fresh' }] }));
@@ -595,7 +593,7 @@ describe('codex.upsert — codex.md §7, validated as a whole before execution',
     expect(fresh.details?.failures?.[0]?.message).toContain('a create mints its own id');
   });
 
-  // B-debt item 8: a citation is a real document's verbatim slice (codex.md §2,
+  // A citation is a real document's verbatim slice (codex.md §2,
   // `EntrySource`). The op carries them, the command checks each, and an update's
   // citations are counted against the entry's own so the cap is on the entry.
   it('holds each provenance citation to the EntrySource contract, and caps the entry at five', () => {
@@ -736,7 +734,7 @@ describe('codex.upsert — codex.md §7, validated as a whole before execution',
       ).sort(),
     ).toEqual([...CODEX_OP_FIELDS].sort());
 
-    // D5: provenance is harness-owned. Naming the field must not smuggle it
+    // codex.md §2: provenance is harness-owned. Naming the field must not smuggle it
     // through a `validate` that never read it.
     //
     // **This is a refusal, not a drop.** The test used to assert that
@@ -760,7 +758,7 @@ describe('codex.upsert — codex.md §7, validated as a whole before execution',
     expect(refused.ok, 'an op carrying origin/updatedAt must be refused, not narrowed').toBe(false);
     if (refused.ok) return;
     const failure = refused.error.details?.failures?.[0];
-    // **`sources` is no longer among the undeclared keys (B-debt item 8).** It is a
+    // **`sources` is no longer among the undeclared keys.** It is a
     // declared field now — the extraction's citations, which the harness supplies —
     // so its own check refuses this shape instead: `kind`/`ref` is not an
     // EntrySource, and the failure says so. `origin` stays refused as undeclared.
@@ -816,7 +814,7 @@ describe('codex.attach', () => {
 
 describe('export.compile, export.compileSelection and project.deleteNode', () => {
   // The limits the store's manifest validator quotes are exported from here, so one
-  // constant is the record of each (B-debt item 8). The numbers are project-format §2's
+  // constant is the record of each. The numbers are project-format §2's
   // and exporter.md §2's, and a change to either is a change to the spec first.
   it('exports the synopsis, keyword and format limits the spec states', () => {
     expect(SYNOPSIS_MAX).toBe(2000);
@@ -833,19 +831,18 @@ describe('export.compile, export.compileSelection and project.deleteNode', () =>
       'dialogue-csv',
       'shot-list-csv',
       'promptpack',
-      // The coherence report, as Markdown and JSON (media-track M6, Review). Ten formats before it, twelve in all.
+      // The coherence report, as Markdown and JSON. Ten formats before it, twelve in all.
       'coherence-md',
       'coherence-json',
     ]);
   });
 
-  // B-debt item 7. This test used to accept any format string, on the reasoning that
-  // the enum was M9's. The bus holds a copy of the exporter's list, and every value in
+  // The format enum is the exporter's, but the bus holds a copy of the exporter's list, and every value in
   // it has a renderer, so a format none of them ships is refused at validate — before an
   // apply is asked to write a file it cannot compile. The copy is checked against the
   // exporter's list in packages/exporter/test/export-formats.test.ts, which imports this
   // one. The list is closed, and the two names share it. The screenplay PDF is the
-  // deliberate exception that proves the rule: it is not in the list until the C28
+  // deliberate exception that proves the rule: it is not in the list until its
   // benchmark has run, so it is refused here.
   it('accepts every format the bus lists on both names, and refuses any other', () => {
     for (const format of EXPORT_FORMATS) {
@@ -868,7 +865,7 @@ describe('export.compile, export.compileSelection and project.deleteNode', () =>
   });
 
   it('export.compile returns exactly its declared keys, built from named fields', () => {
-    // The shape half of the owner's split. Every call here passes only
+    // The shape half of the whole/part split. Every call here passes only
     // declared keys, so this asserts the payload is *built* — and it cannot see
     // the narrowing being removed, which is what the next test is for.
     const whole = validate('export.compile', { format: 'docx' });
@@ -918,7 +915,7 @@ describe('export.compile, export.compileSelection and project.deleteNode', () =>
   });
 
   it('an export names the default recipe of a project that stores no recipes array, because the exporter offers it (exporter.md §4)', () => {
-    // makeSnapshot() stores no recipes array, which is a project that predates recipes: the default is the one it holds (m9 fix).
+    // makeSnapshot() stores no recipes array, which is a project that predates recipes: the default is the one it holds.
     const bare = makeSnapshot();
     expect(bare.manifest.recipes).toBeUndefined();
     expect(validate('export.compile', { format: 'docx', recipeName: DEFAULT_RECIPE_NAME }, bare).ok).toBe(true);
@@ -1010,8 +1007,8 @@ describe('the three view commands validate shape only', () => {
 
   it('still refuses a malformed shape', () => {
     expect(refusal(validate('view.setSelection', { nodeIds: THE_LANDING })).message).toContain('must be an array of strings');
-    // An earlier change changed this message on purpose: the check was `length === 0`, so the
-    // wording was "must not be empty" while `'   '` passed. Both are "must not
+    // This message is deliberate: a `length === 0` check would say
+    // "must not be empty" while `'   '` passed. Both are "must not
     // be blank" now, and the case below is the one that says so.
     expect(refusal(validate('view.setActiveDoc', { docId: '' })).message).toContain('must not be blank');
     expect(refusal(validate('view.setScroll', { nodeId: THE_LANDING, offset: -1 })).message).toContain('must be ≥ 0');
@@ -1076,10 +1073,9 @@ describe('the revision counter the bus reads', () => {
 /**
  * A blank string is refused wherever it names nothing.**
  *
- * A review measured `includeRootIds: ['']` as **accepted** and called
- * the cause a helper gap: `requireStringArray` had no blank check. The rule now
- * lives in the helper, so these cases are not one command's tests — they are the
- * helper's, and the first case in each group is the one a review named.
+ * `includeRootIds: ['']` was once **accepted**, because
+ * `requireStringArray` had no blank check. The rule lives in the helper, so these cases are not one command's tests — they are the
+ * helper's, and the first case in each group is the one that was accepted.
  *
  * **Every case here failed before this slice and each is asserted from the
  * refusing side and the accepting side**, because the shape of the bug was a
@@ -1147,7 +1143,7 @@ describe('a blank string names nothing, so it is a refusal', () => {
     }
     // A *named* format that is not one of the four is refused, as the test above
     // states; the blank refusal is the same check's first half.
-    expect(validate('export.compile', { format: 'a-format-m9-has-not-declared-yet' }).ok).toBe(false);
+    expect(validate('export.compile', { format: 'a-format-the-exporter-has-not-declared' }).ok).toBe(false);
     expect(validate('export.compileSelection', { includeRootIds: ['n1'], format: 'md' }).ok).toBe(true);
   });
 
@@ -1176,7 +1172,7 @@ describe('a blank string names nothing, so it is a refusal', () => {
   it('an empty string is still a legitimate value where the spec calls it one', () => {
     // The counterweight, and the reason the rule is per-field and not a blanket
     // one in `requireString`: "clear this field" is an instruction, and a blanket
-    // blank rule would make it uncallable. If this case ever fails, an earlier change has
+    // blank rule would make it uncallable. If this case ever fails, the blank rule has
     // become a rule about strings rather than about names.
     expect(validate('notes.set', { nodeId: THE_LANDING, notes: '' }).ok).toBe(true);
     expect(validate('binder.setSynopsis', { nodeId: THE_LANDING, synopsis: '' }).ok).toBe(true);

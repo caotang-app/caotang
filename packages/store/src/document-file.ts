@@ -5,7 +5,7 @@
  * irreplaceable content (§4 severity tiering) and is treated as bytes: this
  * module does not normalise line endings, strip trailing whitespace, or add a
  * title heading. Those are editor/MD-dialect concerns (editor-engine.md §5, the
- * C20 dialect contract), and doing them here would make the file disagree with
+ * dialect contract), and doing them here would make the file disagree with
  * the in-memory state that §8's acceptance test diffs against.
  */
 

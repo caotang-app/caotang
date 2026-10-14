@@ -1,16 +1,16 @@
 /**
- * r6 (storyboard): the descriptor of `shot.importImage`. Its validator checks the closed key set and the two strings, and
+ * Storyboard: the descriptor of `shot.importImage`. Its validator checks the closed key set and the two strings, and
  * nothing else: whether the node is a shot is the store's apply to say, before any byte is written.
  */
 
 import { describe, expect, it } from 'vitest';
 
-import { COMMAND_NAMES, COMMAND_REGISTRY, storyboardR6Commands, type ValidationSnapshot } from '../src/index.js';
+import { COMMAND_NAMES, COMMAND_REGISTRY, shotImageCommands, type ValidationSnapshot } from '../src/index.js';
 import { makeSnapshot } from './fixtures.js';
 
 function validate(params: unknown): { ok: boolean; value?: unknown; code?: string; target?: string } {
   const snapshot: ValidationSnapshot = makeSnapshot();
-  const result = storyboardR6Commands.shotImportImage.validate(params, snapshot) as {
+  const result = shotImageCommands.shotImportImage.validate(params, snapshot) as {
     ok: boolean;
     value?: unknown;
     error?: { code: string; target?: string };
@@ -38,7 +38,7 @@ describe('shot.importImage: the descriptor', () => {
   });
 
   it('is a write the gate asks about for an agent, is undone by its inverse, and is asynchronous', () => {
-    const descriptor = storyboardR6Commands.shotImportImage;
+    const descriptor = shotImageCommands.shotImportImage;
     expect(descriptor.agentRisk).toBe('write-confirm');
     expect(descriptor.undo).toBe('inverse');
     expect(descriptor.asyncApply).toBe(true);
@@ -47,6 +47,6 @@ describe('shot.importImage: the descriptor', () => {
 
   it('is named in the closed set and registered, once', () => {
     expect(COMMAND_NAMES.filter((name) => name === 'shot.importImage')).toHaveLength(1);
-    expect(COMMAND_REGISTRY['shot.importImage'].descriptor).toBe(storyboardR6Commands.shotImportImage);
+    expect(COMMAND_REGISTRY['shot.importImage'].descriptor).toBe(shotImageCommands.shotImportImage);
   });
 });

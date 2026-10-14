@@ -1,5 +1,5 @@
 /**
- * The closed set of vendor templates at first landing (video-prompt-pack.md §5, assumption A4).
+ * The closed set of vendor templates in this version (video-prompt-pack.md §5).
  * A new vendor is a spec change with fixtures, never a runtime registration.
  */
 

@@ -1,10 +1,10 @@
 /**
- * The gating suite — the C16 preflight, criterion 4 and 6.
+ * The gating suite of the Tiptap preflight: the corpus run and the result table.
  *
  * Shape borrowed from the `fflate` guard: every finding is an assertion, not
  * a comment, so a change that "fixes" one of them without updating §2 fails
  * exactly one test and the rest stay green. The inverse matters just as much —
- * `unknown types throw` is asserted because it is a hazard M5 must handle, not
+ * `unknown types throw` is asserted because it is a hazard the editor must handle, not
  * because the library should keep throwing.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -37,7 +37,7 @@ const get = (name: string) => {
   return found;
 };
 
-describe('C16 · the §3 handler table is what §3.1/§3.2/§3.3 say', () => {
+describe('preflight · the §3 handler table is what §3.1/§3.2/§3.3 say', () => {
   // The `prosemirror-changeset` pin assertion that used to live here has moved
   // to `pins.test.ts`, which reads the manifest and the lockfile.
   //
@@ -87,7 +87,7 @@ describe('C16 · the §3 handler table is what §3.1/§3.2/§3.3 say', () => {
   });
 });
 
-describe('C16 · criterion 4 — the corpus runs, and deterministically', () => {
+describe('preflight · the corpus runs, and deterministically', () => {
   it('has every §5 group represented', () => {
     const groups = new Set(CORPUS.map((entry) => entry.group));
     expect([...groups].sort()).toEqual(
@@ -96,7 +96,7 @@ describe('C16 · criterion 4 — the corpus runs, and deterministically', () => 
   });
 
   it('covers the constructs §5 names explicitly', () => {
-    // The four §5 constructs called out by name, plus the C22 samples.
+    // The four §5 constructs called out by name, plus the Obsidian spacing samples.
     const names = CORPUS.map((entry) => entry.name);
     for (const required of [
       'intraword-underscore',
@@ -132,7 +132,7 @@ describe('C16 · criterion 4 — the corpus runs, and deterministically', () => 
   });
 
   it('the exact class is byte-identical wherever the dialect allows', () => {
-    // C20 D3: byte-identity holds *iff* the input is already written in the
+    // §5's dialect contract: byte-identity holds *iff* the input is already written in the
     // configured dialect. The constructs that are not byte-identical are the
     // ones §5 explicitly says normalize (foreign markers, setext, intraword
     // escapes), so this asserts the canonical spellings specifically.
@@ -198,7 +198,7 @@ describe('C16 · criterion 4 — the corpus runs, and deterministically', () => 
   });
 
   it('3-level nesting round-trips and re-parses to the same bytes', async () => {
-    // C22 finalized `listItemIndent: 'one'`. The bar is not "looks right" but
+    // §5 fixes `listItemIndent: 'one'`. The bar is not "looks right" but
     // idempotence: serialize(parse(x)) must be a fixed point, or every save
     // rewrites the file.
     const input = '- level one\n  - level two\n    - level three\n';
@@ -208,7 +208,7 @@ describe('C16 · criterion 4 — the corpus runs, and deterministically', () => 
   });
 });
 
-describe('C16 · the findings, each pinned by an assertion', () => {
+describe('preflight · the findings, each pinned by an assertion', () => {
   it('F1 · §5\'s rule/fence spellings are illegal; one character is what it wants', () => {
     // Proves the spec's literal text throws. The cast is needed *because* the
     // values are illegal: `as const` gives them literal types, and
@@ -253,7 +253,7 @@ describe('C16 · the findings, each pinned by an assertion', () => {
 
   it('F3 · unknown mdast types THROW — degrade handlers are mandatory, not optional', async () => {
     // §3.3 says "anything unknown → degrade, literal text fallback". It does
-    // not. This is the finding that most directly shapes M5: the handler table
+    // not. This is the finding that most directly shapes the editor: the handler table
     // is not a convenience layer, it is the only thing preventing a load crash.
     const inputFor = (mdastType: string) =>
       mdastType === 'table'
@@ -308,7 +308,7 @@ describe('C16 · the findings, each pinned by an assertion', () => {
   });
 });
 
-describe('C16 · the result table is a real table', () => {
+describe('preflight · the result table is a real table', () => {
   it('every corpus entry produced a measurement with a class', () => {
     expect(results.size).toBe(CORPUS.length);
     for (const [name, result] of results) {

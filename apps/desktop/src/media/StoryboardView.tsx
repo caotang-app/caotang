@@ -146,7 +146,7 @@ export function ShotBoard({ session, folder, ports, focus = null, zoom: zoomProp
   const [message, setMessage] = useState<string | null>(null);
   // The editor's message lives here, not in the editor: a save changes the card's stored value, which remounts the editor.
   const [editMessage, setEditMessage] = useState<string | null>(null);
-  // The picture open in the lightbox, and the element that opened it, which gets focus back when it closes (F-05).
+  // The picture open in the lightbox, and the element that opened it, which gets focus back when it closes.
   const [lightbox, setLightbox] = useState<{ readonly url: string; readonly title: string; readonly opener: HTMLElement | null } | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropId, setDropId] = useState<string | null>(null);

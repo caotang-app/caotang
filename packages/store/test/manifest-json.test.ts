@@ -59,7 +59,7 @@ function rich(): Manifest {
 }
 
 describe('manifest serializer', () => {
-  // B-debt item 8. The serializer wrote a citation's docId and quote and nothing
+  // The serializer wrote a citation's docId and quote and nothing
   // else, so the offsets and the time codex.md §2 names were lost on the next save.
   it('keeps every field of a codex citation, and a citation without the optional ones is unchanged', () => {
     const m = rich();
@@ -78,7 +78,7 @@ describe('manifest serializer', () => {
     expect(back.codex?.[0]?.sources).toEqual(m.codex![0]!.sources);
   });
 
-  // B-debt item 8: the EPUB floor (epub-metadata.md) and the saved recipes
+  // The EPUB floor (epub-metadata.md) and the saved recipes
   // (exporter.md §2) were specified and not stored. A save drops what the type does
   // not carry, so they are carried now, and a project that set none is unchanged.
   it('keeps the EPUB floor and saved recipes through a save, and writes neither unless set', () => {
@@ -138,7 +138,7 @@ describe('manifest serializer', () => {
     expect(r.manifest?.project).not.toHaveProperty('language');
   });
 
-  // m9 fix: a recipe's character limit is a whole number from 1 to 10000, the bound `recipe.save` checks. A limit outside it is dropped
+  // A recipe's character limit is a whole number from 1 to 10000, the bound `recipe.save` checks. A limit outside it is dropped
   // on load with a warning, and nothing the load rejected is written back, so the next save still parses.
   it('drops a recipe whose character limit is not a whole number from 1 to 10000, and the manifest still writes as valid JSON', () => {
     for (const bad of ['abc', -3, 1.5, 0, 10_001, null]) {
@@ -190,7 +190,7 @@ describe('manifest serializer', () => {
   it('emits the spec §2 key order verbatim', () => {
     const text = serializeManifest(createEmptyManifest('The Lighthouse Keeper', T));
     const keys = [...text.matchAll(/^ {2}"([a-zA-Z]+)":/gm)].map((m) => m[1]);
-    // `recipes` is last: m9's new projects seed the default recipe, and an additive array is written after `codex`.
+    // `recipes` is last: new projects seed the default recipe, and an additive array is written after `codex`.
     expect(keys).toEqual(['app', 'formatVersion', 'project', 'vocabulary', 'tree', 'derived', 'codex', 'recipes']);
   });
 

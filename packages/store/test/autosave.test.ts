@@ -306,7 +306,7 @@ describe('§4 — flush ≥ 800 ms after the last edit', () => {
   });
 });
 
-describe('§4 — a mid-flight edit waits out its own window (B-debt item 4)', () => {
+describe('§4 — a mid-flight edit waits out its own window', () => {
   // The bug: when the write in flight settled, `runFlush` was called straight away
   // for the edit that arrived during it. That call cancels the debounce timer the
   // edit had just armed, so an edit made mid-write went out the moment the write
@@ -353,7 +353,7 @@ describe('§4 — a mid-flight edit waits out its own window (B-debt item 4)', (
   });
 });
 
-describe('§4 — a saved write is a document write for the session tracker (B-debt item 5)', () => {
+describe('§4 — a saved write is a document write for the session tracker', () => {
   // `sessions.jsonl` was produced by tests only: nothing in the write path fed the
   // tracker. A flush that changed a body is now counted into the open session, so
   // the log is what the writes say rather than what a caller remembered to report.
@@ -400,7 +400,7 @@ describe('§4 — a saved write is a document write for the session tracker (B-d
   });
 });
 
-describe('§4 — the dispatch option routes a flush through doc.write (B-debt item 4)', () => {
+describe('§4 — the dispatch option routes a flush through doc.write', () => {
   // command-bus.md §9: `doc.write {docId, body, expectedRevision?}` is the command
   // the user path is meant to be. The option hands each flush to the caller as
   // exactly those params, with the revision it is based on — the guard is the
@@ -558,7 +558,7 @@ describe('§9 — the dirty flag and the non-blocking indicator', () => {
 });
 
 describe('§4 — a failed write keeps the newest body, not the one that failed', () => {
-  // The finding 1. Every failure test above fails a write with nothing in the
+  // Every failure test above fails a write with nothing in the
   // slot, because a scripted `fail` fires before the caller gets control back —
   // so the defect reproduced in the catch was invisible to all of them. These
   // two hold the write open instead, edit under it, and only then fail it.
@@ -657,14 +657,12 @@ describe('§4 — a failed write keeps the newest body, not the one that failed'
     // do, and it produces a pending body containing **none** of the body that
     // failed — `a` is not a superstring of `bbbb`.
     //
-    // The shipped code is right here: it refuses to restore `bbbb` over the
-    // undo. What this pins is the *justification*, which a review found false.
-    // The header previously argued that "the newest pending body already
-    // contains the failed one", and taken seriously that argument requires
-    // restoring `bbbb` — which is the defect, re-derived from the reasoning
-    // that was meant to rule it out. The other three tests here only ever make
-    // the pending body *longer*, so every one of them is consistent with the
-    // false claim; only a shrinking edit separates the two.
+    // The code refuses to restore `bbbb` over the undo. What this pins is the
+    // *justification*: the rule is not "the newest pending body already contains
+    // the failed one", because taken seriously that argument requires restoring
+    // `bbbb`, which is the defect. The other three tests here only ever make
+    // the pending body *longer*, so every one of them is consistent with a
+    // containment rule; only a shrinking edit separates the two.
     const boom = new Error('quota exceeded');
     const { autosave, clock, writer } = harness([{ kind: 'hold' }]);
     autosave.open(DOC, { body: 'a', revision: 0 });

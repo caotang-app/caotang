@@ -100,8 +100,8 @@ const saved = async (body: string): Promise<string> =>
   serialize(await parse(body)).replace(/\n+$/, '');
 
 // ---------------------------------------------------------------------------
-// An earlier change — the banner's cost. Everything below is about *where the per-block
-// canonical text comes from*, and nothing else in `sniffDialect` changed.
+// The banner's cost. Everything below is about *where the per-block
+// canonical text comes from*, and nothing else in `sniffDialect`.
 // ---------------------------------------------------------------------------
 
 /**
@@ -109,10 +109,9 @@ const saved = async (body: string): Promise<string> =>
  * in a repeating mix, written **in Caotang's own dialect** so a correct sniffer
  * reports nothing for any of it.
  *
- * The size is this row's own, not a remembered figure. An earlier change measured the cost on a
- * "synthetic 400-block / 14 275-byte" document whose construction was never
- * written down, which makes the number a story rather than a measurement; this is
- * a document a later change can rebuild exactly, and the generator is the three
+ * The size is this file's own, not a remembered figure. A cost measured on a
+ * "synthetic 400-block" document whose construction is not written down is a
+ * story rather than a measurement; this is a document anyone can rebuild exactly, and the generator is the three
  * lines below rather than a paragraph about them.
  */
 const longManuscript = (blocks: number): string => {
@@ -401,8 +400,8 @@ describe('§5 dialect contract — what a save writes, and who writes it', () =>
   });
 
   it('`listItemIndent` is not the cause of the nested blank line, in any setting', async () => {
-    // **The falsification, pinned so it cannot be re-asserted.** §5's amendment,
-    // `dialect.ts` and an earlier change all named `listItemIndent: 'one'` as the
+    // **The falsification, pinned so it cannot be re-asserted.** It is easy to
+    // name `listItemIndent: 'one'` as the
     // reason a nested list gains a blank line. It is the reason nothing here: the
     // blank line appears with the key **absent**, and `'one'` and `'tab'` change
     // only the indentation. Without this test the false reason survives, because
@@ -475,8 +474,8 @@ describe('§5 dialect contract — what a save writes, and who writes it', () =>
     // one a writer cannot act on.
     //
     // The same package pins `LossWarning.detail` six times (`degrade.test.ts`,
-    // `merged-runs.test.ts`), so an earlier change adding a *second* prose field with no test
-    // was an inconsistency inside the slice's own package, not a house rule.
+    // `merged-runs.test.ts`), so a *second* prose field with no test
+    // would be an inconsistency inside the package's own practice, not a house rule.
     const entity = (await parseWithDiagnostics(ENTITY)).dialect[0]!;
     const loose = (await parseWithDiagnostics(corpusInput('list-loose'))).dialect[0]!;
     const nested = (
@@ -604,7 +603,7 @@ describe('§5 dialect contract — the rule is a comparison, not a list', () => 
     // `pipeline.ts` and every behavioural test here would still pass, because the
     // copy would be byte-identical by construction.
     // **Extended, and the extension is the point rather than an
-    // allowance.** An earlier change added a third chain to `dialect.ts` — the one that renders
+    // allowance.** `dialect.ts` has a third chain — the one that renders
     // the whole document once with a `join` hook attached, which is where the
     // per-block offsets now come from. It is handed
     // `RECORDED_STRINGIFY_OPTIONS`, which *is* a spread copy of the shared object,
@@ -655,7 +654,7 @@ describe('§5 dialect contract — the rule is a comparison, not a list', () => 
     // byte-identical in output today.
     //
     // **The one extra key is asserted by name, not by count.** `join` is the hook
-    // An earlier change needs; anything else in that object is a second dialect definition with a
+    // the recorder needs; anything else in that object is a second dialect definition with a
     // worse disguise, and `Object.keys(...).sort()` makes the pair readable in a
     // failure rather than a bare "not equal".
     const derived = RECORDED_STRINGIFY_OPTIONS as Record<string, unknown>;
@@ -678,8 +677,8 @@ describe('§5 dialect contract — the rule is a comparison, not a list', () => 
     // assertion beside it reads an array's length. `join` is a *list* of rules, so
     // the count is a real claim about the shape and no claim at all about the
     // answer, and the two are independent: a rule answering `false` or `'\n\n'`
-    // passes `toHaveLength(1)` untouched. A review measured
-    // exactly that — returning a real `'\n\n'` left **29 of 31** tests green,
+    // passes `toHaveLength(1)` untouched. Measured:
+    // returning a real `'\n\n'` left **29 of 31** tests green,
     // because the separator lives in the join and never enters a per-block
     // capture, so no per-block assertion *can* see it, and the only two tests that
     // reacted did so by timing out. Hence the end-to-end assertion below, which is
@@ -730,27 +729,22 @@ describe('§5 dialect contract — the rule is a comparison, not a list', () => 
     expect(noisyDespiteNoChange).toEqual([]);
     // **The boundary, pinned by name rather than by silence.** Every entry whose
     // bytes change without a dialect notice is a **loss that `LossWarning` already
-    // reports**, and that is now a single claim this list can make, because build
-    // An earlier change removed the group that was not one.
+    // reports**, and that is a single claim this list can make.
     //
-    // It used to be three groups, and the second was the finding:
+    // Two groups make it up:
     //
     //  1. the degrade class, which `LossWarning` already reports;
-    //  2. **the serialize-side normalizations, which this list claimed were
-    //     "declared by §5's own pinned options"** — a loose list saved tight
-    //     (`spread: false`) and a nested list gained a blank line
-    //     (`listItemIndent: 'one'`). Both halves were wrong. `listItemIndent`
-    //     changes the *indentation* and never the blank line (measured with the
-    //     key absent, `'one'` and `'tab'`), and the counted families are caused by
-    //     pinned options just as much — `* item` → `- item` *is* `bullet: '-'`.
-    //     So "declared by the options" was not a reason, it was an exemption that
-    //     would have covered everything. They are counted now, which is why those
-    //     three names are gone;
-    // 3. one structural loss (`strike-in-emphasis`) — **closed,
-    //     and still here for a different reason than when it was added. That change's
-    //     save-path comparison is *more* sensitive and does see this block's bytes
-    //     change, so this name is now the control proving the extra sensitivity
-    //     did not pull a loss into the dialect channel.
+    //  2. one structural loss (`strike-in-emphasis`). The save-path comparison
+    //     is *more* sensitive and does see this block's bytes change, so this
+    //     name is the control proving the extra sensitivity did not pull a loss
+    //     into the dialect channel.
+    //
+    // The serialize-side normalizations (a loose list saved tight under
+    // `spread: false`, `* item` → `- item` under `bullet: '-'`) are counted, not
+    // listed: "declared by §5's own pinned options" is no reason to exempt a
+    // change, since every counted family is caused by a pinned option.
+    // `listItemIndent` changes the *indentation* and never the blank line
+    // (measured with the key absent, `'one'` and `'tab'`).
     //
     // A new name here means a new undeclared change, which is the failure this
     // list exists to catch. **Removing** a name is a fix, and this assertion is
@@ -765,29 +759,27 @@ describe('§5 dialect contract — the rule is a comparison, not a list', () => 
         'list-task-item',
         'table-gfm',
         'footnote-reference',
-        // **Still here, and for a different reason than when an earlier change put it here.**
-        // The save-path comparison an earlier change introduced is strictly more sensitive and
+        // **Still here.**
+        // The save-path comparison is strictly more sensitive and
         // *does* see this block's bytes change — a nested emphasis collapsing
         // into the one around it. It is a **loss**, `LossWarning` reports it, and
         // a dialect notice for the same block would describe one change in two
         // vocabularies. So this name is now the negative control that the extra
         // sensitivity did not drag a loss into this channel, and it is why the
-        // list cannot shrink past eight. The mechanism is also corrected here,
-        // because this comment was the second place that had it wrong: it is a
+        // list cannot shrink past eight. The mechanism, precisely: it is a
         // **nested** `emphasis` that collapses into the one around it, not three
         // sibling nodes — the two shapes behave oppositely, and a check written
         // to the sibling version would warn on the case that loses nothing and
         // stay silent on the one that does.
         'strike-in-emphasis',
-        // **Removed, each naming the row that removed
-        // it:** `list-loose` and `obsidian-blank-line-list` (the same input, so
+        // **Removed:** `list-loose` and `obsidian-blank-line-list` (the same input, so
         // two names for one construct) were a loose list saving tight, and
         // `list-nested-3-level` was a tight nested list gaining a blank line.
         // They were *declared by the pinned options* — and the options are not
         // what caused them; the handlers are. See the cause tests below.
         //
         // **Kept: `strike-in-emphasis`**, which is the loss. The save-path
-        // comparison an earlier change introduced is strictly more sensitive than the parse one
+        // comparison is strictly more sensitive than the parse one
         // and *does* see this block's bytes change — so this name is the negative
         // control that says the extra sensitivity did not drag a loss into the
         // dialect channel, and it is the reason the list cannot shrink further.
@@ -796,7 +788,7 @@ describe('§5 dialect contract — the rule is a comparison, not a list', () => 
     // **Every entry that was removed is gone for a reason this file can state,
     // and the three that are left are all losses** — the property the list is
     // for. Asserted rather than described: a future change that leaves a *spelling*
-    // on this list has re-opened an earlier change, whatever the comment says.
+    // on this list has re-opened that decision, whatever the comment says.
     expect(changedButNotCounted).not.toContain('list-loose');
     expect(changedButNotCounted).not.toContain('obsidian-blank-line-list');
     expect(changedButNotCounted).not.toContain('list-nested-3-level');
@@ -851,7 +843,7 @@ describe('§5 dialect contract — the rule is a comparison, not a list', () => 
 
 /**
  * The budget for the two 400-block fixtures below — **explicit, per-test, and
- * never `vitest.config.ts`'s default** (An earlier change, closing the decision).
+ * never `vitest.config.ts`'s default**.
  *
  * **Why 5 000 ms was never these tests' budget.** Neither of them measures wall
  * clock. One asserts that two derivations *agree* block for block; the other
@@ -859,16 +851,15 @@ describe('§5 dialect contract — the rule is a comparison, not a list', () => 
  * *"A timing test says the number is small on the machine it ran on; a render
  * count says the shape is different, on every machine, forever."* So the 5 000 ms
  * default was never guarding their claim. It was guarding a fixture that
- * **deliberately runs the `O(n²)`-shaped path**, which is the very path an earlier change exists
- * to keep honest — the cost is the subject matter, not an accident.
+ * **deliberately runs the `O(n²)`-shaped path**, which is the very path the recorder is checked
+ * against — the cost is the subject matter, not an accident.
  *
- * **Measured, both directions, and the second is the correction.** A review recorded
+ * **Measured, both directions.** Under load they ran
  * 15 193 ms and 17 244 ms with `--testTimeout=60000` — 3.0× and 3.2× the default.
- * Re-measured 2026-10-06 21:0x on this machine, **alone and idle**: **4 372 ms**
+ * Alone and idle on one development machine: **4 372 ms**
  * and **6 112 ms**. **The second exceeds 5 000 ms with no contention at all**, so
  * on this hardware that test is red *unconditionally* and no amount of re-running
- * an idle machine fixes it — which corrects the row's premise that the gate's
- * colour is purely a property of load. Under the full suite's 47 workers the same
+ * an idle machine fixes it — the gate's colour is not purely a property of load. Under the full suite's 47 workers the same
  * two run 6 730 ms and 7 373 ms.
  *
  * **30 000 ms clears every figure recorded on either machine (max 17 244 ms) with
@@ -880,7 +871,7 @@ const LONG_FIXTURE_TIMEOUT = 30_000;
 
 describe('§5 dialect contract — the cost of counting', () => {
   it('produces the same per-block text as the prefix algorithm, over the whole corpus', async () => {
-    // **The control for the slice.** An earlier change changed where the per-block canonical
+    // **The control.** The recorder changes where the per-block canonical
     // text comes from — one render of the document, with the serializer's own
     // per-block strings read off it, instead of one render of every growing
     // prefix — and changed nothing else. So the guard is the two derivations run
@@ -1039,8 +1030,8 @@ describe('§5 dialect contract — the cost of counting', () => {
     renders = 0;
     ownTextsByPrefix(400, prefix);
     const prefixRenders = renders;
-    // Two, and four hundred. The ratio is the row: An earlier change converted `400²/2 =
-    // 80 200` blocks' worth of tree per load, this converts `400 + 1`.
+    // Two, and four hundred. The prefix algorithm converts `400²/2 =
+    // 80 200` blocks' worth of tree per load, the recorder converts `400 + 1`.
     expect(recordedRenders).toBe(2);
     expect(prefixRenders).toBe(400);
     // And the count is connected to the mechanism rather than to a helper nobody
@@ -1117,11 +1108,11 @@ describe('§5 dialect contract — the cost of counting', () => {
   });
 
   it('still reports a save-side change no named mechanism accounts for', async () => {
-    // **Criterion (2), as a live fixture: a cheaper banner that cannot see
-    // a new defect is a banner that has stopped working.** The candidate fix an earlier change
-    // rejected — skipping the save-path render for blocks with no list in them —
+    // **As a live fixture: a cheaper banner that cannot see
+    // a new defect is a banner that has stopped working.** The rejected
+    // shortcut — skipping the save-path render for blocks with no list in them —
     // would make the common case linear and *this* test impossible to pass, which
-    // is the trade the row refused. So the sweep's ability to report an
+    // is the trade that was refused. So the sweep's ability to report an
     // undeclared change is asserted on a real one.
     //
     // **A tight blockquote is one, and it is live today.** `> one\n> two` is one
@@ -1216,8 +1207,8 @@ describe('§5 dialect contract — the cost of counting', () => {
     // default "would move every other test's budget too". This asserts it was
     // not taken, by reading the config rather than by trusting the diff.
     //
-    // **The assertion is the ABSENCE of the key, not two of its values.** It was
-    // `/testTimeout:\s*(?:30_?000|60_?000)/`, and a review measured that guard
+    // **The assertion is the ABSENCE of the key, not two of its values.** A guard of
+    // `/testTimeout:\s*(?:30_?000|60_?000)/` is
     // blind in the direction that matters: planting `testTimeout: 10_000` — the
     // rejected option, at a value the regex does not name — left all 34 tests in
     // this file green, while the same guard does fire on 30 000. A guard that

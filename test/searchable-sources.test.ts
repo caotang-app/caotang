@@ -32,7 +32,7 @@
  * The fix is the escaped form, which is behaviour-identical and drops the
  * `eslint-disable` line that existed only to suppress `no-control-regex` on the
  * literal bytes. **The escape alone would leave the next instance free, so the
- * guard below is the other half of the slice.**
+ * guard below is the other half of the fix.**
  *
  * ## What it checks, and why a byte and not a heuristic
  *

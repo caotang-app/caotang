@@ -403,7 +403,7 @@ function initializeAnswers(server: InProcessServer, reply: (id: unknown) => unkn
 
 describe('a server that speaks another MCP revision', () => {
   it('connects a 2025-era server through the legacy handshake, after the 2026 probe is answered "method not found"', async () => {
-    // Before the m10 fix (a pin to 2026-07-28) every server like this was refused with the revision message.
+    // A pin to 2026-07-28 would refuse every server like this with the revision message; `auto` negotiation connects it.
     const server = startInProcessServer({ tools: [LORE, NOTE], respond: () => textResult('ok') }, { revisions: ['2025-06-18'] });
     fixtures.push(server);
     const probes: string[] = [];

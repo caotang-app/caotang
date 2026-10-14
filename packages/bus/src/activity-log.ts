@@ -1,23 +1,22 @@
 /**
  * The activity log — [command-bus.md §8](docs/architecture/command-bus.md).
  *
- * ## What an earlier change left out, and why an earlier change is the row that owns it
+ * ## Which of §8's fields are filled, and by whom
  *
- * §8 declares ten fields. An earlier change shipped the six the pipeline could honestly fill at
- * append time and **omitted the other four from the type rather than defaulting
- * them**, because a log row that claimed a digest it had not computed is worse
- * than a row without one. An earlier change is that row, and it is a row rather than a task
- * because the missing four cannot be filled by the pipeline alone:
+ * §8 declares ten fields. The pipeline fills the ones it can honestly fill at
+ * append time and **leaves the rest out rather than defaulting them**, because a
+ * log row that claimed a digest it had not computed is worse than a row without
+ * one. Some fields cannot be filled by the pipeline alone:
  *
- * | §8 field | an earlier change | where it comes from |
+ * | §8 field | written | where it comes from |
  * |---|---|---|
- * | `at`, `command`, `issuedBy` | ✅ an earlier change | §2's own envelope fields; `at` is `createdAt`, which §2 says is *"log/display only — never affects behavior"* |
- * | `turnId?`, `callId?` | ✅ an earlier change | echoed from the envelope |
- * | `undoGroupId?` | ✅ an earlier change | present exactly when §5 registered something into a group |
- * | `affected: {nodeId, title}[]` | ✅ an earlier change | the **apply** — the only thing at the point of knowledge, and §8's *"human titles, not bare ids"* needs both a post-rename title and a pre-delete one |
- * | `summary` | ✅ an earlier change | the apply, and the bus **refuses** a dispatch that reported none rather than inventing one |
- * | `source?` | ✅ an earlier change | stamped `'native'`; §8 reserves `'mcp'` for the v0.2 client, which cannot reach `execute()` yet |
- * | `tokensSpent?` | declared, never written | the gateway ledger's, and no agent turn has run — M3 owns the writer |
+ * | `at`, `command`, `issuedBy` | ✅ | §2's own envelope fields; `at` is `createdAt`, which §2 says is *"log/display only — never affects behavior"* |
+ * | `turnId?`, `callId?` | ✅ | echoed from the envelope |
+ * | `undoGroupId?` | ✅ | present exactly when §5 registered something into a group |
+ * | `affected: {nodeId, title}[]` | ✅ | the **apply** — the only thing at the point of knowledge, and §8's *"human titles, not bare ids"* needs both a post-rename title and a pre-delete one |
+ * | `summary` | ✅ | the apply, and the bus **refuses** a dispatch that reported none rather than inventing one |
+ * | `source?` | ✅ | stamped `'native'`; §8 reserves `'mcp'` for the v0.2 client, which cannot reach `execute()` yet |
+ * | `tokensSpent?` | declared, never written | the gateway ledger's, and the bus never writes it — the gateway owns the writer |
  *
  * ## Why an apply reports, and not the pipeline
  *
@@ -114,7 +113,7 @@ export interface ActivityEntry {
   readonly summary: string;
   /**
    * §8's agent-turn token cost, fed by the gateway ledger. **Declared and never
-   * written in M2**: the gateway is M3 and no turn has run, so a row that carried
+   * written by the bus**: the cost is the gateway's to measure, so a row that carried
    * a `0` would claim a measurement nobody took. The pipeline omits the key
    * entirely rather than writing `undefined`, because there is no envelope field
    * to echo — `turnId` and `callId` have one and `tokensSpent` does not.

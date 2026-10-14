@@ -2,7 +2,7 @@
  * The EPUB structural gate — exporter.md §3a and epub-metadata.md.
  *
  * The acceptance gate §3a names is epubcheck, which runs in `epub-epubcheck.test.ts` over the
- * fixture corpus (C24-E, pinned at 0.7.0). What this file holds is the structure a unit test can
+ * fixture corpus (pinned at 0.7.0). What this file holds is the structure a unit test can
  * carry: the ZIP's ordering and storage rules, the container, the metadata floor, the manifest and
  * spine, the navigation documents, one XHTML file per chapter, and the properties epub-metadata.md
  * requires to persist across a re-pack. The ISBN, cover and language properties are in

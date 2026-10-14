@@ -170,7 +170,7 @@ describe('the ghost shares the focus document’s schema (§8)', () => {
   });
 });
 
-describe('a stream that fails (§8, M5 finding 7)', () => {
+describe('a stream that fails (§8)', () => {
   it('an abort keeps the partial text, shows the reason, and disables Apply', async () => {
     const onApply = vi.fn();
     const { host, instance } = await mountInto(PLAIN, { ghost: { onApply } });

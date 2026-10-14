@@ -14,7 +14,7 @@
  *
  * ## What this file is, and what it deliberately is not
  *
- * An earlier change built the store; this is the clock on top of it, and it is **not a second
+ * `store.ts` is the store; this is the clock on top of it, and it is **not a second
  * write path**. Every flush goes through `writeDocumentBody`, so §4's "every
  * mutation is one IndexedDB transaction" is inherited rather than reimplemented.
  * A second write function here would be a third way for a body to reach storage,
@@ -60,31 +60,27 @@
  * stale `expectedRevision` can only conflict again, forever. The body is kept
  * (losing it is the one failure this file exists to prevent) and the conflict is
  * surfaced. Resolving it is not this file's job — §9 says it "surfaces the
- * command-bus conflict envelope", and that envelope is M2's.
+ * command-bus conflict envelope", and that envelope is the bus's.
  *
  * ## Which body a failure keeps
  *
- * The newest one, and that distinction is load-bearing enough to have been a
- * defect for a day. A write takes several hundred milliseconds, a fast
+ * The newest one, and that distinction is load-bearing. A write takes several hundred milliseconds, a fast
  * typist does not pause for it, and so a failed write is *routinely* followed by
  * edits the failure has nothing to do with. Restoring the body that failed over
  * the one that arrived afterwards discards those keystrokes silently — the next
  * flush succeeds, the indicator clears, and the text is gone. Bodies are whole
  * documents rather than deltas, so the rule has no exceptions to reason about,
  * and the argument is **recency, not containment**: a pending body is a whole
- * document taken *after* the one that failed, so it supersedes it whatever its
+ * document taken *after* the one that failed, so it replaces it whatever its
  * content. Restoring the older one can only destroy and never recovers, so
  * there is no ordering of edits in which keeping it is the right answer.
  *
- * Corrected. This paragraph previously read
- * *"the newest pending body already contains the failed one"*, and that is
- * false, in exactly the case the fix exists for: an undo or a select-all-delete
- * that lands while the write is in flight produces a pending body containing
- * **none** of the failed one, and `a` is not a superstring of `bbbb`. Taken
- * seriously that justification re-derives the defect an earlier change fixed — it requires
- * restoring `bbbb` over the user's undo. The containment claim is not needed
- * and is now unpinned in the wrong direction; `keeps a mid-flight edit that
- * undid the failed write` in the suite is what falsifies it.
+ * Containment is not the argument, because it is false in exactly the case that
+ * matters: an undo or a select-all-delete that lands while the write is in
+ * flight produces a pending body containing **none** of the failed one, and `a`
+ * is not a superstring of `bbbb`. A containment rule would restore `bbbb` over
+ * the user's undo; `keeps a mid-flight edit that undid the failed write` in the
+ * suite is what pins this.
  *
  * The same reasoning is why a failed write needs no rebasing. §9's atomicity
  * claim means storage did not move, so a pending body is still based on the
@@ -102,7 +98,7 @@
  * than a write's own settle, and it comes last, because a settle that landed after it
  * would put back the state it replaced. The base never moves backwards (see `reseat`).
  * It drops the unsaved body on purpose: the restore that calls it has decided that
- * the unsaved text is superseded, and keeping it would store the text it removed.
+ * the unsaved text is obsolete, and keeping it would store the text it removed.
  */
 
 import type { DocWriteParams } from '@caotang/bus';
@@ -216,8 +212,8 @@ export interface DocumentWriteRequest {
 /**
  * The one seam between this scheduler and storage.
  *
- * Today it is bound straight to the runtime store's `writeDocumentBody`. When
- * M2 lands it becomes a `doc.write` dispatch (`issuedBy: 'user'`, one undo group
+ * It can be bound straight to the runtime store's `writeDocumentBody`, or to a
+ * `doc.write` dispatch (`issuedBy: 'user'`, one undo group
  * per debounce window — [command-bus.md §9](docs/architecture/command-bus.md)),
  * and the request shape above is deliberately the command's params.
  */
@@ -325,8 +321,8 @@ interface AutosaveCommonOptions {
 /**
  * Exactly one way to write, named explicitly.
  *
- * `source: 'store'` is the app today. `source: 'write'` is what M2 uses once the
- * flush dispatches `doc.write` through the bus — and it is how this slice's own
+ * `source: 'store'` writes the runtime store directly. `source: 'write'` is for a
+ * flush that dispatches `doc.write` through the bus — and it is how this file's own
  * tests run, because a scheduler test has no reason to open a database. Making
  * it a tagged union rather than two optional fields means "both were passed" and
  * "neither was passed" are type errors instead of a silent preference order.
@@ -578,8 +574,7 @@ export function createAutosave(options: AutosaveOptions): Autosave {
       // would be the one outcome §4's atomicity note cannot rescue, because
       // nothing was written to be atomic about.
       //
-      // **The body kept is the newest one, never the one that failed** — fixed
-      // here as an earlier change, on the finding 1. Restoring `body`
+      // **The body kept is the newest one, never the one that failed.** Restoring `body`
       // unconditionally loses every keystroke typed while this write was in
       // flight: type `b`, the write of `b` fails, type `c`, and the next flush
       // sends `b` (reproduced: bodies `["b","b"]`). See the header for why there
@@ -643,8 +638,7 @@ export function createAutosave(options: AutosaveOptions): Autosave {
       // revision underneath one would make the next flush guard against the
       // wrong number.
       //
-      // **A write in flight is outstanding work too** — fixed here as an earlier change,
-      // on the finding 2. Testing `pendingBody` alone is the bug, and it
+      // **A write in flight is outstanding work too.** Testing `pendingBody` alone is the bug, and it
       // is worse than it looks: `runFlush` clears `pendingBody` *before* it
       // awaits the write, so a re-open inside that window passed this guard even
       // though a write was running. Two consequences, both silent. A *successful*

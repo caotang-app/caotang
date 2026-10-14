@@ -87,7 +87,7 @@ async function validatedLookup(scripts?: Record<string, MockMcpScript>) {
 }
 
 /**
- * The bus's closed set holds `mcp.invoke` (m8-integration), and its apply is asynchronous, so these helpers run the real
+ * The bus's closed set holds `mcp.invoke`, and its apply is asynchronous, so these helpers run the real
  * pipeline through `executeAsync` with this registration in the name's slot, as the store registry injects it.
  */
 function pipelineFor(registration: McpInvokeRegistration): { registry: CommandRegistry; bus: BusContext<never> } {
@@ -223,7 +223,7 @@ describe('the per-call risk the gate reads', () => {
   });
 
   it('the registered descriptor gates each call by its own risk, through agentRiskOf over the normalized call', async () => {
-    // Integrated (m8-integration): the floor stays write-confirm, and `agentRiskOf` gives the risk of the call it names.
+    // Integrated: the floor stays write-confirm, and `agentRiskOf` gives the risk of the call it names.
     // A trusted read is `read`, and an untrusted call is `write-confirm`, which asks the writer first.
     const { client } = await openClient({ approve: [STORY_KEY], trust: [STORY_KEY] });
     const loaded = loadedWith(qualified(STORY_KEY, 'lore_lookup'));
@@ -300,7 +300,7 @@ describe('through the bus pipeline: a refusal reaches the caller as ok: false', 
   });
 
   it('gates a trusted read by its own risk, so the bus runs it with no confirmation', async () => {
-    // Integrated (m8-integration): the descriptor's `agentRiskOf` hands the gate this call's risk, so a read the user
+    // Integrated: the descriptor's `agentRiskOf` hands the gate this call's risk, so a read the user
     // trusts is `read` and runs `auto`. The server is called once, and the result is the call's.
     const scripts = fixtureScripts();
     const story = scripts[STORY_KEY];

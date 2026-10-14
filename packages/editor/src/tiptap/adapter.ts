@@ -30,7 +30,7 @@
  *    serializes and stops. The projection map is built only by the members that take or
  *    return offsets (`getSelection`, `captureAnchor`, `revealRange`, and the primitives).
  *    Both are cached per document state. Before this split a flush built the map, which
- *    is the quadratic step (M5 finding 6).
+ *    is the quadratic step.
  * 3. **Lane 1 and Lane 2 are told apart by the transaction's own meta, not by which
  *    method was called.** {@link markLane} is the only writer of `addToHistory: false`,
  *    and every lane decision in this file reads that meta back from the transaction. So
@@ -51,7 +51,7 @@
  *    says so with `discardUnsaved`, which is §7 rule 3's explicit confirmation.
  * 6. **The primitives read their text as body Markdown, and an agent edit cannot reach
  *    the user's undo.** `replaceRange` and `insertAtSelection` parse their text with
- *    `insertionOf`, so `*x*` saves as `_x_` (M5 finding 8). An agent edit that overlaps
+ *    `insertionOf`, so `*x*` saves as `_x_`. An agent edit that overlaps
  *    the span the user's undo can reach empties that undo (`undo-scope.ts`, §7 rule 1),
  *    because `prosemirror-history` would otherwise rebase the user's inverse steps over
  *    the agent's text.
@@ -118,7 +118,7 @@ export interface TiptapMountOptions extends EditorMountOptions {
   /**
    * Whether the browser's spellchecker runs over the focus document. Default `false`, which is
    * editor-engine.md D9: Chromium's spellcheck is a documented severe slowdown at manuscript scale,
-   * so turning it on is the app's decision, per document (M5 finding 6).
+   * so turning it on is the app's decision, per document.
    */
   spellcheck?: boolean;
   /**
@@ -131,7 +131,7 @@ export interface TiptapMountOptions extends EditorMountOptions {
 
 /**
  * What the unsaved state is, as the store reports it (§9). A failed flush and a pending edit are not
- * the same state, so an indicator needs this and not `hasUnsavedEdits()` alone (M5 finding 8).
+ * the same state, so an indicator needs this and not `hasUnsavedEdits()` alone.
  */
 export interface EditorSaveStatus {
   /** The store's state for the document. Without a store, `pending` while an edit is unsaved and `clean` otherwise. */
@@ -147,7 +147,7 @@ export interface EditorSaveStatus {
 
 /**
  * The mount was refused because the store has moved the document past the body it was given, and holds
- * no unsaved body the editor could show instead (M5 finding 4): a write was still in flight, or a write
+ * no unsaved body the editor could show instead: a write was still in flight, or a write
  * landed that this caller does not have. Taking the body would show a state the store has moved past,
  * and the next keystroke would replace the store's work with it. Nothing is mounted, and the store keeps
  * its work. Reload the document from the store, then mount again with that body and revision.
@@ -164,7 +164,7 @@ export class StaleMountError extends Error {
   }
 }
 
-/** The seam's load diagnostics, grouped for the banner (A planning decision: grouping is a separate call). */
+/** The seam's load diagnostics, grouped for the banner (grouping is a separate call). */
 export interface LoadResult extends LoadDiagnostics {
   groups: LossWarningGroup[];
 }
@@ -246,7 +246,7 @@ export interface TiptapEditorInstance extends EditorInstance {
    * With `revision` given, the store's base moves to it in the same step; without it the base stays
    * the store's own until the app reports the new one with {@link setRevision}.
    *
-   * **The app re-syncs the editor after a store-side body change (M5 finding 11).** The store's notices
+   * **The app re-syncs the editor after a store-side body change.** The store's notices
    * now carry the body (`AutosaveEvent.body`), but the editor does not re-render from them yet. So an
    * agent apply, a restore or an undo-all that changes the stored body reaches the editor only when the
    * app calls this with `historyExcluded`, and then {@link setRevision}.
@@ -298,7 +298,7 @@ interface MountSeed {
 }
 
 /**
- * M5 finding 4, revised: before a mount takes its body, the store's outstanding work for the
+ * Before a mount takes its body, the store's outstanding work for the
  * document is settled, and the mount shows the body the store holds rather than the one it was given.
  *
  * A mount that took the body it was given would show a stored body while the store held a keystroke
@@ -631,12 +631,12 @@ const createInstance = (
       const selection = getSelection();
       // A target longer than the bound is not captured, because edit-anchors §2 bounds `exact` and
       // the resolver refuses a longer one, so the anchor could never resolve. The caller splits the
-      // target into anchored steps (M5 finding 5).
+      // target into anchored steps.
       if (selection === null || selection.to - selection.from > MAX_EXACT_CHARS) return null;
       // `exact` is read from the body, so the anchor must describe the body its revision
       // names. While the user's keystrokes are unsaved the body is not that body, and an
       // anchor would quote text the stored document does not contain. The capture waits for
-      // the write (edit-anchors §2; M5 finding 5).
+      // the write (edit-anchors §2).
       if (unsaved()) return null;
       const captured = currentRevision();
       if (captured === undefined) return null;

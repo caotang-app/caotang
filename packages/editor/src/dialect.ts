@@ -51,18 +51,16 @@
  *    reports **zero** for a document that changes on save — a wrong zero, which is
  *    the one failure this channel cannot have.
  *
- * ## How the context is obtained, and why it cost a second and a half per load
- * until 2026-10-05
+ * ## How the context is obtained, and why the obvious way costs a second and a half per load
  *
- * "In context" used to mean *the tail of the canonical form of the prefix that
+ * The obvious reading of "in context" is *the tail of the canonical form of the prefix that
  * ends with this block*: render blocks `1…i+1`, subtract blocks `1…i`, keep what is
  * left. That is correct, and it is `O(n²)` — every block re-converted the whole
  * document before it. **1 586 ms** for a 400-block / 19 kB document, measured.
  *
- * An earlier change measured the same shape at 763 ms for a whole `parseWithDiagnostics` on a
- * smaller fixture, cut a row for it, and correctly called the quadratic *inherited*
- * rather than new. This is that row. The fix is the other of the two options the
- * row named: **the offsets come from the serializer.** The library already renders
+ * The same shape measured 763 ms for a whole `parseWithDiagnostics` on a
+ * smaller fixture, and the quadratic was *inherited* rather than new. The fix is the
+ * other of the two options: **the offsets come from the serializer.** The library already renders
  * the whole document in one pass and produces one string per top-level block on the
  * way out; `recordRootBlocks` below is a `join` rule — a documented option of
  * `remark-stringify` — that wraps its dispatcher and keeps those strings as they
@@ -127,7 +125,7 @@
  * another. No test caught it because every notice the suite asserted was a
  * non-list construct, and for those the two renderings agree.
  *
- * **The old reason, withdrawn: "declared by the pinned options".** §5's amendment
+ * **Not the reason: "declared by the pinned options".** §5's amendment
  * and the previous version of this file both exempted the serialize-side
  * normalizations because they are *"declared by §5's own pinned option list"* —
  * a loose list "because `fromPmNode('list')` hard-codes `spread: false`", nested
@@ -135,8 +133,8 @@
  *
  * 1. **`listItemIndent` is not a cause of anything here.** The nested blank line
  *    appears with the key **absent**, with `'one'` and with `'tab'` — the option
- *    changes the *indentation* and never the blank line. §5's amendment, this
- *    file and an earlier change all named it as the cause; it is not one.
+ *    changes the *indentation* and never the blank line. It is easy to name as
+ *    the cause; it is not one.
  * 2. **The real cause is that the ProseMirror schema cannot carry Markdown list
  *    looseness.** `fromPmNode('list')` pins `spread: false`, and
  *    `fromPmNode('listItem')` emits no `spread` field at all — so a tight nested
@@ -163,7 +161,7 @@
  * ## The cost, measured against this file's own baseline, and re-measured
  *
  * The prefix scheme was quadratic — every block re-rendered the whole prefix before
- * it — and **that was inherited, not introduced. An earlier change removed it: the
+ * it. The recorder removes that: the
  * per-block text now comes out of **one** render of the document, with the
  * serializer's own per-block strings read off it. Same document, same machine, same
  * harness (`test/dialect.test.ts`'s `longManuscript`, 400 blocks / 19 007 bytes):
@@ -266,7 +264,7 @@ const SAVE_SIDE_CAUSES: ReadonlyMap<string, Exclude<DialectCause, 'parse-side'>>
  *
  * The fields are the ones §5's banner and §4's carrier can both use without
  * reaching for anything else: which construct, where it starts, the two
- * spellings, and — since 2026-10-05, an earlier change — **which mechanism produced the
+ * spellings, and **which mechanism produced the
  * canonical form**. `position` is optional for the same reason `LossWarning`'s is
  * — mdast `position` is optional, and inventing a line number for a node that had
  * none would be a claim about a location rather than about a spelling.
@@ -545,7 +543,7 @@ const blockBoundaries = (doc: PmNode): number[] => {
 /**
  * Whether this block already has a loss reported against it.
  *
- * Two tests, and the second is the one an earlier change had to add. A degrade node anywhere
+ * Two tests, and the second is the easy one to miss. A degrade node anywhere
  * inside is enough, and a task list item counts even though `listItem` is not a
  * degrade type — the warning for it is a loss, so its byte change is already
  * spoken for. `DEGRADE_MDAST_TYPES` is read from the handler table rather than
@@ -782,7 +780,7 @@ export const ownTextsRecorded = (
 /**
  * The same two facts, by the prefix algorithm, for when the recorder declines.
  *
- * **This is the exact algorithm an earlier change shipped, kept whole and named**, and it
+ * **This is the original prefix algorithm, kept whole and named**, and it
  * is what makes the recorder's guard a real one rather than a claim: the fast path
  * is only allowed to answer when it has proved it captured every block, and this
  * is the answer it is proved against. It costs `O(n²)`, so it is a fallback and

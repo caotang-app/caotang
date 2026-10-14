@@ -20,24 +20,24 @@ import { PROMPT_PACK_TOOL_ENTRIES } from '@caotang/video-prompt-pack';
  *
  * **Beyond the frozen fourteen are the extension rows, each marked `surface:
  * 'extension'` so no reader mistakes it for part of the v0.1 surface.** `doc.import`
- * was decided by the project owner's lead so that existing writing can move into
+ * is a fixed choice, so that existing writing can move into
  * Caotang without paraphrase; its external use waits on a confirmation path an
  * external caller can take (extensibility §9), and until that path exists an
- * external call is refused. m8 adds `codex.import` (the owner's own worldbuilding as
- * canon, codex.md §2 D5) and the coherence module's three tools (coherence.md §7),
- * which take their rows from `@caotang/coherence` so the module declares them once.
+ * external call is refused. `codex.import` (the writer's own worldbuilding as
+ * canon, codex.md §2 provenance) and the coherence module's three tools (coherence.md §7)
+ * follow; the coherence rows come from `@caotang/coherence` so the module declares them once.
  *
- * m8-integration adds the Tier-2 gateway `tool.search` (extensibility §5, from `@caotang/mcp-client`) and the
+ * The Tier-2 gateway `tool.search` (extensibility §5, from `@caotang/mcp-client`), the
  * storyboard module's two tools (`shots.derive`, `shots.annotate`, storyboard.md §4) and the prompt-pack
- * module's two (`prompt.draft`, `prompt.variant`, video-prompt-pack.md §6), each taken from its module's own
- * entries. The dialogue module's two rows are here as well (media-track M2, dialogue-narrative.md §7). They were held
- * back while that package imported this one: its helpers (`refusal`, `param`, `toJsonSchema`) now come from the bus,
- * so the module no longer imports the harness and the registry can join its rows without a cycle.
+ * module's two (`prompt.draft`, `prompt.variant`, video-prompt-pack.md §6) are each taken from their module's own
+ * entries. The dialogue module's two rows are here as well (cutscenes and interactive narrative, dialogue-narrative.md
+ * §7). Its helpers (`refusal`, `param`, `toJsonSchema`) come from the bus, so the module does not import the harness
+ * and the registry can join its rows without a cycle.
  *
  * **`response_token_cap` values.** agent-harness.md states three caps: ~8k for
  * `binder.read_tree`, 25k for `doc.read` and 8k for `codex.read`. The rest are
  * this module's choices, sized from the data each response carries. They are not
- * spec values, and the report that landed this package lists them as open.
+ * spec values.
  */
 
 export const TOOL_NAMES = [
@@ -247,7 +247,7 @@ export const TOOL_METADATA: readonly ToolMetadata[] = [
     surface: 'extension',
   },
   {
-    // Codex.import (codex.md §2, D5). A create-only batch whose entries are the writer's own
+    // Codex.import (codex.md §2 provenance). A create-only batch whose entries are the writer's own
     // canon: origin 'import', each citing the document it is attached to. Its own row, beside
     // doc.import, because codex.write stamps 'agent' and an import is the writer's text.
     name: 'codex.import',
@@ -256,20 +256,20 @@ export const TOOL_METADATA: readonly ToolMetadata[] = [
     response_token_cap: 4000,
     descriptionVersion: 1,
     description:
-      'Import up to 20 codex entries that are the owner’s own writing, each attached to the document its full text was imported into. Create-only: a name or alias that already exists is refused, never merged. Each entry is stamped as imported, not as drafted by the agent, and cites a passage of its document. Requires user confirmation. One undo removes the whole import. Extension beyond the v0.1 surface, for migrating existing worldbuilding into Caotang.',
+      'Import up to 20 codex entries that are the writer’s own writing, each attached to the document its full text was imported into. Create-only: a name or alias that already exists is refused, never merged. Each entry is stamped as imported, not as drafted by the agent, and cites a passage of its document. Requires user confirmation. One undo removes the whole import. Extension beyond the v0.1 surface, for migrating existing worldbuilding into Caotang.',
     surface: 'extension',
   },
   // The coherence module's three tools, declared in the coherence package and joined here
   // (coherence.md §7). They are the module's rows, so the registry takes them as written there.
   ...COHERENCE_TOOL_ENTRIES.map((entry) => entry.meta),
-  // m8-integration: the Tier-2 gateway (extensibility §5), declared in the MCP client package and joined here.
+  // The Tier-2 gateway (extensibility §5), declared in the MCP client package and joined here.
   // It is a read, and it is wired whether or not a server is connected: with none, its answer says so.
   TOOL_SEARCH_META,
-  // m8-integration: the storyboard module's two tools (storyboard.md §4), and the prompt-pack module's two
+  // The storyboard module's two tools (storyboard.md §4), and the prompt-pack module's two
   // (video-prompt-pack.md §6). Each module declares its own rows; these are the registry's view of them.
   ...STORYBOARD_TOOL_ENTRIES.map((entry) => entry.meta),
   ...PROMPT_PACK_TOOL_ENTRIES.map((entry) => entry.meta),
-  // m8-integration: the dialogue module's two rows (dialogue-narrative.md §7). Read from the module's own entries.
+  // The dialogue module's two rows (dialogue-narrative.md §7). Read from the module's own entries.
   ...DIALOGUE_TOOL_ENTRIES.map((entry) => entry.meta),
 ];
 

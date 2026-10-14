@@ -1,5 +1,5 @@
 /**
- * The coherence report (media-track M6, Review): the Markdown and JSON it writes from the findings file, the grouping by
+ * The coherence report (the one-source compile's Review row): the Markdown and JSON it writes from the findings file, the grouping by
  * fact, and the way a project with no file or no run reads.
  */
 
@@ -65,7 +65,7 @@ function input(file: CoherenceState | undefined): CoherenceReportInput {
   return { title: 'The Lighthouse Keeper', date: '2026-10-08', file, docTitle };
 }
 
-describe('the Markdown report (media-track M6, Review)', () => {
+describe('the Markdown report (the Review row of the one-source compile)', () => {
   it('summarises the file, then lists the findings by severity with their quotes and their verdicts, then the runs', () => {
     const text = coherenceReportMarkdown(input(fileWithFindings()));
     expect(text.startsWith('# Coherence report: The Lighthouse Keeper\n\nDated 2026-10-08.\n')).toBe(true);
@@ -133,7 +133,7 @@ describe('the Markdown report (media-track M6, Review)', () => {
   });
 });
 
-describe('the JSON report (media-track M6, Review)', () => {
+describe('the JSON report (the Review row of the one-source compile)', () => {
   it('carries the findings and runs exactly as the file holds them, with the summary counts', () => {
     const file = fileWithFindings();
     const parsed = JSON.parse(coherenceReportJson(input(file))) as { summary: Record<string, number>; findings: unknown; runs: unknown };

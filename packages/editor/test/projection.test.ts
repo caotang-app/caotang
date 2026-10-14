@@ -1,11 +1,11 @@
 /**
  * The offset bridge's two measured defects, and the mechanism that replaced the quadratic one.
  *
- * - **Offsets in a block's leading syntax** (M5 finding 1). `textPositionFor` returned a
+ * - **Offsets in a block's leading syntax**. `textPositionFor` returned a
  *   position before the first text run for such offsets: `-1` for `# Title`, a container
  *   position for `- one`. Every offset from 0 to the first run's start must now be a text
  *   position at that run's start.
- * - **Block spans from one render** (M5 finding 6). `buildProjectionMap` used to serialize every
+ * - **Block spans from one render**. `buildProjectionMap` used to serialize every
  *   prefix of the document, which is quadratic. The spans now come from one save-path render
  *   and a single pass over the body. The prefix algorithm is kept as the oracle, and the two must
  *   agree wherever the document has no empty block (where the spans are defined differently, and
@@ -24,7 +24,7 @@ const isTextPosition = (doc: PmNode, pos: number): boolean => {
   return doc.resolve(pos).parent.inlineContent;
 };
 
-describe('an offset in a block’s leading syntax maps to the text it precedes (M5 finding 1)', () => {
+describe('an offset in a block’s leading syntax maps to the text it precedes', () => {
   it.each([
     ['heading-first', '# Title\n\nSome text.\n'],
     ['list-first', '- one\n- two\n'],
@@ -73,7 +73,7 @@ const hasEmptyBlock = (doc: PmNode): boolean => {
   return empty;
 };
 
-describe('block spans come from one render, and agree with the prefix algorithm (M5 finding 6)', () => {
+describe('block spans come from one render, and agree with the prefix algorithm', () => {
   it('the spans equal the prefix algorithm’s, block for block, on every corpus entry without an empty block', async () => {
     let compared = 0;
     for (const entry of CORPUS) {

@@ -2,7 +2,7 @@
  * The exporter — [exporter.md §4](../../../docs/architecture/exporter.md), and the port the bus's `export.compile`
  * and `export.compileSelection` call. It compiles the prose formats (Markdown, plain text, DOCX, EPUB) and the
  * media-track formats (screenplay Fountain and FDX, the dialogue table and compiled Ink, the shot list and the
- * video prompt pack — media-track M6, see `media.ts`).
+ * video prompt pack — the one-source compile, see `media.ts`).
  *
  * Two entry points share one plan, so they cannot disagree about what a compile is:
  *

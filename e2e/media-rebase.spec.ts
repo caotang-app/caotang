@@ -1,5 +1,5 @@
 /**
- * The media views after an undo (media-track M1-M3, editor-engine §9). An undo is a write of its own, so it moves the revision the
+ * The media views after an undo (screenplay, dialogue and storyboard; editor-engine §9). An undo is a write of its own, so it moves the revision the
  * store holds up past the view's. A view that did not re-seed its autosave on that revision wrote its next text against a revision
  * the store no longer had: every flush was refused, and the text was gone after a reload. Each test types, undoes, types again, and
  * checks that the second text is the one the store keeps across a reload.

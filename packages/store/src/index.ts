@@ -319,7 +319,7 @@ export {
   type SnapshotBudget,
 } from './runtime/retention.js';
 
-// m9 (project export): the project block's identity (epub-metadata.md), the cover import and its staging, the recipe
+// Project export: the project block's identity (epub-metadata.md), the cover import and its staging, the recipe
 // options, and the zip engine loader the desktop uses to bundle a multi-file export.
 export {
   BACKFILLABLE_FIELDS,
@@ -347,7 +347,7 @@ export {
 export { loadZipEngine } from './zip.js';
 export type { ExportRecipe, ExportRecipeOptions } from './manifest.js';
 
-// r6 (storyboard): the browser's copy of the project's images, in its own IndexedDB database (storyboard.md §2.2).
+// Storyboard: the browser's copy of the project's images, in its own IndexedDB database (storyboard.md §2.2).
 export {
   ASSET_DB_NAME,
   ASSET_DB_VERSION,
@@ -361,4 +361,4 @@ export {
   type AssetRow,
   type AssetStore,
 } from './runtime/asset-store.js';
-export { storyboardR6CommandRegistrations } from './commands-storyboard-r6.js';
+export { shotImageCommandRegistrations } from './commands-shot-image.js';

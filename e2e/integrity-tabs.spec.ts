@@ -85,7 +85,7 @@ test('a project another tab has open is refused, the first tab keeps its words, 
   await expect(other.getByRole('textbox', { name: 'Document text' })).toHaveText('First tab words.');
 });
 
-test('a folder whose project another tab has open is refused as the list refuses it, and no second copy of the book is made (DS-2)', async ({
+test('a folder whose project another tab has open is refused as the list refuses it, and no second copy of the book is made', async ({
   page,
   context,
 }) => {
@@ -199,7 +199,7 @@ test('a stale tab asks before it reloads, and the question names the words the r
   await expect(page.getByRole('textbox', { name: 'Document text' })).toContainText('Written in another tab.');
 });
 
-test('a project open in another tab is not offered for removal, and the list says where it is (DS-5)', async ({ page }) => {
+test('a project open in another tab is not offered for removal, and the list says where it is', async ({ page }) => {
   await createProject(page, 'Held Here');
   const other = await secondTab(page);
 
@@ -215,7 +215,7 @@ test('a project open in another tab is not offered for removal, and the list say
   await expect(other.getByRole('listitem').filter({ hasText: 'Held Here' })).toHaveCount(0);
 });
 
-test('a project this tab has left is removed from the list at once, and is not reported as open in another tab (DS-5)', async ({ page }) => {
+test('a project this tab has left is removed from the list at once, and is not reported as open in another tab', async ({ page }) => {
   await createProject(page, 'Just Left');
   // The list is opened straight from the project. The close of this tab's session is not held open here, so this checks the list's own
   // answer (no report of another tab), not the wait for that close.
@@ -228,7 +228,7 @@ test('a project this tab has left is removed from the list at once, and is not r
   await expect(page.getByRole('listitem').filter({ hasText: 'Just Left' })).toHaveCount(0);
 });
 
-test('a store another tab has upgraded stops this tab, and the words typed after the upgrade stay in this tab (DS-6)', async ({ page }) => {
+test('a store another tab has upgraded stops this tab, and the words typed after the upgrade stay in this tab', async ({ page }) => {
   await projectWithScene(page, 'Upgraded Store', 'Saved here first.');
 
   // Another tab opens the browser's store at a newer version. The browser closes this tab's connection, as it does when a newer build runs.
@@ -250,7 +250,7 @@ test('a store another tab has upgraded stops this tab, and the words typed after
   await page.keyboard.type(' Typed after the upgrade.');
 
   await expect(page.getByTestId('save-state')).toHaveAttribute('data-state', 'conflict');
-  // The cause is the upgrade, not newer text in another tab: the notice and the save indicator say so, and say what to do (DS-6).
+  // The cause is the upgrade, not newer text in another tab: the notice and the save indicator say so, and say what to do.
   const notice = page.getByRole('dialog', { name: 'Caotang was updated in another tab' });
   await expect(notice).toContainText('Caotang was updated in another tab, so this tab cannot save to browser storage.');
   await expect(notice).not.toContainText('Another tab has stored newer text');

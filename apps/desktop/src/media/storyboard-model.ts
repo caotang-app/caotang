@@ -83,7 +83,7 @@ export const ENUM_OPTIONS: Readonly<Record<'shotSize' | 'cameraAngle' | 'cameraM
 export type ShotDraft = Readonly<Record<EditableField, string>>;
 
 /**
- * The words the editor shows for one closed-list value (F-08). The option's value stays the enum value, so the save writes what the list
+ * The words the editor shows for one closed-list value. The option's value stays the enum value, so the save writes what the list
  * holds. A value the list does not have (a kept unknown) is shown as it is, because the writer has to see what the file holds.
  */
 export function enumLabelOf(field: ShotEnumField, value: string): string {

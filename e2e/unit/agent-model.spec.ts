@@ -210,7 +210,7 @@ test('a drafted scene can be approved only once its draft has been on screen, an
   expect(check(true, true).steps[0]).toMatchObject({ onScreen: true, previewed: true });
 });
 
-test('a screenplay scene’s draft counts as previewed where the card shows it, because no prose editor can show it (L2)', () => {
+test('a screenplay scene’s draft counts as previewed where the card shows it, because no prose editor can show it', () => {
   const card = cardOf([stepOf(0, 'scene.draft', { doc: 'The Lamp' })]);
   const lamp = draftOf('The Lamp', 'c1', 'doc_lamp');
   const check = (kind: string | undefined) =>

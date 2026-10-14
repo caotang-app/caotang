@@ -112,7 +112,7 @@ test.describe('the findings tab model (coherence.md §6.3, §8)', () => {
   });
 });
 
-test.describe('Fix with agent is offered where the agent drafts a scene (coherence.md §6.3, L1)', () => {
+test.describe('Fix with agent is offered where the agent drafts a scene (coherence.md §6.3)', () => {
   const DIALOGUE = 'n_DIALOG0001';
   const SCREENPLAY = 'n_SCRIPT0001';
 

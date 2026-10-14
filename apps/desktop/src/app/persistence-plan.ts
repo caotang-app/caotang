@@ -126,7 +126,7 @@ function fullPlan(state: ProjectState, next: Shadow): PersistPlan {
  * A detached `ProjectState` with the same content, built through the store's own
  * constructor so its `derived` block is the shape the store expects. What the load
  * declined is carried too: a writer that did not know a file was declined would
- * delete it as unowned, or refuse a document whose body it cannot hold (DS-1).
+ * delete it as unowned, or refuse a document whose body it cannot hold.
  */
 export function copyState(state: ProjectState): ProjectState {
   const copy = createProjectState(structuredClone(state.manifest));

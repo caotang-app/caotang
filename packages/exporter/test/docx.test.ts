@@ -1,6 +1,6 @@
 /**
- * The DOCX publishing gate — exporter.md §3 (the v0.1 contract, A4/A5) and §2 (the
- * C23 TOC recipe).
+ * The DOCX publishing gate — exporter.md §3 (the v0.1 contract) and §2 (the
+ * TOC recipe).
  *
  * "It has to be in docx format or it's not getting read." So this file does not
  * check that a `.docx` came out. It opens the package with a ZIP reader and asserts
@@ -82,7 +82,7 @@ describe('the DOCX chapter break — pageBreakBefore on each Heading 1', () => {
   });
 });
 
-describe('the DOCX contents field — the C23 recipe', () => {
+describe('the DOCX contents field — the TOC recipe', () => {
   it('writes a TOC field on Heading 1 with hyperlinks, inside a document-part content control', async () => {
     const body = (await parts(await renderDocx(input())))['word/document.xml'] ?? '';
     expect(body).toContain('<w:sdt>');
@@ -129,11 +129,10 @@ describe('the DOCX renderer — loaded lazily, and pinned', () => {
     expect(source).not.toMatch(/^import (?!type )[^;]*from 'docx';/m);
   });
 
-  it('pins docx to one exact version with no range, which is the launch branch\'s pin and not one the spec names', () => {
-    // The spec names no version to pin. exporter.md §7-E1 records 9.5.2 (C23) and then the later 9.8.1 and 9.9.0 as
-    // upstream facts, and it leaves the choice to the M9 benchmark (C9), which has not run. What this test holds is the
-    // pin the launch branch ships ahead of that benchmark. Its decision record ("docx shipped ahead of the C9 gate") is
-    // proposed and not yet written to docs/decisions.md: one exact version, so a range can never move the renderer under a
+  it('pins docx to one exact version with no range, which is the shipped pin and not one the spec names', () => {
+    // The spec names no version to pin. exporter.md §7-E1 records 9.5.2 and the later 9.8.1 and 9.9.0 as upstream facts,
+    // and it leaves the choice to the renderer-fidelity benchmark, which has not run. What this test holds is the pin
+    // this build ships ahead of that benchmark: one exact version, so a range can never move the renderer under a
     // benchmark that has not run.
     const manifest = JSON.parse(readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8')) as {
       dependencies: Record<string, string>;

@@ -3,8 +3,8 @@
  *
  * ## Why this exists
  *
- * **pnpm 12 writes `pnpm-lock.yaml` as a two-document YAML file.** Measured on
- * 12.8.1 (2026-10-02):
+ * **pnpm 12 writes `pnpm-lock.yaml` as a two-document YAML file.** As measured on
+ * 12.8.1:
  *
  * - **Document 1** (lines 2–157, after the `---` on line 1) — pnpm's
  *   *self-management* record. It exists because pnpm 12 manages its own version
@@ -19,18 +19,17 @@
  *
  * Both documents are `lockfileVersion: '9.0'` and both contain a `packages:`
  * and a `snapshots:` block, so **nothing about the shape distinguishes them.**
- * A parser that takes the first `packages:` it finds — which is what both
- * lockfile guards did — reads the wrong document and reports a 15-package tree.
+ * A parser that takes the first `packages:` it finds reads the wrong document
+ * and reports a 15-package tree.
  *
- * ## The failure it caused, and why the guards caught it
+ * ## Why the guards catch it
  *
- * 12 guard assertions failed, and **`test/toolchain-floor.test.ts`'s own control
- * is what named the cause**: `parses the resolutions — a parse that matches
- * nothing fails, not passes` reported `expected 15 to be greater than or equal
- * to 300`. That control exists because a parser matching nothing and a parser
- * matching everything produce the same green.
- * This is that lesson returning in a new place, and the control is why it was
- * a red test rather than a silently-healthy tree.
+ * **`test/toolchain-floor.test.ts`'s own control names the cause**: `parses the
+ * resolutions — a parse that matches nothing fails, not passes` reports
+ * `expected 15 to be greater than or equal to 300` against a first-document
+ * read. That control exists because a parser matching nothing and a parser
+ * matching everything produce the same green, so a wrong read is a red test
+ * rather than a silently-healthy tree.
  *
  * ## The discriminator is semantic, not positional
  *

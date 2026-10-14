@@ -47,14 +47,14 @@
  *
  * ## Why `binder.create` waited for `project.deleteNode`
  *
- * An earlier change shipped five of §9's six `inverse` names and could not ship the sixth.
+ * Five of §9's six `inverse` names could ship before the sixth.
  * `binder.create`'s exact inverse is `project.deleteNode` — the only command that
  * removes a node, and §5 asks for the *exact* one — and at that point
  * `project.deleteNode` had no apply at all (`state.ts` had no `removeNode`
  * primitive), so a `binder.create` shipped then would have registered an undo group
  * whose compensation is a command the bus refuses to resolve: **a write-auto
  * command that reports success and cannot be undone**, which is the one outcome §5's
- * `inverse` exists to prevent. An earlier change ships the pair.
+ * `inverse` exists to prevent. So the pair ships together.
  *
  * That cut was not free of a second problem, and it is the reason the inverses here
  * carry `issuedBy: 'user'` — which is why the delete's own `never` risk class makes
@@ -80,7 +80,7 @@
  * function the bus calls directly, and §5's "one click = undo the group" is the
  * user's own gesture by construction. The `never`-class `editor.*` names are the
  * case that would be un-approvable if they were inverses; as compensations they
- * are restorable by a click, which is what C14's two-lane undo needs.
+ * are restorable by a click, which is what the two-lane undo (command-bus §5) needs.
  *
  * ## The one thing an exact inverse cannot restore
  *
@@ -161,7 +161,7 @@ import {
 } from './state.js';
 import type { CodexEntry, CodexIncludePolicy, TreeNode } from './manifest.js';
 import { projectCommandRegistrations, type ProjectAssetPort } from './commands-project.js';
-import { storyboardR6CommandRegistrations } from './commands-storyboard-r6.js';
+import { shotImageCommandRegistrations } from './commands-shot-image.js';
 import { furnitureApplies } from './commands-furniture.js';
 import { scriptApplies } from './commands-script.js';
 
@@ -194,10 +194,10 @@ export interface ProjectCommandOptions {
    */
   readonly snapshots?: SnapshotSink;
   /**
-   * The exporter, for M9's two export names. **Injected, not imported** — the
+   * The exporter, for the two export names. **Injected, not imported** — the
    * exporter reads this store, so the store importing it would be a cycle. With no
-   * exporter the two names stay descriptor-only and the registry refuses them, the
-   * same loud refusal a build without M9 gives.
+   * exporter the two names stay descriptor-only and the registry refuses them
+   * loudly.
    */
   readonly exporter?: ExportCommandPort;
   /**
@@ -799,7 +799,7 @@ export function createProjectCommandRegistry(
    * dangling attachment ids at load, and states why: an id that does not resolve now
    * will not resolve later, so keeping it "would only make the next manifest carry a
    * lie forward". This command knows the id is gone, so it repairs at the point of
-   * knowledge rather than leaving the manifest to be corrected by the next open —
+   * knowledge rather than leaving the manifest to be repaired by the next open —
    * and the prior list travels in the artifact, so the undo restores the attachment
    * instead of losing it. An undo that removed a codex entry's attachment without
    * being able to put it back would be a *second* irreversible effect inside a
@@ -991,7 +991,7 @@ export function createProjectCommandRegistry(
   }
 
   /**
-   * `codex.upsert` — the batch, and the last of M2's five effectless names.
+   * `codex.upsert` — the batch.
    *
    * **One undo group for the batch, with each entry compensated inside it** (codex.md
    * §7, verbatim). That is one `compensate()` call, not one per entry: `undo.ts`'s
@@ -1007,13 +1007,13 @@ export function createProjectCommandRegistry(
    * copy is a whole entry rather than a diff: the artifact then restores exactly
    * without having to record which fields this dispatch happened to touch.
    *
-   * **`origin` follows the envelope and is never flipped.** D5 requires an
+   * **`origin` follows the envelope and is never flipped.** codex.md requires an
    * agent-created entry to carry `origin: 'agent'` and a manual one `origin:
    * 'manual'`, and codex.md §2 types `origin` as required while `CodexUpsertOp` has
    * no such field — so the flow that issued the command is the only fact that can
-   * decide it, and it is on the envelope. m8 adds one flow that `issuedBy` cannot
+   * decide it, and it is on the envelope. There is one flow that `issuedBy` cannot
    * name: an import (`provenance: 'import'`, codex.md §2), which stamps `'import'`
-   * and so outranks nothing it should not. On an update it is left alone, because D5
+   * and so outranks nothing it should not. On an update it is left alone, because codex.md
    * is explicit that an agent updating a hand-authored entry "never flips its
    * origin". `sources` stays empty: the op carries no citations, and the extraction's
    * docIds and quoted spans are the harness's data, not a mutation command's.
@@ -1080,9 +1080,9 @@ export function createProjectCommandRegistry(
       if (op.attachTo !== undefined || op.detachFrom !== undefined) {
         applyAttachmentDelta(entry, op.attachTo ?? [], op.detachFrom ?? []);
       }
-      // An update's citations are appended to the entry's, never replace them (D5:
+      // An update's citations are appended to the entry's, never replace them (codex.md:
       // an agent updating a hand-authored entry adds a source and keeps the entry's
-      // own). `origin` is untouched: D5 never flips it.
+      // own). `origin` is untouched: an update never flips it.
       if (op.sources !== undefined) {
         entry.sources = [...entry.sources, ...op.sources.map((source) => ({ ...source }))];
       }
@@ -1122,7 +1122,7 @@ export function createProjectCommandRegistry(
     // changes no node at all, and only the `attachTo` of an op that attached
     // something counts. Collected from the ops rather than from `entry.attachments`
     // because the latter is the whole set — what the project looks like now, not
-    // what this dispatch did to it. That distinction is the same one an earlier change drew for
+    // what this dispatch did to it. That distinction is the same one drawn for
     // the inverse, and for the same reason.
     const attachedNodes: string[] = [];
     for (const op of params.entries) {
@@ -1436,7 +1436,7 @@ export function createProjectCommandRegistry(
   };
 
   // -------------------------------------------------------------------------
-  // M9 — `export.compile` and `export.compileSelection`. Registered only when an
+  // Export — `export.compile` and `export.compileSelection`. Registered only when an
   // exporter is injected (see `ProjectCommandOptions.exporter`).
   // -------------------------------------------------------------------------
 
@@ -1580,7 +1580,7 @@ export function createProjectCommandRegistry(
     },
   };
 
-  // m4-furniture: the saved-filter and project-goal applies (binder-filters §5, goals-progress §4). Their descriptors are
+  // The saved-filter and project-goal applies (binder-filters §5, goals-progress §4). Their descriptors are
   // the bus's own, already in `registry` through `buildRegistry()`, so each entry keeps its descriptor and gains the apply.
   const furniture = furnitureApplies(clock, restore);
   registry['binder.saveFilter'] = { descriptor: registry['binder.saveFilter'].descriptor, apply: narrow(furniture['binder.saveFilter']) };
@@ -1588,7 +1588,7 @@ export function createProjectCommandRegistry(
   registry['project.saveGoal'] = { descriptor: registry['project.saveGoal'].descriptor, apply: narrow(furniture['project.saveGoal']) };
   registry['project.deleteGoal'] = { descriptor: registry['project.deleteGoal'].descriptor, apply: narrow(furniture['project.deleteGoal']) };
 
-  // m6-script: the whole-script imports and the dialogue container's settings (screenplay.md §2.2, dialogue-narrative.md
+  // The whole-script imports and the dialogue container's settings (screenplay.md §2.2, dialogue-narrative.md
   // §2.1 and §4). Their descriptors are the bus's own, already in `registry` through `buildRegistry()`.
   const script = scriptApplies(clock);
   registry['screenplay.import'] = { descriptor: registry['screenplay.import'].descriptor, apply: narrow(script['screenplay.import']) };
@@ -1692,13 +1692,13 @@ export function createProjectCommandRegistry(
     registry['shot.setMeta'] = { descriptor: commands.shotSetMeta, apply: narrow(shotSetMeta) };
   }
 
-  // m9 (project export): the project block, the saved recipes, the vocabulary and the cover import. The applies are in
+  // Project export: the project block, the saved recipes, the vocabulary and the cover import. The applies are in
   // commands-project.ts; `project.importAsset` is added only when the host injects its asset port.
   Object.assign(registry, projectCommandRegistrations({ clock, ...(options.assets === undefined ? {} : { assets: options.assets }) }));
-  // r6 (storyboard): the shot image import needs both the asset port and the storyboard port (commands-storyboard-r6.ts).
+  // Storyboard: the shot image import needs both the asset port and the storyboard port (commands-shot-image.ts).
   Object.assign(
     registry,
-    storyboardR6CommandRegistrations({
+    shotImageCommandRegistrations({
       clock,
       ...(options.assets === undefined ? {} : { assets: options.assets }),
       ...(shotPort === undefined ? {} : { shots: shotPort }),

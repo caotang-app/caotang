@@ -91,7 +91,7 @@ const PNG = Buffer.from(
 
 // The pending window itself (the listing not yet back after the board remounts) is checked by shownListingOf's unit tests in
 // e2e/unit/media-storyboard-board.spec.ts; this test sees only the settled picker.
-test('after a pack link into a shot whose picture is in the project, the picker names the stored file (F-08)', async ({ page }) => {
+test('after a pack link into a shot whose picture is in the project, the picker names the stored file', async ({ page }) => {
   await openShotFields(page);
   await page.getByLabel('Choose an image file for shot 1').setInputFiles({ name: 'frame.png', mimeType: 'image/png', buffer: PNG });
   await expect(page.getByRole('article', { name: 'Shot 1: New shot' }).locator('img')).toBeVisible();

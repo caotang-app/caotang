@@ -3,7 +3,7 @@
  *
  * The taxonomy is closed: seven kinds, each with one user-facing message written for
  * the person or the model to act on. The messages name the corrective surface
- * (Settings, the activity log) rather than a bare status, per §4's an earlier change finding.
+ * (Settings, the activity log) rather than a bare status, per §4.
  *
  * **Secrets.** No template in this file takes the API key. Each takes a host, a path,
  * a base URL, a status, or an excerpt the transport has already passed through

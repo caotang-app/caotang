@@ -1,6 +1,6 @@
 /**
  * The digest read a folder save and the MCP server share (folder-digests.ts `digestOfFile`), and the words a change is named in. A brief
- * hold on a file by another program (EBUSY, EPERM, EACCES on Windows) is retried, so it is not read as a change or as a failed save (DS-1).
+ * hold on a file by another program (EBUSY, EPERM, EACCES on Windows) is retried, so it is not read as a change or as a failed save.
  * Any other failure, and a hold that outlasts the retries, is passed on.
  */
 

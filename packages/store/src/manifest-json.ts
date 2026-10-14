@@ -20,11 +20,9 @@
  * it *is* rolling the version forward on an unrelated edit — and the file it
  * produces claims a shape it does not have, which the next open then validates
  * against the wrong schema because the version gate now believes it is current.
- * (Found 2026-09-30, fixed 2026-10-04: the stamp was previously
- * unconditional, defended by the argument that "the writer cannot upgrade such a
- * manifest, because only the §6 registry knows the steps" — which proves the
- * writer cannot *fix* the manifest and was then read as permission to mislabel
- * it. The writer does not migrate, and it does not lie about what it wrote.)
+ * That only the §6 registry knows the migration steps proves the writer cannot
+ * *fix* such a manifest, not that it may mislabel it. The writer does not
+ * migrate, and it does not lie about what it wrote.
  * So a manifest whose own `formatVersion` is not this build's is refused, in
  * both directions, and the load path is where a version changes.
  */
@@ -103,7 +101,7 @@ function node(n: TreeNode): string {
   if (n.kind !== undefined) pairs.push(['kind', str(n.kind)]);
   if (n.shot !== undefined) pairs.push(['shot', JSON.stringify(n.shot)]);
   if (n.dialogue !== undefined) pairs.push(['dialogue', JSON.stringify(n.dialogue)]);
-  // Additive timestamps (2026-09-17, A15a) are emitted only when present, so
+  // Additive timestamps are emitted only when present, so
   // that a project which never sets them round-trips unchanged.
   if (n.createdAt !== undefined) pairs.push(['createdAt', str(n.createdAt)]);
   if (n.updatedAt !== undefined) pairs.push(['updatedAt', str(n.updatedAt)]);

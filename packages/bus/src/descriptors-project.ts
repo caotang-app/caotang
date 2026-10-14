@@ -1,5 +1,5 @@
 /**
- * m9 (project export): the descriptors of the project block, the saved export recipes, the vocabulary and the cover
+ * Project export: the descriptors of the project block, the saved export recipes, the vocabulary and the cover
  * import. Their applies are the store's (`packages/store/src/commands-project.ts`), and they are reached through the
  * same registry as the rest of the closed set (`registry.ts`).
  *
@@ -437,7 +437,7 @@ export const recipeDelete: CommandDescriptor<RecipeDeleteParams> = {
   },
 };
 
-/** The m9 descriptors by name, for the registry and for a test that reads them as a set. */
+/** The project-export descriptors by name, for the registry and for a test that reads them as a set. */
 export const PROJECT_DESCRIPTORS = {
   'project.rename': projectRename,
   'project.setMetadata': projectSetMetadata,

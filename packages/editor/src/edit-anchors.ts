@@ -105,7 +105,7 @@ export const CONTEXT_CHARS = 32;
  * nothing, and an anchor arriving from a plan card (§2's "the user can edit the
  * anchor inline like any plan param") can carry more. So {@link fuzzyLocate} refuses
  * any context longer than this instead of letting the library throw — the same
- * shape an earlier change recorded for §3.3's `unknown` fallback, where the library throws rather
+ * shape as §3.3's `unknown` fallback, where the library throws rather
  * than degrades. Without this line a hand-edited anchor turns a recoverable drift
  * into a crash in the middle of a turn.
  */

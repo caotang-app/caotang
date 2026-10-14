@@ -55,7 +55,7 @@
  * than an oversight.** §5's registration refusal fires *because* the apply handed
  * over nothing to register, so there is no group to name and it behaves like a
  * pre-apply refusal on the `details` field. **§8's report refusal is not that
- * case, and an earlier version of this header said it was** — it fires for a
+ * case** — it fires for a
  * missing `summary`, but it runs *after* step 5, so a dispatch whose apply
  * captured an `inverse` or a `compensate` has a real group and the refusal names
  * it. Measured, one captured `compensable`:
@@ -65,8 +65,7 @@
  * every mutating project command, which is all of them except the view three.
  * The other four post-apply refusals — the thenable apply, the throwing apply,
  * the postcondition verdict and the throwing subscriber — all name the group
- * when there is one. **Five post-apply refusals exist, not the three docs/decisions.md
- * 2026-10-02 (13:0x) enumerates**, and the one that cannot name a group is the
+ * when there is one. **Five post-apply refusals exist**, and the one that cannot name a group is the
  * one that exists because a required hand-off was missing.
  *
  * ## §6 adds one step before the effect and one lookup before all of them
@@ -94,7 +93,7 @@
  * shape of defect this repo has now found four times in guards and zero times in
  * "the one place that decides".
  *
- * ## Two entry points, one pipeline (m8-integration, extensibility §6)
+ * ## Two entry points, one pipeline (extensibility §6)
  *
  * `execute()` is the synchronous bus, A2, and it refuses an apply that returns a
  * promise, as it always has. A command declared `asyncApply` is refused before
@@ -110,7 +109,7 @@
  * the refusal it carries rather than an `internal` defect, and the report the apply
  * made, if any, is still written as the row for the attempt (command-bus §8).
  *
- * ## Per-call risk and the row's source (m8-integration)
+ * ## Per-call risk and the row's source
  *
  * A descriptor may declare `agentRiskOf`, and then the gate reads the risk of the
  * call the command names, from the normalized params `validate` returned. A
@@ -123,7 +122,7 @@
  * The bus does
  * not own project state (§1) and does not import `@caotang/store` (the dependency
  * runs store → bus), so `read` is a **seam** the caller closes over its own
- * state — the same move an earlier change made for the autosave clock, and for the same reason:
+ * state — the same move the store makes for the autosave clock, and for the same reason:
  * a clock read from a global is a clock no test can control.
  */
 
@@ -206,7 +205,7 @@ export interface ExecutionOutcome {
 }
 
 /**
- * A refusal an apply raises on purpose, as opposed to a defect it throws by accident (m8-integration).
+ * A refusal an apply raises on purpose, as opposed to a defect it throws by accident.
  *
  * An apply that knows its refusal and its corrective path throws this with the error the caller should get, and the bus
  * returns that error unchanged. Both entry points do so: `execute()` for a synchronous apply (the exporter's refusals are
@@ -388,7 +387,7 @@ export function execute<K extends CommandName>(
 }
 
 /**
- * `executeAsync()` — the same pipeline, awaiting an apply that returns a promise (m8-integration; extensibility
+ * `executeAsync()` — the same pipeline, awaiting an apply that returns a promise (extensibility
  * §6). The apply is the only async boundary, so everything before it is decided synchronously, exactly as in
  * {@link execute}. A caller that dispatches the same `callId` again while the first dispatch is still running
  * gets the first one's answer only once that answer is recorded: the in-flight case is not deduplicated.
@@ -463,7 +462,7 @@ function dispatch<K extends CommandName>(
 function asyncApplyRefusal(name: CommandName): CommandError {
   return {
     code: 'internal',
-    message: `"${name}" has an asynchronous apply, which execute() cannot await (A2), so it was refused before anything ran. Its call must go through executeAsync, which awaits the apply. Nothing was validated, approved, applied or written.`,
+    message: `"${name}" has an asynchronous apply, which execute() cannot await, so it was refused before anything ran. Its call must go through executeAsync, which awaits the apply. Nothing was validated, approved, applied or written.`,
     target: name,
     correctiveHint: `dispatch "${name}" through executeAsync(), which awaits its apply; do not retry it through execute()`,
   };
@@ -567,7 +566,7 @@ function applyReturnedPromise<S>(
   }
   return err({
     code: 'internal',
-    message: `the apply for "${command.name}" returned a promise, and §3's bus is synchronous (A2), so the pipeline could not check its postconditions or finish the dispatch. ${groupId === undefined ? 'Nothing was written to the activity log.' : `Whatever it changed is registered for undo as ${groupId}, and the activity log has a row for it.`}`,
+    message: `the apply for "${command.name}" returned a promise, and the command bus is synchronous, so the pipeline could not check its postconditions or finish the dispatch. ${groupId === undefined ? 'Nothing was written to the activity log.' : `Whatever it changed is registered for undo as ${groupId}, and the activity log has a row for it.`}`,
     target: command.name,
     details: recoverable(command, groupId),
     correctiveHint:

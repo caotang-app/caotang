@@ -1,5 +1,5 @@
 /**
- * The media-track formats, one structural contract per format (media-track M6), through the §4 API. The
+ * The media-track formats, one structural contract per format (the one-source compile), through the §4 API. The
  * compile writes nothing, so each test reads the files a compile produced and checks what the spec says a file
  * of that format is. The bus path, the log and the undo are in `media-bus.test.ts`.
  */
@@ -147,7 +147,7 @@ describe('fountain — the screenplay scenes as Fountain', () => {
   // screenplay.md §5.1's round-trip gate, for one whole-script file: import, then compile, and the text comes back as it
   // went in. The synthesis the spec allows (the section line from the tree, the synopsis line from the manifest) is
   // here the same text the file had, so the gate is byte identity. Sections deeper than one, and section synopses,
-  // are the cases this fixture does not reach (knownGaps).
+  // are the cases this fixture does not reach (a known gap).
   it('round-trips a whole-script Fountain file: import it, compile it, and the same text comes back', async () => {
     const state = bindersFromScript(WHOLE_SCRIPT);
     const { text } = await oneFile(rig({ state }).exporter, ['manuscript'], 'fountain');
@@ -363,7 +363,7 @@ describe('shot-list-csv — the shot list, one row per shot', () => {
   });
 
   it('notes a shot with no metadata on record, so its blank columns are not read as a blank shot', async () => {
-    // The store does not keep a shot's metadata on save yet (knownGaps), so a reloaded shot can list with every column blank.
+    // The store does not keep a shot's metadata on save yet (a known gap), so a reloaded shot can list with every column blank.
     const intact = await rig().exporter.compile({ includeRootIds: ['manuscript'] }, 'shot-list-csv');
     expect(intact.log.notes.some((note) => note.includes('no shot metadata'))).toBe(false);
 

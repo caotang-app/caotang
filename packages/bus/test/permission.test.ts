@@ -1,6 +1,5 @@
 /**
- * The permission gate — [command-bus.md §4](docs/architecture/command-bus.md),
- * An earlier change.
+ * The permission gate — [command-bus.md §4](docs/architecture/command-bus.md).
  *
  * §10 names this slice's exit criterion in one clause: *"permission-matrix
  * assertions (each `never` command refused for agent, allowed/destructive-confirmed
@@ -101,11 +100,8 @@ describe('§4 the hard-deny list is not approvable by any flow', () => {
   // cannot rescue a hard-denied class, which `agentRisk: 'never'` would otherwise
   // carry to `ok` on the strength of §4's *other* bullet.
   //
-  // **It does not pin the ordering, and this comment used to say it did**
-  // (*"This one is the only thing that pins the ordering"*) — the same standing
-  // species as `ProjectCommit`'s an earlier change comment, arriving in a file whose whole
-  // subject is knowing which test does the work. Re-derived in both directions on
-  // 2026-10-02: removing the hard-deny check fails **3** tests, and
+  // **It does not pin the ordering.** Re-derived in both directions: removing the
+  // hard-deny check fails **3** tests, and
   // moving it below the inherited-grant branch fails **exactly 1** — the flow sweep
   // below, not this one. A plan is not an inherited grant, so the ordering mutant
   // leaves this test green.
@@ -220,7 +216,7 @@ describe('§4 issuedBy: \'agent\' — the risk matrix', () => {
     // `coherence.setFindingStatus` is the one write-confirm name whose agent answer depends on its params
     // (coherence.md §6.3: the agent may set `fixed` and nothing else). Its refusal is the status refusal,
     // which is tested on its own below, so this generic row leaves it out rather than pass it for the
-    // wrong reason. m8 added the name; before m8 this list had no param-dependent member.
+    // wrong reason. It is the list's only param-dependent member.
     const confirmClass = COMMAND_NAMES.filter(
       (n) => COMMAND_REGISTRY[n].descriptor.agentRisk === 'write-confirm' && n !== 'coherence.setFindingStatus',
     );
@@ -359,8 +355,7 @@ describe('the gate is a pure function of its three arguments', () => {
 describe('the gate\'s own lists are held against the spec, not against themselves', () => {
   /**
    * A hand-written copy of §4's hard-deny bullet can only be compared with itself,
-   * which proves nothing — the pin-drift passes of 2026-09-29/30 reported a stale
-   * version as current for exactly that reason. So the bullet is read out of the
+   * which proves nothing — a stale copy would still report itself as current. So the bullet is read out of the
    * file, and each declared class must still be named in it.
    */
   it('declares exactly the four classes §4\'s bullet names, and finds that bullet', () => {
@@ -419,7 +414,7 @@ describe('the gate\'s own lists are held against the spec, not against themselve
       const risk = COMMAND_REGISTRY[name].descriptor.agentRisk;
       byRisk.set(risk, [...(byRisk.get(risk) ?? []), name]);
     }
-    // The two M4 view names (2026-10-08) carry `read` too: they are ephemeral, so
+    // The two binder/corkboard view names carry `read` too: they are ephemeral, so
     // the gate has nothing to protect and an agent may move the binder's cursor.
     expect(byRisk.get('read')).toEqual([
       'view.setSelection',

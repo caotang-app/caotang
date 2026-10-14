@@ -1,5 +1,5 @@
 /**
- * m9 (project export): the image files of a project survive the `.caotang` byte-for-byte (project-format.md §7,
+ * Project export: the image files of a project survive the `.caotang` byte-for-byte (project-format.md §7,
  * storyboard.md §2.2). The old bundle decoded every entry as text, so a PNG came back changed and longer; this pins that
  * the bytes an asset was written with are the bytes an import reads back, including the bytes UTF-8 cannot carry.
  */

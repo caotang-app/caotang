@@ -1,7 +1,7 @@
 /**
- * `@caotang/exporter` — the M9 compile pipeline ([exporter.md](../../../docs/architecture/exporter.md)):
+ * `@caotang/exporter` — the compile pipeline ([exporter.md](../../../docs/architecture/exporter.md)):
  * select → flatten → render → emit, with the Markdown, plain-text, DOCX and EPUB renderers, and the
- * media-track formats of media-track M6 (`media.ts`): screenplay Fountain and FDX, the dialogue table and
+ * media-track formats of the one-source compile (`media.ts`): screenplay Fountain and FDX, the dialogue table and
  * compiled Ink, the storyboard shot list, and the video prompt pack.
  *
  * The store never imports this package. The app builds one exporter over the
@@ -46,7 +46,7 @@ export { createExporter, EXPORT_MIME, recipesOf, type ExportDispatch, type Expor
 export { assetRecordsOf, exportMetadataOf } from './export-metadata.js';
 export { flatten, documentLabel, type FlattenOptions, type FlattenResult } from './flatten.js';
 export { renderMedia, type MediaFile, type MediaOutput, type MediaRequest } from './media.js';
-// The coherence report's renderers (media-track M6, Review). The compile reaches them through `renderMedia`.
+// The coherence report's renderers (the one-source compile's Review row). The compile reaches them through `renderMedia`.
 export {
   COHERENCE_JSON_MIME,
   COHERENCE_MARKDOWN_MIME,

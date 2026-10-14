@@ -35,8 +35,8 @@
  * `require`, with **no `browser` key**, so the browser build is what you get by
  * *not* matching `node`. That makes the guarantee "no resolver sets the `node`
  * condition" — and this repository's test environment sets it (`vitest.config.ts`
- * is `environment: 'node'`, because M0's exit criterion is "mock provider
- * importable headless").
+ * is `environment: 'node'`, because the mock provider must be importable
+ * headless).
  *
  * Measured here rather than assumed, on fflate 0.8.3:
  *
@@ -101,7 +101,7 @@ const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8', { fatal: false });
 
 /**
- * The import's entry decoder, and the fix the note above asked for (B-debt item 8).
+ * The import's entry decoder, and the fix the note above asked for.
  *
  * An entry that is valid UTF-8 is text and goes in as text; one that is not is
  * binary and goes in as its bytes, so nothing is replaced. `ignoreBOM` keeps a
@@ -154,8 +154,7 @@ export const ZIP_ENGINE = {
 } as const;
 
 /**
- * The bundle's file extension, §7: `<project-name>.caotang` (the owner's decision,
- * docs/decisions.md).
+ * The bundle's file extension, §7: `<project-name>.caotang` (docs/decisions.md).
  */
 export const BUNDLE_EXTENSION = '.caotang';
 
@@ -269,12 +268,12 @@ export function bundleStem(name: string, projectId: string): string {
     // exactly as it flags the literal bytes — measured, both forms, ESLint
     // 10.11.0, docs/decisions.md. It is a true positive, so the
     // suppression stays and says why; the alternative spellings that silence it
-    // are recorded in the same entry. What an earlier change changed is that the regex is
+    // are recorded in the same entry. The regex is
     // written in escapes, because the literal-byte spelling made this whole
     // file binary-classified and therefore invisible to `rg` and to the Grep
     // tool — see test/searchable-sources.test.ts.
     //
-    // A review measured what the rule actually *reports*, which
+    // What the rule actually *reports*, which
     // the lines above do not say: it names only `\x00, \x1f`, and a class of
     // `\u007f` alone is clean in both spellings. So the suppression is justified
     // by the C0 members alone, and **DEL is in this class on no lint's
@@ -305,7 +304,7 @@ export function bundleFilename(name: string, projectId: string): string {
  * writer's abandoned drafts into the artefact they send to someone else. The
  * current manifest is always in the bundle, so nothing the ladder could recover
  * is lost from the project itself — only the ability to walk *back* to a draft
- * the writer has already superseded, which is local to their machine.
+ * the writer has already replaced, which is local to their machine.
  *
  * This is a filter over the assembled file set rather than a `remove` loop, and
  * that is deliberate: {@link exportProjectZip} assembles into a **fresh**

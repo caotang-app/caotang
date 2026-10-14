@@ -1,11 +1,11 @@
 /**
- * The §3.3 mdast handler table — **the M5 editor's own**, transcribed from
+ * The §3.3 mdast handler table — **the editor's own**, transcribed from
  * [editor-engine.md] §3.3, the exact class and the degrade class.
  *
  * §3.3 classifies *every* mdast type. This table registers handlers for the
  * **exact class** and for the **degrade rows §3.3 assigns a code to**, and lets
  * the library's own defaults handle the rest. The product and the audit keep
- * **separate** tables — an earlier change registered the
+ * **separate** tables — the audit registers the
  * exact class only so its measured diff would be a diff against the *library*,
  * and a degrade handler written there would replace the behaviour under test
  * with Caotang's intent, which measures nothing. The gap between the two tables
@@ -188,7 +188,7 @@ export const STRINGIFY_OPTIONS = CANONICAL_STRINGIFY_OPTIONS;
  * The library cannot produce it. `mdast-util-to-markdown@2.1.3`'s `hardBreak`
  * returns the two-character string `"\\\n"` unconditionally, and this version has
  * **no** `hardBreakEscape` option to change it — so without an override every line
- * break Caotang writes came out as a backslash break, and the C16 preflight recorded
+ * break Caotang writes came out as a backslash break, and the Tiptap preflight recorded
  * that spelling as the canonical dialect rather than as a divergence (§2.1's
  * result table, `hard-break-two-space` → *"byte-normalized to the canonical
  * dialect spelling"*). Measured: a two-space input came back as a backslash, and
@@ -202,8 +202,7 @@ export const STRINGIFY_OPTIONS = CANONICAL_STRINGIFY_OPTIONS;
  * `mdast-util-to-markdown` **merges** `options.handlers` into its defaults rather
  * than replacing them (`configure.js`, `case 'handlers': map(…)` → `Object.assign`),
  * so it adds the §3.3 spelling without touching the other **19** of the library's
- * **20** default handlers. Measured 2026-10-04 18:0x, which corrected
- * this line's own "25": the figure was never re-run, and `Object.keys(defaultHandlers)`
+ * **20** default handlers. Measured: `Object.keys(defaultHandlers)`
  * on 2.1.3 returns 20 — `blockquote, break, code, definition, emphasis, hardBreak,
  * heading, html, image, imageReference, inlineCode, link, linkReference, list, listItem,
  * paragraph, root, strong, text, thematicBreak`. The merge itself was also confirmed
@@ -219,10 +218,10 @@ export const TWO_SPACE_HARD_BREAK = '  \n';
  * override §3.3's `break` row requires. It lives here, beside the options, and
  * not in `pipeline.ts` because **two modules have to render with it and they must
  * not be able to disagree**: the save, and §5's dialect sniffer, which compares a
- * block's source spelling against what a save would write. When the sniffer used
- * the five bare options while the save used these, the channel reported a
- * two-space line break as foreign — measured, a *canonical* document produced one
- * notice while its bytes never changed. A notice is a statement about this
+ * block's source spelling against what a save would write. A sniffer using the
+ * five bare options while the save uses these reports a two-space line break as
+ * foreign — measured, a *canonical* document produces one notice while its bytes
+ * never change. A notice is a statement about this
  * product's dialect, so a second chain with different options is not a
  * simplification, it is a false positive waiting for a reader to act on.
  *
@@ -230,13 +229,10 @@ export const TWO_SPACE_HARD_BREAK = '  \n';
  * call site.** `test/dialect.test.ts` asserts the *contents* of this object (that
  * it carries §5's five values and §3.3's `break` override), which every chain
  * passes whether it is handed this object or another one with the same values.
- * The disagreement itself is caught by four behavioural tests, none of them the
- * one that used to be named for it: pointing the sniffer's chain at the five bare
+ * The disagreement itself is caught by four behavioural tests: pointing the sniffer's chain at the five bare
  * `CANONICAL_STRINGIFY_OPTIONS` fails **2** (§5's line-break test and the §13
  * sweep), and pointing the *save*'s chain at them fails **4** (those two plus
- * `pipeline.test.ts`'s two hard-break tests). Corrected 2026-10-05 (10:0x) by
- * which also corrected the same claim in docs/decisions.md
- * (17:0x): the guarantee is real and the attribution for it was not.
+ * `pipeline.test.ts`'s two hard-break tests).
  *
  * **What is *not* held is the identity, and it cannot be: a copy with identical
  * contents leaves all 187 tests green** (measured — `{ ...SAVE_STRINGIFY_OPTIONS }`),
@@ -427,8 +423,7 @@ const warn = (
  * `emphasis` → `em`, `strong` → `strong`, `delete` → `strike`, per §3.2 and §3.3's
  * `delete` row.
  *
- * **Why `link` is not here — corrected.** The
- * original comment gave one reason, *"`link` carries `href`/`title`, so two links
+ * **Why `link` is not here.** One reason is *"`link` carries `href`/`title`, so two links
  * are interchangeable only when their attributes are equal"*, and that is a real
  * property of the mark and **not the operative one**: **CommonMark does not let
  * a link contain a link**, so the hypothetical it rules out cannot be written.

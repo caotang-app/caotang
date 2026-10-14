@@ -16,7 +16,7 @@
  *   not an element, so a transition after one goes before the break.
  *
  * Annotations do not print: a boneyard or a note is removed from every line (`printedText`).
- * Dual dialogue (`NAME ^`) lays out in sequence; side-by-side columns are not drawn (knownGaps).
+ * Dual dialogue (`NAME ^`) lays out in sequence; side-by-side columns are not drawn (a known gap).
  *
  * Estimates (screenplay.md §2.2, §5.2): a page count is the pagination's own count, and one page is
  * about one minute of screen time. The minute figure is an estimate, never a
@@ -30,7 +30,7 @@ import type { ScreenplayElement } from './types.js';
  * The layout constants (screenplay.md §5.3): 12pt Courier, US Letter, 1.5in left margin,
  * 1.0in elsewhere, single-spaced. All horizontal values are in characters from the left
  * margin, all vertical values in points. Courier Prime (A3) is metrically the same as
- * Courier, so the layout does not change when the embedded font lands with C28.
+ * Courier, so the layout does not change when the embedded font lands with the PDF library.
  */
 export const LAYOUT = Object.freeze({
   pageWidth: 612,
@@ -41,7 +41,7 @@ export const LAYOUT = Object.freeze({
   marginBottom: 72,
   charWidth: 7.2,
   lineHeight: 12,
-  /** (792 - 72 - 72) / 12. The spec's "~55" is this figure for its own margins. C28 calibrates it. */
+  /** (792 - 72 - 72) / 12. The spec's "~55" is this figure for its own margins. The PDF-library benchmark calibrates it. */
   linesPerPage: 54,
   /** The text width in characters: (612 - 108 - 72) / 7.2. */
   columns: 60,
@@ -235,7 +235,7 @@ function sentenceCuts(text: string): number[] {
 /**
  * The place to break a block whose rows from `at` have `room` rows of page: the last sentence end
  * that fits, after its row or inside it. Null when no sentence end fits (the speech then splits at
- * the page edge, knownGaps).
+ * the page edge, a known gap).
  */
 function breakIn(rows: readonly BlockRow[], at: number, room: number): { readonly row: number; readonly cut: number | null } | null {
   if (room < 1) return null;
@@ -480,7 +480,7 @@ class Pager {
     for (let i = from; i < to; i++) {
       const row = rows[i];
       if (row === undefined) continue;
-      // Only an oversized block reaches the foot here, and it splits at the page edge (knownGaps).
+      // Only an oversized block reaches the foot here, and it splits at the page edge (a known gap).
       if (this.free() === 0) this.newPage();
       this.textLine(row.para, row.text, false);
     }
@@ -579,7 +579,7 @@ class Pager {
       });
     }
     const head = rowsOf(lead) + (cue.blankBefore ? 1 : 0) + cue.lines.length + rowsOf(parens);
-    // A head this tall leaves no room for the rules, so it is laid as text and the page edge splits it (knownGaps).
+    // A head this tall leaves no room for the rules, so it is laid as text and the page edge splits it (a known gap).
     if (head + 2 > LAYOUT.linesPerPage) {
       this.placeAtomic([...lead, cue, ...parens, ...items, ...trailer]);
       return;
@@ -608,7 +608,7 @@ class Pager {
       const found = breakIn(rows, at, room);
       let next: number;
       if (found === null) {
-        // No sentence end fits on this page, so the speech splits mid-sentence (knownGaps).
+        // No sentence end fits on this page, so the speech splits mid-sentence (a known gap).
         next = Math.max(at + 1, Math.min(rows.length - 1, at + room));
         if (next >= rows.length) {
           this.placeRows(rows, at, rows.length);

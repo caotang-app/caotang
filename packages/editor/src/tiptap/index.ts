@@ -3,7 +3,7 @@
  *
  * It is not re-exported from `@caotang/editor`, and that is the point of the split. The
  * barrel must stay importable without an engine, a DOM or a store, and `EditorApi`
- * (§4) is the headless half of M5 for exactly that reason. Everything here needs a
+ * (§4) is the headless half of the editor for exactly that reason. Everything here needs a
  * DOM, `@tiptap/core` and `@caotang/store`, so it is a separate door.
  */
 export { createTiptapEditorApi, StaleMountError, UnsavedEditsError } from './adapter.js';

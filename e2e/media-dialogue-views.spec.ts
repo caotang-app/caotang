@@ -1,6 +1,6 @@
 /**
- * The dialogue view as a writer reads it (dialogue-narrative.md §3 and §5): a choice's label is drawn on its arrow (M2), a compile error
- * names its line once (L6), and a codex alias clears a speaker finding in the open container at once, with no edit to the Ink text (L7).
+ * The dialogue view as a writer reads it (dialogue-narrative.md §3 and §5): a choice's label is drawn on its arrow, a compile error
+ * names its line once, and a codex alias clears a speaker finding in the open container at once, with no edit to the Ink text.
  * The tests read the view through what is on screen, as a writer does, and make the codex change through the codex panel.
  */
 
@@ -29,7 +29,7 @@ async function dialogueWith(page: Page, ink: string): Promise<void> {
   await waitForSaved(page);
 }
 
-test('a choice is drawn as a label on its arrow, and the choices list keeps the whole label (M2)', async ({ page }) => {
+test('a choice is drawn as a label on its arrow, and the choices list keeps the whole label', async ({ page }) => {
   await dialogueWith(
     page,
     ['=== start ===', 'Mara: Which way?', '* [Left] -> left', '* [Right] -> right', '=== left ===', 'Mara: Left, then.', '-> END', '=== right ===', 'Mara: Right, then.', '-> END', ''].join('\n'),
@@ -54,7 +54,7 @@ test('a choice is drawn as a label on its arrow, and the choices list keeps the 
   await expect(view.getByRole('list', { name: 'Choices' }).getByText('“Left” → left')).toBeVisible();
 });
 
-test('a compile error names its line once, in the words the view uses for every line (L6)', async ({ page }) => {
+test('a compile error names its line once, in the words the view uses for every line', async ({ page }) => {
   await dialogueWith(page, ['=== start ===', 'Mara: Hello.', '-> nowhere', ''].join('\n'));
   const alert = page.getByRole('alert', { name: 'Compile errors' });
   await expect(alert).toBeVisible();
@@ -64,7 +64,7 @@ test('a compile error names its line once, in the words the view uses for every 
   expect(first.match(/line \d+/g)).toHaveLength(1);
 });
 
-test('a codex alias clears the open container’s speaker finding at once, with no edit to the text (L7)', async ({ page }) => {
+test('a codex alias clears the open container’s speaker finding at once, with no edit to the text', async ({ page }) => {
   // The top of the body diverts to the knot, so the knot is reached and the speaker is the only finding the container has.
   await dialogueWith(page, ['-> start', '=== start ===', 'Elena: It is me.', '-> END', ''].join('\n'));
   const view = page.getByRole('region', { name: `Dialogue: ${DIALOGUE}` });
@@ -86,10 +86,10 @@ test('a codex alias clears the open container’s speaker finding at once, with 
   await expect(view.getByText('No loose end, dead end or unknown speaker in this container.')).toBeVisible();
 });
 
-test('the Inspector’s findings count of a container follows a codex alias at once, as the view does (L7)', async ({ page }) => {
+test('the Inspector’s findings count of a container follows a codex alias at once, as the view does', async ({ page }) => {
   await dialogueWith(page, ['-> start', '=== start ===', 'Elena: It is me.', '-> END', ''].join('\n'));
   await binderTitle(page, DIALOGUE).click();
-  // The container settings show the structure of the Ink text, and its findings count is the one the Inspector kept stale (L7).
+  // The container settings show the structure of the Ink text, and its findings count is the one the Inspector kept stale.
   const findings = page
     .getByRole('complementary', { name: 'Inspector' })
     .getByTestId('dialogue-meta')

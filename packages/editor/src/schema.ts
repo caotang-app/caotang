@@ -1,11 +1,11 @@
 /**
- * The §3 Caotang ProseMirror schema — **the M5 editor's own schema**, transcribed
+ * The §3 Caotang ProseMirror schema — **the editor's own schema**, transcribed
  * from [editor-engine.md] §3.1 (nodes) and §3.2 (marks).
  *
  * ## Why this file is a second copy, on purpose
  *
  * `packages/editor-audit/src/schema.ts` is a byte-for-byte transcription of the
- * same two tables, written as the minimum surface the C16 fixture
+ * same two tables, written as the minimum surface the preflight fixture
  * corpus needs in order to run at all. The two are **kept apart deliberately**,
  * and:
  *
@@ -19,8 +19,8 @@
  *   compares them **behaviourally** (names, attrs, content expressions) and never
  *   by `===`, which a shared object would pass by construction.
  *
- * Two `Schema` instances in one tree is correct, not a compromise. An earlier change
- * shipped the same shape when it asserted the two `fflate` builds are *different
+ * Two `Schema` instances in one tree is correct, not a compromise. The editor audit
+ * has the same shape where it asserts the two `fflate` builds are *different
  * objects*, and the duplication is the maintenance cost that buys the audit the
  * only capability it needs: the ability to report the product wrong.
  *
@@ -42,8 +42,8 @@
  *    ProseMirror whatever the prose says, so the transcription was not faithful:
  *    with a default, `create()` accepts an image node with no `src` at all.
  * 3. **`paragraph`/`heading` are `inline*` and `code_block` is `text*`**, where
- *    §3.1's Content column read `inline+` and `text`. Both were measured before
- *    the spec was corrected, and neither is a preference:
+ *    a literal reading of §3.1 would be `inline+` and `text`. Both are measured,
+ *    and neither is a preference:
  *    - `code_block: 'text'` is **not a ProseMirror schema at all** — the
  *      constructor throws *"Only non-generatable nodes (text) in a required
  *      position (in content expression 'text')"*. Read literally, §3.1 made
@@ -74,7 +74,7 @@ export const caotangSchema = new Schema({
     // Tiptap's `bulletList` / `orderedList`. §3.1 is the contract, the §3.3
     // handler table is keyed on these names, and Tiptap's StarterKit is not what
     // builds this schema (that is §10's extension set, and it lands with §4's
-    // adapter — M5 slice 2, not here).
+    // adapter, not here).
     bullet_list: { group: 'block', content: 'list_item+', defining: true },
     ordered_list: {
       group: 'block',

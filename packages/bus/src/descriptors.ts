@@ -15,20 +15,16 @@
  * | cycle check + manuscript-root invariant, in `validate` | command-bus §9 `binder.move` |
  *
  * **These are `validate` only — none of them has an effect in this package.** §3's
- * pipeline and the undo groups are an earlier change (the gate) and an earlier change (2026-10-02: `execute()`,
+ * pipeline and the undo groups live in `pipeline.ts` and `undo.ts` (`execute()`,
  * the group store, the log); the three `view.*` applies ship because §2
  * makes their effect ephemeral UI state — they need no store, and they are the
  * pipeline's non-vacuous case. Every project apply is store-side, and by
  * necessity rather than by phase: §1 says the bus does not own project state.
- * An earlier change shipped the five `inverse` names in
- * `packages/store/src/commands.ts`; an earlier change (`compensable` text) and an earlier change
- * (`codex.upsert` + `project.deleteNode`) followed it — **corrected 2026-10-03
- * 18:0x, which found this paragraph still saying they "are still to
- * come" five commits after both landed.** The store's
- * `createProjectCommandRegistry()` now carries **sixteen** of §9's eighteen names
- * (asserted by `expect(implemented).toHaveLength(16)` in
- * `packages/store/test/commands.test.ts` — measured, not counted here); the two
- * left are M9's exports. `registry.ts`'s `resolveCommand` still refuses any name
+ * The project applies (`inverse`, `compensable`, `codex.upsert`,
+ * `project.deleteNode` and the rest) are in `packages/store/src/commands.ts`, and
+ * `packages/store/test/commands.test.ts` asserts how many the store's
+ * `createProjectCommandRegistry()` implements — measured, not counted here; the
+ * names left without an exporter are the two exports. `registry.ts`'s `resolveCommand` still refuses any name
  * with no effect loudly, which for the bus is all of them, because §1 puts the
  * applies in the store.
  */
@@ -110,7 +106,7 @@ import {
 } from './coherence.js';
 
 /**
- * project-format.md §2's node limits, **exported** (B-debt item 8), for the same
+ * project-format.md §2's node limits, **exported**, for the same
  * reason as the codex limits above: the manifest validator in `@caotang/store` quotes
  * the same numbers, and one constant is the only way the two cannot drift.
  */
@@ -179,7 +175,7 @@ const PATCH_KEYS = ['status', 'label', 'keywords_add', 'keywords_remove'];
  * fields; this narrows the same way, so the returned value is provably a
  * `CodexUpsertOp` rather than asserted to be one.
  *
- * `origin` is the load-bearing one: D5 (2026-09-12) makes provenance
+ * `origin` is the load-bearing one: codex.md §2 makes provenance
  * harness-owned and ranks hand-authored above agent-inferred, so an agent must
  * not be able to stamp its own provenance by naming the field.
  *
@@ -397,7 +393,7 @@ const MANUSCRIPT_ID = 'manuscript';
  */
 export const CHAPTERLESS_DOCUMENT_REFUSAL = 'A document goes inside a chapter, not directly under the manuscript.';
 
-/** The node types `binder.create` takes: the two prose types, and the two media types (media-track M1-M3). */
+/** The node types `binder.create` takes: the two prose types, and the two media types (screenplay, branching dialogue, storyboard). */
 const BINDER_CREATE_TYPES = ['folder', 'document', 'shot', 'dialogue'] as const;
 
 /**
@@ -691,11 +687,9 @@ function requireLoadedBody(
 /**
  * Parse §6's `expectedRevision` — **and nothing else**.
  *
- * An earlier change wrote this helper with a pointer: *"§6's revision **comparison** is an earlier change
- * checks only that it is a number."* That comparison landed in `pipeline.ts`
- * not here, and the pin in `test/validate.test.ts` that says `validate`
- * does **not** compare is still the true one — so this helper's contract is now
- * settled rather than pending: it parses, the pipeline compares.
+ * The revision **comparison** lives in `pipeline.ts`, not here, and the pin in
+ * `test/validate.test.ts` says `validate` does **not** compare — so this
+ * helper's contract is: it parses, the pipeline compares.
  *
  * Keeping the parse here and the compare there is what makes the rule single.
  * A check inside `validate` would be a second implementation of "which commands
@@ -864,7 +858,7 @@ function validateCodexOp(
     const r = invalid(
       `${undeclared.map((key) => `"${key}"`).join(', ')} ${undeclared.length === 1 ? 'is' : 'are'} not ${undeclared.length === 1 ? 'a field' : 'fields'} a codex.upsert entry carries`,
       // `origin` is named explicitly rather than lumped in with the rest: an
-      // agent reaching for it is trying to stamp provenance, and D5 makes that
+      // agent reaching for it is trying to stamp provenance, and codex.md §2 makes that
       // harness-owned. Saying so is the difference between a correction and a
       // retry.
       undeclared.includes('origin')
@@ -893,7 +887,7 @@ function validateCodexOp(
   } else if (id !== undefined) {
     // A create mints its own id (the store does, from the same generator as
     // every node and codex id). An id the caller sends on a create was accepted
-    // and then dropped, which is the silent drop an earlier change closed for every other
+    // and then dropped, which is the silent drop the closed params surface refuses for every other
     // field; so it is refused, and the message says which of the two cases it is.
     const taken = typeof id === 'string' ? snapshot.manifest.codex?.find((entry) => entry.id === id) : undefined;
     push(taken !== undefined
@@ -911,8 +905,8 @@ function validateCodexOp(
 
   const name = op['name'];
   if (name === undefined && action === 'create') {
-    // codex.md §2: "Required, non-empty after trim." an earlier change cut the nameless create
-    // as an apply-side default; the rule is the validator's, and it is here.
+    // codex.md §2: "Required, non-empty after trim." A nameless create is not
+    // given an apply-side default; the rule is the validator's, and it is here.
     push(invalid(
       'name is required on create — codex.md §2 requires a non-empty name, and an entry without one cannot be found',
       'pass a name for the new entry',
@@ -923,7 +917,7 @@ function validateCodexOp(
     if (typeof name !== 'string') {
       push(invalid(`name must be a string, got ${typeof name}`));
     } else if (name.trim().length === 0) {
-      // codex.md §2, verbatim: "**Required, non-empty after trim.**" an earlier change — the
+      // codex.md §2, verbatim: "**Required, non-empty after trim.**" Without this branch the
       // op validator checked the length ceiling and the case-insensitive
       // collision map but never this half, so an entry could be created with a
       // blank name and the map would treat it as a name like any other. The
@@ -1003,7 +997,7 @@ function validateCodexOp(
 
   // codex.md §2: at most CODEX_SOURCES_MAX citations, each a real document with a
   // verbatim quote of ≤ 300 chars and in-range offsets. An update's citations are
-  // appended to the entry's (D5: an agent update appends a source), so the cap is
+  // appended to the entry's (an agent update appends a source), so the cap is
   // checked against what the entry already holds.
   const sources = op['sources'];
   if (sources !== undefined) {
@@ -1231,10 +1225,10 @@ export const codexAttach: CommandDescriptor<CodexAttachParams> = {
  * (packages/exporter/test/export-formats.test.ts) imports this copy and asserts it
  * equals the exporter's. So every value this list accepts is one the exporter
  * renders. It is the prose formats (md, txt, docx, epub) and the media-track
- * formats the exporter ships (exporter.md §5, media-track M6): the screenplay
- * Fountain and FDX, the dialogue table and compiled Ink, the shot list, and the
- * video prompt pack. The screenplay PDF is not in it yet: it waits on the C28
- * benchmark, and the list says what is compiled, not what is planned.
+ * formats the exporter ships (exporter.md §5, one-source compile): the screenplay
+ * Fountain and FDX, the dialogue table and compiled Ink, the shot list, the
+ * video prompt pack and the coherence report. The screenplay PDF is not in it
+ * yet: it waits on a benchmark, and the list says what is compiled, not what is planned.
  */
 export const EXPORT_FORMATS = [
   'md',
@@ -1247,7 +1241,7 @@ export const EXPORT_FORMATS = [
   'dialogue-csv',
   'shot-list-csv',
   'promptpack',
-  // m8 (media-track M6, Review): the coherence report. Two names, appended after the ten above (ten + two = twelve).
+  // The coherence report. Two names, appended after the ten above (ten + two = twelve).
   'coherence-md',
   'coherence-json',
 ] as const;
@@ -1267,23 +1261,18 @@ export const exportCompile: CommandDescriptor<ExportCompileParams> = {
   mutates: 'project',
   agentRisk: 'write-confirm',
   undo: 'compensable',
-  // **The whole manuscript** (the owner's decision) — no scope field is declared,
-  // and a scope field the caller passes is **refused**, not dropped
-  // (measured 2026-10-02: `includeRootIds`, and the pre-split
-  // `selection`, both used to come back as `ok` carrying `format` alone). A
+  // **The whole manuscript** — no scope field is declared,
+  // and a scope field the caller passes (`includeRootIds`, `selection`) is
+  // **refused**, not dropped as an `ok` carrying `format` alone. A
   // caller reaching for a scope field here is expressing an intent this name
   // cannot mean, and the refusal says so in one round trip instead of compiling
   // the whole manuscript for a request about a part of it — which is the one
   // outcome §9's two-row split exists to prevent.
   // Shape only. exporter.md §2's format enum joins the media track post-v0.1,
-  // so the enum is M9's — but **"any string" is not the same claim as "any
-  // non-blank string"**, and an earlier change closes that half now: `format: ''` and
-  // `format: '   '` named no format at all, while the sibling `recipeName` one
-  // line below already refused a blank. The pair disagreed on the same question
-  // one line apart, and the row's own phrase was the tell — a review called this one
-  // falling out of the enum deferral "rather than being chosen", which is exactly
-  // right about the *enum* and exactly wrong about the *blank*: no enum choice
-  // makes an empty format meaningful.
+  // so the enum is the exporter's — but **"any string" is not the same claim as
+  // "any non-blank string"**: `format: ''` and `format: '   '` name no format at
+  // all, and the sibling `recipeName` one line below refuses a blank too. No enum
+  // choice makes an empty format meaningful.
   // A recipe name is checked here too: a name the project does not hold is not-found at validate, before the exporter
   // would refuse it at apply, so the refusal comes back with the same corrective text as `recipe.delete`'s.
   validate: (params, snapshot) => {
@@ -1326,7 +1315,7 @@ export const exportCompileSelection: CommandDescriptor<ExportCompileSelectionPar
   mutates: 'project',
   agentRisk: 'write-confirm',
   undo: 'compensable',
-  // **A part** (the owner's decision) — the sibling of `export.compile` above,
+  // **A part** — the sibling of `export.compile` above,
   // split by scope so neither call can mean the other.
   // `recipeName` supplies the options a part compiles with, so the dialog's title page, contents and author apply to a
   // single item. The recipe's own selection is not read: the part is the nodes it names.
@@ -1437,9 +1426,9 @@ export const viewSetActiveDoc: CommandDescriptor<ViewSetActiveDocParams> = {
   validate: (params) => {
     const p = requireDeclaredParams('view.setActiveDoc', params);
     if (!p.ok) return p;
-    // This check used to be `docId.value.length === 0`, which refused
-    // `docId: ''` and **accepted `docId: '   '`** — the row's own title, verbatim:
-    // a blank string accepted where the sibling check refuses one. A focus
+    // A blank id is refused, not only an empty one: a length check alone would
+    // refuse `docId: ''` and **accept `docId: '   '`**, a blank string accepted
+    // where the sibling check refuses one. A focus
     // request naming three spaces is the same "no node was named" outcome the
     // empty-string refusal exists to stop, and it is the view command a user
     // reaches for first, so it is the one where a wrong id is least visible.
@@ -1467,7 +1456,7 @@ export const viewSetScroll: CommandDescriptor<ViewSetScrollParams> = {
 };
 
 /*
- * M4 (2026-10-08): the two view names the UI spec needs. Shape only, like the three
+ * The two view names the UI spec needs. Shape only, like the three
  * above — a folder that has since been deleted is a stale expansion flag, not a
  * refusal, and the binder ignores it at render time.
  */

@@ -35,7 +35,7 @@ async function openedOf(outcome: Promise<OpenOutcome>): Promise<Opened> {
 }
 
 /**
- * m9 (project export), below the browser: the cover image lives in the project's asset store, and the three places that
+ * Project export, below the browser: the cover image lives in the project's asset store, and the three places that
  * touch it agree. A bundle carries it and an import brings it back; a folder keeps it and a reopen reads it; a folder that
  * would overwrite it is refused. The EPUB is what a writer receives, so each check reads the package document it carries.
  *

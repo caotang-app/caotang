@@ -1,5 +1,5 @@
 /**
- * M9's two export applies — `export.compile` and `export.compileSelection` — in the
+ * The two export applies — `export.compile` and `export.compileSelection` — in the
  * store's registry.
  *
  * The store must not import the exporter (the exporter imports the store), so these
@@ -147,9 +147,9 @@ describe('registration — the two names are implemented only with an exporter',
     expect(registry['export.compile'].apply).toBeUndefined();
     expect(registry['export.compileSelection'].apply).toBeUndefined();
     const implemented = Object.values(registry).filter((entry) => entry.apply !== undefined);
-    // Everything but the two export names (commands.test.ts). m8's three coherence applies (two mutations and the run
-    // discard) are among them, since they need no exporter; m9 adds six and m4-furniture four: 21 + 6 + 4 = 31. m6-script
-    // adds three more (the two imports and the container settings): 31 + 3 = 34.
+    // Everything but the two export names (commands.test.ts). The three coherence applies (two mutations and the run
+    // discard) are among them, since they need no exporter; project export adds six and saved filters and goals four:
+    // 21 + 6 + 4 = 31. The script imports add three more (the two imports and the container settings): 31 + 3 = 34.
     expect(implemented).toHaveLength(34);
   });
 

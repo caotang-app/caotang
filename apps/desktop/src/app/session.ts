@@ -298,9 +298,9 @@ export class ProjectSession {
   private detachCoherenceFlush: () => void = () => undefined;
   private readonly onClosed: (() => void) | undefined;
   /** The project as it stood when the writer last had a copy of it (`markExported`), as a signature (`changedSinceExport`). */
-  /** r6: the images the open dropped because `assets/` does not hold them, one line each. Shown on the storyboard. */
+  /** The images the open dropped because `assets/` does not hold them, one line each. Shown on the storyboard. */
   private imageDropNotes: readonly string[] = [];
-  /** r6: the open's image check runs once, at the first settle, after the bundle's images and the folder are in. */
+  /** The open's image check runs once, at the first settle, after the bundle's images and the folder are in. */
   private imagesChecked = false;
   private exportBaseline: string | null = null;
   /** What the open folder's copy said when this session last loaded it or saved to it, and the folder it was in (`setFolderBaseline`). */
@@ -320,7 +320,7 @@ export class ProjectSession {
     this.backfilled = backfillProjectIdentity(this.state.manifest);
 
     this.assets = options.assets ?? new ProjectAssets();
-    // r6: the browser's copy of the project's images, so a reopened project's images read back after a reload. Every read and
+    // The browser's copy of the project's images, so a reopened project's images read back after a reload. Every read and
     // write of the assets waits for this binding (project-assets.ts), so nothing is written to a store that is not yet bound.
     void this.assets.persistFor(options.projectId);
     this.exporterService = exporterFor(() => this.state, this.exports, this.assets, () => this.imagesForExport());
@@ -1082,7 +1082,7 @@ export class ProjectSession {
 
   /**
    * Records that this project is a separate copy of the project `originalId`, made with a fresh id because the original was already in this
-   * browser (lifecycle `adopt`). A save into a folder holding the original is refused (lifecycle `saveFolder`, DS-2).
+   * browser (lifecycle `adopt`). A save into a folder holding the original is refused (lifecycle `saveFolder`).
    */
   setCopiedFrom(originalId: string): void {
     this.copiedFromId = originalId;
@@ -1099,7 +1099,7 @@ export class ProjectSession {
   }
 
   /**
-   * The body nodes (documents and dialogue containers, DS-3) the folder's copy named that this session has since deleted: the only
+   * The body nodes (documents and dialogue containers) the folder's copy named that this session has since deleted: the only
    * files a save to that folder may remove. A file the session never owned is not in this list, so it is never removed. The caller
    * asks only about the folder the copy is for (lifecycle `saveFolder`).
    */

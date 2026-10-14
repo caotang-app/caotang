@@ -27,7 +27,7 @@ function mapOf(id: string, ref: VideoShotRef, references: readonly ResolvedRefer
   return template.map(ref, { references });
 }
 
-describe('the closed set of templates (video-prompt-pack.md §5, A4)', () => {
+describe('the closed set of templates (video-prompt-pack.md §5)', () => {
   it('ships the six vendors the spec names, in the spec order', () => {
     expect(VIDEO_TEMPLATE_IDS).toEqual(['runway-gen4', 'veo-3.1', 'kling-2.6', 'sora-2', 'wan-2.6', 'seedance-2.5']);
   });
@@ -44,9 +44,9 @@ describe('the closed set of templates (video-prompt-pack.md §5, A4)', () => {
     }
   });
 
-  it('marks every template provisional until C29 verifies its payload and best-take fields (§9, A3)', () => {
+  it('marks every template provisional until its payload and best-take fields are checked against the vendor documentation (§9, A3)', () => {
     for (const template of VIDEO_TEMPLATES) {
-      expect(template.provisional ?? '', template.id).toMatch(/payload field names.*best-take fields.*C29/);
+      expect(template.provisional ?? '', template.id).toMatch(/payload field names.*best-take fields are unverified until they are checked against/);
     }
   });
 });

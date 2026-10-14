@@ -4,7 +4,7 @@
   "license": "MIT",
   "private": true,
   "type": "module",
-  "description": "Dialogue and game narrative — Ink branching, the line-ID table, the Ink compile gate and the dialogue harness tools (dialogue-narrative.md, M2)",
+  "description": "Dialogue and game narrative — Ink branching, the line-ID table, the Ink compile gate and the dialogue harness tools (dialogue-narrative.md)",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {

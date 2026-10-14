@@ -1,7 +1,7 @@
 # Goals & progress — session targets, project goals, stats surfaces (v1)
 
 > Status: built.
-> Cross-refs: `sessions.jsonl` = [project-format.md](project-format.md) §1/A5 · word-count pipeline = [editor-engine.md](editor-engine.md) §9 · settings = [ui-modules.md](ui-modules.md) §5 · bus registry = [command-bus.md](command-bus.md) §9 (addition).
+> Cross-refs: `sessions.jsonl` = [project-format.md](project-format.md) §1 and §9 · word-count pipeline = [editor-engine.md](editor-engine.md) §9 · settings = [ui-modules.md](ui-modules.md) §5 · bus registry = [command-bus.md](command-bus.md) §9 (addition).
 
 ## 1. Two goal kinds, deliberately separated
 
@@ -15,7 +15,7 @@ Both are **read-only derived state + tiny config**: no goal ever mutates manuscr
 ### 2.1 Session target (app settings — exists, semantics now specified)
 
 - `AppSettings.session.dailyTargetWords?: number` (clamp 0–100_000; absent = no target set).
-- **Progress** = words written **today** (**the device's local calendar day** — a browser app has no other honest timezone; assumption A3), summed from `sessions.jsonl` entries whose `endedAt` falls on today. `wordsWritten` per the A5 schema is the counted quantity.
+- **Progress** = words written **today** (**the device's local calendar day** — a browser app has no other honest timezone; assumption A3), summed from `sessions.jsonl` entries whose `endedAt` falls on today. `wordsWritten` per the `sessions.jsonl` schema (project-format §9) is the counted quantity.
 - **Display (editor status bar + binder footer):** progress ring (Ulysses' validated affordance) + "412 / 800 words today". Crossing the target flips the ring to the success color + one-shot notification (Longform's model — a gentle completion, never a nudge to keep going; no streaks, no shame mechanics in v0.1, assumption A4).
 - Mid-session target edits apply to today's display immediately (settings clamp; no history recompute).
 
@@ -25,7 +25,7 @@ Both are **read-only derived state + tiny config**: no goal ever mutates manuscr
 interface ProjectGoal {
   id: string;                    // "g_" + 10 chars Crockford base32 (same generator family)
   nodeId: string;                // manuscript root or any folder (three-tier: folders/root only — a per-scene goal is noise; Ulysses allows sheets, we restrict to folder+ for v0.1, assumption A2)
-  metric: 'words' | 'chars';     // words, or characters counted as non-whitespace code points (§9.2); pages and reading time stay out (A4)
+  metric: 'words' | 'chars';     // words, or characters counted as non-whitespace code points (§9.2); pages and reading time stay out (exporter-domain, §7)
   kind?: 'project' | 'weekly' | 'monthly';   // absent = project; weekly and monthly are session windows on the manuscript (§9.3)
   resetDay?: number | 'last';    // weekly: 0 (Sunday)–6 (Saturday); monthly: 1–28 or 'last'; absent = locale's first weekday / the 1st (§9.3)
   comparator: 'at-least' | 'at-most' | 'about';   // Ulysses' validated comparator triple, adopted verbatim
@@ -65,25 +65,25 @@ goalProgress(goal: ProjectGoal, wordsOf(nodeId: string): number): {
 
 - **Project goals:** top-level `goals[]` in `caotang.json` — **additive in format v1** (same no-wild-artifacts argument as `codex[]`/`recipes[]`/`filters[]`; loaders tolerate absence). Load-time tolerance: unknown comparator/metric → goal dropped with load warning; dangling nodeId → kept + flagged (§2.2).
 - **Session target:** app settings only (already in the typed schema — ui-modules §5.1). Never in `caotang.json` (it is writer-level, not project-level, and the no-secrets/no-cross-project-leak discipline keeps app state out of artifacts).
-- **History:** `sessions.jsonl` is the only history surface (append-only, A5 schema). No per-goal progress snapshots in v0.1 — pace is computed live. **A15(b) resolved 2026-09-17:** assumption A5's resolution is **jsonl reconstruction, zero new artifacts** — "was I on track last month" is a v0.2 UI over `sessions.jsonl` (§9); no snapshot regime is ever needed for goal history.
+- **History:** `sessions.jsonl` is the only history surface (append-only, the project-format §9 schema). No per-goal progress snapshots in v0.1 — pace is computed live. Assumption A5's resolution is **jsonl reconstruction, zero new artifacts** — "was I on track last month" is a v0.2 UI over `sessions.jsonl` (§9); no snapshot regime is ever needed for goal history.
 
 ## 4. Commands & UI
 
-**Command-bus §9 registry rows for the goals (two project commands; no agent tools — see §5; revised 2026-10-09):**
+**Command-bus §9 registry rows for the goals (two project commands; no agent tools — see §5):**
 
 | Command | Params | agentRisk | undo | Notes |
 |---|---|---|---|---|
 | `project.saveGoal` | `{goal: {id?, nodeId, metric?, kind?, resetDay?, comparator, target, deadline?, archived?}}` | write-auto | inverse | Create (an id is minted when none is given) or update by id. The bus checks the id shapes, the field types, the comparator, the per-value limits, the node the goal attaches to, and for a weekly or monthly goal the §9.3 rules and the shape of its reset day (refused at `goal.resetDay`; `null` reads as absent); the store checks the count of goals and whether the id exists, and refuses both before it writes (`packages/bus/src/descriptors-furniture.ts`). Kept in the manifest's `goals[]`. |
 | `project.deleteGoal` | `{goalId}` | write-auto | inverse | Removes a goal — metadata, not content. |
 
-**The session target is not a bus command.** The daily target is an app setting (`session.dailyTargetWords`, ui-modules §5.1), written by the settings store and read by the status bar. No agent can change it, because it is app-level state (command-bus §9). The earlier draft listed it as a command row, and that row is removed.
+**The session target is not a bus command.** The daily target is an app setting (`session.dailyTargetWords`, ui-modules §5.1), written by the settings store and read by the status bar. No agent can change it, because it is app-level state (command-bus §9).
 
 **UI surfaces:**
 
 - **Editor status bar** (exists for word counts — editor-engine §9): adds today's session ring + "412 / 800 today"; click → session-target quick-set (writes the app setting `session.dailyTargetWords`, not a command).
 - **Inspector (folder/manuscript nodes):** "Goals" section — goal rows (comparator sentence: "at least 12,000 words by Oct 31"), progress bar + pace line, Add/Edit/Remove (→ `project.saveGoal`/`project.deleteGoal`). Editing mirrors inspector edit semantics (debounced where freeform, discrete pickers for comparator/deadline).
 - **Binder footer:** active project-level goal summary (nearest deadline first) — one line, click-through to inspector.
-- **Stats surfaces (read-only, v0.1 minimum):** per-node word/char counts already rendered (binder rows, editor status bar); **project total** + today's total in the binder footer. Ulysses' six-metric statistics panel = polish backlog; pages/reading-time estimates deliberately out (metric conversions are exporter-domain, A4).
+- **Stats surfaces (read-only, v0.1 minimum):** per-node word/char counts already rendered (binder rows, editor status bar); **project total** + today's total in the binder footer. Ulysses' six-metric statistics panel = polish backlog; pages/reading-time estimates deliberately out (metric conversions are exporter-domain).
 
 ## 5. Agent integration (read-only, zero new tools)
 
@@ -98,7 +98,7 @@ goalProgress(goal: ProjectGoal, wordsOf(nodeId: string): number): {
 
 ## 7. Rejected alternatives
 
-- **Six Ulysses metrics in v0.1** — characters/sentences/paragraphs/pages/reading-time are cheap *conversions* but each adds surface (per-goal metric pickers, unit tests, UI labels) for marginal validated value; words is the writing-loop currency (sessions.jsonl counts words; targets read words). **A15(b) resolved 2026-09-17:** v0.2 menu = chars-first widening (§9); pages/reading-time stay exporter-domain.
+- **Six Ulysses metrics in v0.1** — characters/sentences/paragraphs/pages/reading-time are cheap *conversions* but each adds surface (per-goal metric pickers, unit tests, UI labels) for marginal validated value; words is the writing-loop currency (sessions.jsonl counts words; targets read words). v0.2 menu = chars-first widening (§9); pages/reading-time stay exporter-domain.
 - **Per-scene goals** — Ulysses allows sheet-level goals; for Caotang's three-tier model a per-scene goal duplicates the inspector's synopsis/word-count row and clutters the §4 inspector. Folder+ only.
 - **Streaks / gamified history** — NaNoWriMo-style streak mechanics contradict the "no meter on your writing" posture the coherence module adopted (never background-shame); completion notification only.
 - **Agent-managed goals** — registry band frozen; goals are writer intent, and an agent "helpfully" lowering a deadline is the exact automation class the 0-to-1 rule exists for.
@@ -107,11 +107,11 @@ goalProgress(goal: ProjectGoal, wordsOf(nodeId: string): number): {
 
 | # | Assumption | Status |
 |---|---|---|
-| A1 | Words-only metric covers v0.1 | Explicit; validated (A6/A8 all word-shaped); other metrics = v0.2 menu, **resolved by A15(b) (2026-09-17, §9)**: chars-first widening + weekly/monthly kinds. |
+| A1 | Words-only metric covers v0.1 | Explicit; validated (the surveyed tools' goals are all word-shaped); other metrics = v0.2 menu, **resolved (§9)**: chars-first widening + weekly/monthly kinds. |
 | A2 | Folder/root attachment (no per-scene goals) suffices | Explicit; the Ulysses sheet-goal use case maps to Caotang folder goals for all but micro-scheduling. |
-| A3 | Device-local calendar day for "today" | Explicit; a browser app cannot honestly know a preferred timezone; Tauri wrap (Phase 3) can expose a timezone setting without schema change. |
+| A3 | Device-local calendar day for "today" | Explicit; a browser app cannot honestly know a preferred timezone; a native desktop wrap (Tauri) could expose a timezone setting without schema change. |
 | A4 | No streaks/shame mechanics in v0.1 | Explicit posture; completion notification only. |
-| A5 | Live-computed pace (no snapshots) answers v0.1 | **RESOLVED 2026-09-17 (A15(b))** — the historical "was I on track" surface is a v0.2 UI over `sessions.jsonl` (jsonl reconstruction; §9); snapshots are never needed. Zero new artifacts. |
+| A5 | Live-computed pace (no snapshots) answers v0.1 | **Resolved** — the historical "was I on track" surface is a v0.2 UI over `sessions.jsonl` (jsonl reconstruction; §9); snapshots are never needed. Zero new artifacts. |
 
 ## 9. History, metrics and goal kinds
 
@@ -119,7 +119,7 @@ History, a second goal metric and the recurring goal kinds are furniture over th
 
 1. **History = a UI over `sessions.jsonl` (the binder footer's Show the history).** No new storage: the appender already captures `(startedAt, endedAt, wordsWritten, docIds[])` per session (§2.1). The **History panel** groups sessions by device-local calendar day (same A3 convention as the target reset) and renders today / daily average / daily best / last-10-days bars, each bar green on target-hit days, plus **CSV export**. Zero snapshots, zero schema change — pure derived read.
    **Today includes the open sitting.** The panel's today is the status line's figure: the sessions that ended today plus the sitting open now (`historyReading`'s `todayWords`), so the Today figure, today's bar, the average and the best agree with the status line while a sitting is open.
-2. **Metric enum widening (additive):** `metric: 'words' | 'chars'`. **Chars came first**, because whitespace-split "words" mislead for CJK manuscripts. `chars` counts non-whitespace code points, as recorded in [decisions.md](../decisions.md). The footer's goal picker sets it. `sentences` and `paragraphs` are not built. `pages`/`reading-time` stay parked as exporter-domain conversions (A4 — print-pipeline constants, not editor counts).
+2. **Metric enum widening (additive):** `metric: 'words' | 'chars'`. **Chars came first**, because whitespace-split "words" mislead for CJK manuscripts. `chars` counts non-whitespace code points, as recorded in [decisions.md](../decisions.md). The footer's goal picker sets it. `sentences` and `paragraphs` are not built. `pages`/`reading-time` stay parked as exporter-domain conversions (print-pipeline constants, not editor counts).
 3. **Goal-kind menu:** `kind: 'project' | 'weekly' | 'monthly'` and the optional `resetDay` ride the existing `ProjectGoal` shape; both are additive, written only when set. Both kinds stay. A **project** goal is a total over a node's subtree with an optional deadline. A **weekly** or **monthly** goal is a writing-pace window like the daily target: it attaches to the manuscript root, is `at-least`, counts words, takes no deadline, and counts the words written in the sessions that ended inside its window (plus the open sitting). The bus enforces its four rules and the reset day's shape (`descriptors-furniture.ts`, `sessionGoalProblem`, `resetDayProblem`), and the furniture package states the same rules (`sessionGoalProblems`).
    **Each recurring goal picks its own reset day**, and the window is fixed by it (`goalWindowOf`, both ends included, device-local days):
    - **Weekly**, reset weekday W (0 Sunday … 6 Saturday): the seven days starting on the latest W on or before today.

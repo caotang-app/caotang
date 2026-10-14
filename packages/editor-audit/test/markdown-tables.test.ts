@@ -194,7 +194,7 @@ describe('a markdown table in docs/ renders', () => {
 
 describe('the width is the table\'s own, and the escape is honoured', () => {
   it('honours an escaped pipe inside a code span — the naive-split failure', () => {
-    // A planning decision measured 31 of its 36 "broken rows" here: a well-formed row whose
+    // A naive split reported 31 of its 36 "broken rows" here: a well-formed row whose
     // cell carries `\|`. A guard that flagged this would punish the corpus for
     // writing correct markdown, and the count would rise as the docs improve.
     const f = fixture(
@@ -226,8 +226,7 @@ describe('the width is the table\'s own, and the escape is honoured', () => {
 
   it('takes each table\'s width from its own header, never a global number', () => {
     // `docs/` holds both shapes today (a 4-column queue, a 5-column scoreboard,
-    // a 2-column board), so a single hardcoded width cannot serve. An earlier change recorded
-    // the same requirement for the queue tables alone.
+    // a 2-column board), so a single hardcoded width cannot serve.
     const twoWidths = fixture(
       'widths.md',
       [

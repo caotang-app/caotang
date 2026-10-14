@@ -302,13 +302,12 @@ function validateFields(
     return { manifest: source as unknown as Manifest, errors, migrations };
   }
 
-  // Step 3's vocabulary, off `source` like every other step-3 field. A review (found
-  // 2026-09-30, fixed here 2026-10-04) had this one reading `input.vocabulary`,
-  // so after a migration the ids compared below were the *pre*-migration ones
-  // while every node validated came from the post-migration tree. The
+  // Step 3's vocabulary, off `source` like every other step-3 field. Reading
+  // `input.vocabulary` instead would, after a migration, compare the *pre*-migration
+  // ids while every node validated came from the post-migration tree. The
   // counterfactual is in `test/migration-path.test.ts`: a step that renames a
   // status term leaves the nodes pointing at an id the vocabulary no longer
-  // defines, and reading `input` is what silenced the "unknown vocabulary id"
+  // defines, and reading `input` would silence the "unknown vocabulary id"
   // warning that manifest must raise.
   const vocabulary = isRecord(source.vocabulary) ? source.vocabulary : {};
   const statusIds = new Set(
@@ -446,19 +445,17 @@ function validateFields(
  * Step 3's `codex[]` subsection — [codex.md §2's eight field contracts](docs/architecture/codex.md),
  * on the manifest.
  *
- * ## Why this was latent for two days and then was not
+ * ## Why this is not latent
  *
- * The row that cut this work said the gap was "latent … nothing in M2 can write a
- * `codex[]` entry". Measured on 2026-10-07, that is false: the `codex.upsert`
- * pushes into `state.manifest.codex` and the shipped pipeline dispatches it. A
- * create op carrying `aliases: ['Elena','elena']` and 21 `exclude` phrases —
- * both §2 violations — lands in the manifest, and every one of the 24 probed
- * violations validated **silently**. The trigger the row named (`codex.write`,
- * M6/M8) is not the first writer; §9's `codex.upsert` is.
+ * `codex.upsert` pushes into `state.manifest.codex` and the shipped pipeline
+ * dispatches it. Without this check a create op carrying `aliases:
+ * ['Elena','elena']` and 21 `exclude` phrases — both §2 violations — lands in
+ * the manifest, and every one of 24 probed violations validated **silently**.
+ * The harness's `codex.write` is not the first writer; §9's `codex.upsert` is.
  *
  * ## The shape check comes first, and it is not optional bookkeeping
  *
- * `codex` absent is fine (additive per D5); `codex` present and not an array is
+ * `codex` absent is fine (additive, codex.md §10 K4); `codex` present and not an array is
  * **fatal**, mirroring the `tree` branch. Every contract below reads
  * `entry.field`, so without this a `codex: "not-an-array"` manifest skips all
  * eight and arrives at the loader as a string where an array of entries is

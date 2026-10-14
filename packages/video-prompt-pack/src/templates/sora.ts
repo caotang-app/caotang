@@ -8,7 +8,7 @@
  * uploads that clip. The pack names the character and the file to attach.
  *
  * Sora's seed and audio are not in the evidence, so neither is sent. The size table covers the two ratios
- * the evidence documents in both resolutions. The payload names are provisional until C29.
+ * the evidence documents in both resolutions. The payload names are provisional until they are checked against the vendor's documentation.
  */
 
 import type { VideoAspectRatio, VideoResolution } from '../model.js';
@@ -25,7 +25,7 @@ function soraSize(aspect: VideoAspectRatio | undefined, resolution: VideoResolut
 export const SORA_2 = defineTemplate({
   id: 'sora-2',
   displayName: 'Sora 2',
-  provisional: 'The payload field names, the frame-size table and the best-take fields are unverified until C29 checks them against OpenAI’s Sora documentation.',
+  provisional: 'The payload field names, the frame-size table and the best-take fields are unverified until they are checked against OpenAI’s Sora documentation.',
   limits: {
     modes: ['t2v', 'i2v'],
     durations: [4, 8, 12, 16, 20],

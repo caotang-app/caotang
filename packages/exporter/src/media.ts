@@ -1,5 +1,5 @@
 /**
- * The media-track compile recipes — [media-track.md §1 M6](../../../docs/architecture/media-track.md), with
+ * The media-track compile recipes — [media-track.md §1, the one-source compile](../../../docs/architecture/media-track.md), with
  * [screenplay.md §5](../../../docs/architecture/screenplay.md), [dialogue-narrative.md §4](../../../docs/architecture/dialogue-narrative.md),
  * [storyboard.md §6](../../../docs/architecture/storyboard.md) and [video-prompt-pack.md §5](../../../docs/architecture/video-prompt-pack.md)
  * as the specs for what each format writes.
@@ -130,7 +130,7 @@ export function renderMedia(request: MediaRequest): MediaOutput {
 }
 
 /**
- * The coherence report (media-track M6, Review). It reports the project's findings file, not a selection of the
+ * The coherence report (the one-source compile's Review row). It reports the project's findings file, not a selection of the
  * manuscript, so the selection is not read: the report is always the whole file. It is written for any project,
  * including one that never ran a check, which the report says in words.
  */

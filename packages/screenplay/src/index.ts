@@ -1,14 +1,14 @@
 /**
  * `@caotang/screenplay` — the screenwriting engine, headless ([screenplay.md](../../../docs/architecture/screenplay.md),
- * media-track M1).
+ * the media track's screenplay format).
  *
  * Fountain is parsed into a located element model and serialised back. A whole script
  * imports as sections and scenes, and the scenes are paginated under the spec's constants.
  * The result renders as Fountain (identity), FDX (typed paragraphs) and PDF (paginated).
  *
- * No agent tools are exported. screenplay.md §6 adds none for M1: the screenplay workflow
+ * No agent tools are exported. screenplay.md §6 adds none for the screenplay: the screenplay workflow
  * rides the existing `scene.draft`, `doc.read`, `synopsis.fill` and `export.compile` tools.
- * The `export.compile` format enum gains `fountain | pdf | fdx` at the integration step, which
+ * The `export.compile` format enum carries the screenplay formats, which
  * belongs to the exporter and the harness, not to this package.
  *
  * Nothing here touches the editor, the store or the network. The flattened block shape is

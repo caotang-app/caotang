@@ -118,7 +118,7 @@ export const DETERMINISTIC_CHECK_LABELS: Readonly<Record<DeterministicCheckId, s
 export const LLM_CATEGORIES = ['timeline-plot', 'characterization', 'world-building', 'factual', 'narrative-style'] as const;
 export type LlmCategory = (typeof LLM_CATEGORIES)[number];
 
-/** §5.2.1: `timelineMode`. Absent means `linear`. `time-skip` is deferred to C33 and is not here. */
+/** §5.2.1: `timelineMode`. Absent means `linear`. `time-skip` is deferred until a `timeline.gap` check consumes it (§11 D12), so it is not here. */
 export const TIMELINE_MODES = [
   'linear',
   'flashback',

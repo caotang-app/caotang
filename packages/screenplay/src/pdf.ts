@@ -5,7 +5,7 @@
  * and nothing else. Caotang owns it for the same reason it owns the EPUB emitter
  * (exporter.md §3a): a dormant dependency costs more than a few hundred lines of
  * frozen-format output. The embedded Courier Prime of A3 and the library question belong
- * to the C28 gate. Courier Prime is metrically identical to Courier, so the layout is the
+ * to the PDF-library benchmark. Courier Prime is metrically identical to Courier, so the layout is the
  * same either way.
  *
  * Every byte is ASCII. Strings are escaped on the way in, so the object offsets the xref

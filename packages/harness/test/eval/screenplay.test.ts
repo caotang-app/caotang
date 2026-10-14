@@ -1,5 +1,5 @@
 /**
- * The screenplay scene-draft role, run end to end (screenplay.md §3 and §6, M1). A draft of a screenplay scene is asked for in
+ * The screenplay scene-draft role, run end to end (screenplay.md §3 and §6). A draft of a screenplay scene is asked for in
  * Fountain, and a continue into its passage is asked for the Fountain only, with no heading. Each scenario runs through the real
  * loop and bus: the mock answers the draft with the Fountain it was given, and the scenario reads the role the request carried,
  * so a role that drifts from the scene's form fails here as well as in the role's own unit test.

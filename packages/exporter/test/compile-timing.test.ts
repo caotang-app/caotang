@@ -6,8 +6,8 @@
  * and each compile finishes inside a budget. The budget is generous on purpose. It exists to catch a quadratic step or a
  * leak in the flatten, the render or the zip, not to grade a machine: a 100k-word compile that takes minutes is a bug.
  *
- * The Word and LibreOffice fidelity posture is not measured here. That benchmark is M9's and has not run. Its decision
- * record is only proposed so far, not yet written to docs/decisions.md, and exporter.md §7-E1 holds the open item.
+ * The Word and LibreOffice fidelity posture is not measured here. That benchmark has not run, and exporter.md §7-E1
+ * holds the open item.
  */
 
 import { describe, expect, it } from 'vitest';

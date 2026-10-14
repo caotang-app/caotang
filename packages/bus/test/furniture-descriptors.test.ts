@@ -150,7 +150,7 @@ describe('project.saveGoal', () => {
     expect(errorCodeOf(validateGoal({ goal: { nodeId: 'manuscript', metric: 'pages', comparator: 'at-least', target: 500 } }))).toBe('invalid-params');
   });
 
-  // goals-progress §9.2: `chars` is a metric a project goal may take. m9 widened the validator from words-only to words or characters.
+  // goals-progress §9.2: `chars` is a metric a project goal may take. The validator takes words or characters.
   it('takes characters as well as words, and returns the metric only when it is characters', () => {
     const chars = validateGoal({ goal: { id: GOAL_ID, nodeId: 'manuscript', metric: 'chars', comparator: 'at-least', target: 90_000 } });
     expect(chars).toEqual({

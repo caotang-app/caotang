@@ -1,5 +1,5 @@
 /**
- * `@caotang/video-prompt-pack` — the AI-video prompt authoring engine, headless (video-prompt-pack.md, M4).
+ * `@caotang/video-prompt-pack` — the AI-video prompt authoring engine, headless (video-prompt-pack.md).
  *
  * What is in here:
  *  - the normalized shot schema, the codex visual-reference rules and the reference resolution order;

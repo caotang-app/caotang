@@ -66,7 +66,7 @@ const mount = async (initialBody: string): Promise<{ instance: EditorInstance; d
   return { instance, driver: driverFor(instance) };
 };
 
-describe('§7 — two-lane undo, criterion 1: the separation as a number in both directions', () => {
+describe('§7 — two-lane undo: the separation as a number in both directions', () => {
   it('a user keystroke raises Lane 1, an excluded agent apply does not, and the same apply without the option does', async () => {
     const { instance, driver } = await mount('one\n\ntwo');
 
@@ -411,11 +411,10 @@ describe('§7 rule 4c — redo after an undo does not lose the bookkeeping', () 
     expect(instance.getContent()).toContain('Aone');
     expect(depth(driver)).toBe(1);
 
-    // The app's own meta on the transaction — what §C14's "metadata lost on redo
-    // replay" names. **Asserted present before the round trip** (A review,
-    // 2026-10-06 06:0x): the loss assertion below is `toBeUndefined()`, and a
-    // loss needs something to lose. Removing this `setMeta` call left all 14
-    // tests green — the test asserted that a meta nobody set did not survive,
+    // The app's own meta on the transaction — what §7's "metadata lost on redo
+    // replay" names. **Asserted present before the round trip**: the loss assertion below is `toBeUndefined()`, and a
+    // loss needs something to lose. Without this `setMeta` call all 14
+    // tests stay green — the test would assert that a meta nobody set did not survive,
     // which is the shape of the very vacuity this suite was written to avoid.
     const marked = driver.state().tr.insertText('B', 1);
     marked.setMeta('caotangLane', 'user');
@@ -455,7 +454,7 @@ describe('§7 rule 4c — redo after an undo does not lose the bookkeeping', () 
   });
 });
 
-describe('criterion 7 — the slice added no dependency and still runs headless', () => {
+describe('the lane policy adds no dependency and still runs headless', () => {
   it('`packages/editor` gained no entry, and the environment is still `node`', () => {
     const pkg = JSON.parse(readFileSync(join(repoRoot, 'packages/editor/package.json'), 'utf8')) as {
       dependencies: Record<string, string>;
@@ -464,7 +463,7 @@ describe('criterion 7 — the slice added no dependency and still runs headless'
     const declared = Object.keys({ ...pkg.dependencies, ...pkg.devDependencies });
     // The lane policy imports `@tiptap/pm/history`, which the package already
     // declared. A direct `prosemirror-history` entry would be a new dependency
-    // adopted without the C16 preflight the pin table requires.
+    // adopted without the Tiptap preflight the pin table requires.
     expect(declared).not.toContain('prosemirror-history');
     expect(declared).not.toContain('prosemirror-state');
     expect(pkg.dependencies['@tiptap/pm']).toBe('3.31.4');
@@ -474,7 +473,7 @@ describe('criterion 7 — the slice added no dependency and still runs headless'
   });
 });
 
-describe('criterion 5 — the parameter is read, in exactly one place', () => {
+describe('the parameter is read, in exactly one place', () => {
   it('no second writer of `addToHistory` and no second reader of `historyExcluded`', () => {
     const read = (rel: string): string => readFileSync(join(repoRoot, rel), 'utf8');
     const lanes = read('packages/editor/src/lanes.ts');
@@ -493,9 +492,8 @@ describe('criterion 5 — the parameter is read, in exactly one place', () => {
     expect(fixture).not.toMatch(writesMeta);
     expect(seam).not.toMatch(writesMeta);
 
-    // **Every** source file, not the three this slice happened to touch
-    //. An earlier change named `lanes.ts`, the fixture and
-    // `seam.ts` and read those three — so "no second writer" was a claim about
+    // **Every** source file, not three hand-picked ones. Naming `lanes.ts`, the fixture and
+    // `seam.ts` and reading only those three — so "no second writer" was a claim about
     // three files wearing the grammar of a claim about the package, and a writer
     // planted in `pipeline.ts` left all 14 tests green. The count below is the
     // control that makes the scan non-vacuous: it fails if the directory read

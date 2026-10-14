@@ -5,8 +5,8 @@
  * ## Why there are two schemas at all
  *
  * `packages/editor-audit/src/schema.ts` is a transcription of §3.1/§3.2 written
- * as the minimum the C16 corpus needs to run. `packages/editor/src/
- * schema.ts` is the M5 editor's own. They are kept apart deliberately
+ * as the minimum the preflight corpus needs to run. `packages/editor/src/
+ * schema.ts` is the editor's own. They are kept apart deliberately
  *, and the separation is only worth its cost
  * if the two are *checked against each other* — otherwise they are two
  * transcriptions drifting quietly, and the audit's 59-construct result table
@@ -17,7 +17,7 @@
  * that safe rather than merely tidy:
  *
  * 1. **They are different objects.** Asserted below, and the reason is the one
- *    An earlier change used for the two `fflate` builds: a guard that compared the schema to
+ *    used for the two `fflate` builds: a guard that compared the schema to
  *    *itself* would pass forever. `caotangSchema` and the audit's `caotangSchema`
  *    are separate `new Schema(...)` constructions, so a divergence is a real
  *    divergence.
@@ -64,12 +64,11 @@
  * a claim about a set nothing computes. It was the standing species one level
  * away from the registry harness: **this file's own header argues that a
  * hand-copied duplicate only proves the copy still matches itself, and then the
- * file's most load-bearing test hand-copies its input.** Measured 2026-10-04
- * 18:0x: adding a construct to `EXACT` moves the count and
- * **reaches nothing here** — 802 → 803, 42 files green. The name is corrected
- * below to what the assertion actually is, and the structural fix (one source
- * for both lists) is an earlier change, because choosing that source is a design
- * decision and a review does not make one.
+ * file's most load-bearing test hand-copies its input.** Measured: adding a
+ * construct to `EXACT` moves the count and **reaches nothing here**. The test is
+ * named for what the assertion actually is, and the structural fix (one source
+ * for both lists) is left open, because choosing that source is a design
+ * decision.
  */
 import { Schema } from '@tiptap/pm/model';
 import type { MarkSpec, NodeSpec } from '@tiptap/pm/model';

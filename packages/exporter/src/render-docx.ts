@@ -1,6 +1,6 @@
 /**
  * The DOCX renderer — [exporter.md §2 and §3](../../../docs/architecture/exporter.md),
- * with the C23 TOC recipe from §2 and the §7-E1 rubric.
+ * with the TOC recipe from §2 and the §7-E1 rubric.
  *
  * ## The contract this file has to meet (the publishing gate)
  *
@@ -13,11 +13,11 @@
  * - a TOC **field** anchored on Heading 1, with `updateFields` in the settings so
  *   Word offers to refresh it on open;
  * - `cachedEntries` built from the binder's chapter list, so the contents are
- *   visible in every viewer before anything is updated (C23's recipe).
+ *   visible in every viewer before anything is updated (the §2 TOC recipe).
  *
  * ## Why `cachedEntries` and why the field is left dirty
  *
- * C23 rejected the two alternatives by name. `beginDirty: false` gives no prompt but
+ * The TOC recipe rejects the two alternatives by name. `beginDirty: false` gives no prompt but
  * a stale table, because nothing ever refreshes it; a static table loses the field's
  * semantics, so Word can no longer regenerate it. The default — a dirty field with
  * cached content — is what `docx` writes when `beginDirty` is not given, and this
@@ -27,7 +27,7 @@
  *
  * The cached entries carry titles and no page numbers. Page numbers need a layout
  * this renderer does not do; Word fills them in when it updates the field. A viewer
- * that never updates a field shows the titles, which is the content C23 required.
+ * that never updates a field shows the titles, which is the content the recipe requires.
  *
  * ## Text XML cannot carry
  *

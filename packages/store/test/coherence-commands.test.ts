@@ -8,7 +8,7 @@
  *   is absent again, and a list goes back by membership (coherence.md §5, command-bus §5).
  * - The agent path to a dismissal is refused at the gate, through every flow the gate reads.
  * - `codex.upsert` stamps `origin` from the envelope's provenance first, then from `issuedBy`, so an
- *   import is `'import'` and nothing else can name that origin (codex.md §2, D5).
+ *   import is `'import'` and nothing else can name that origin (codex.md §2).
  */
 
 import { describe, expect, it } from 'vitest';
@@ -267,7 +267,7 @@ describe('coherence.setFindingStatus (coherence.md §6.3, §7.1)', () => {
   });
 });
 
-describe('codex.upsert provenance (codex.md §2, D5)', () => {
+describe('codex.upsert provenance (codex.md §2)', () => {
   const create = (name: string, extra: Record<string, unknown> = {}) => ({ entries: [{ action: 'create', name, ...extra }] });
 
   it('stamps manual for the writer, agent for an agent with no provenance, and import when the envelope carries it', () => {

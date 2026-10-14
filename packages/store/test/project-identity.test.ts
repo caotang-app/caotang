@@ -1,5 +1,5 @@
 /**
- * m9 (project export): the project block's identity and language (epub-metadata.md), its backfill on open, and the
+ * Project export: the project block's identity and language (epub-metadata.md), its backfill on open, and the
  * validator's tolerance for the new fields.
  *
  * The rule under test is the one the EPUB persistence depends on: an identifier is minted once, at create or on the

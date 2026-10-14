@@ -1,10 +1,10 @@
 /**
  * The folder writer's two data-safety rules that a save depends on (write.ts header, rules 1 and 3):
  *
- *   - a body the file already holds is not written again, so a save touches only the documents that changed (DS-4's neighbour, and
+ *   - a body the file already holds is not written again, so a save touches only the documents that changed (and
  *     project-format §4); and
  *   - a deleted document's file is removed only after the manifest that stops naming it has been written, so a failure between the
- *     two can never leave a manifest that names a file which is gone (DS-4, the fatal load of project-format §4).
+ *     two can never leave a manifest that names a file which is gone (the fatal load of project-format §4).
  */
 
 import { describe, expect, it } from 'vitest';

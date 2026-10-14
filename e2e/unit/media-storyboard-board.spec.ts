@@ -6,7 +6,7 @@ import { addShotNode, addStoryboardFolder } from '../../packages/storyboard/src/
 import { addDocument, createEmptyManifest, createProjectState, nodeById, type ProjectState, type TreeNode } from '../../packages/store/src/index.js';
 
 /**
- * The shot board's view model (storyboard.md §2.1, §3.1 and §4): the labels the shot editor shows (F-08), the words the picture
+ * The shot board's view model (storyboard.md §2.1, §3.1 and §4): the labels the shot editor shows, the words the picture
  * picker uses while the picture list loads, the status and label a card names, and the storyboard folder a scene's shots live in,
  * which decides whether the scene offers to derive them. Pure over the project state, so no browser is needed.
  */
@@ -112,14 +112,14 @@ test.describe('the card’s status, label and picture note', () => {
     expect(second?.label).toBeNull();
   });
 
-  test('the picker says a picture is gone only once the list has come back without it, and never while it loads (F-08)', () => {
+  test('the picker says a picture is gone only once the list has come back without it, and never while it loads', () => {
     expect(missingPictureLabelOf('pending')).toBe('Checking the project’s pictures');
     expect(missingPictureLabelOf('failed')).toBe('This picture could not be checked');
     expect(missingPictureLabelOf('listed')).toBe('This picture is no longer in the project');
   });
 });
 
-test.describe('where the picture listing stands (F-08)', () => {
+test.describe('where the picture listing stands', () => {
   const FOLDER_A = { name: 'a' };
   const FOLDER_B = { name: 'b' };
   const RECORDS = new Map([['a_ONE', { id: 'a_ONE', fileName: 'a_ONE.png' }]]);

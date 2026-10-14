@@ -22,7 +22,7 @@
  *
  * ## Why the fixtures are read from the audit's corpus and not re-typed
  *
- * The §13 C20 entries are named in the row that cut this slice
+ * The four §13 degrade entries
  * (`table-gfm`, `footnote-reference`, `image-reference`, `html-raw-block`), and
  * the corpus is the authoritative list. Copying four strings into this file
  * would make a corpus edit leave the product testing a construct that no longer
@@ -500,7 +500,7 @@ describe('§3.3 degrade class — a link reference', () => {
   });
 
   it('an undefined reference never reaches the handler — measured, not assumed', async () => {
-    // The same finding an earlier change measured for `imageReference`, re-measured for this
+    // The same finding as for `imageReference`, re-measured for this
     // construct rather than assumed from the sibling: remark-parse resolves
     // references itself, so `[text][nowhere]` arrives as literal text and no
     // `linkReference` node is ever created. Nothing was a reference, so nothing
@@ -512,7 +512,7 @@ describe('§3.3 degrade class — a link reference', () => {
   });
 
   it('the unresolvable-reference fallback degrades to the link spelling, called directly', async () => {
-    // Called at the handler, for the same reason an earlier change called its own: the parse
+    // Called at the handler, for the same reason as the `imageReference` fallback: the parse
     // chain cannot reach this branch. The spelling matters — the footnote shape
     // `[^text][ref]` is a *different construct* and would re-parse as a footnote
     // reference, so a fallback that reused `referenceText` would be worse than
@@ -556,8 +556,8 @@ describe('§5 canonical dialect — the one option the pipeline does not pin', (
     //   `- a\n\n- b`  re-parses as ONE loose list with two items (a different
     //                  document, and a `lossy-structure` nobody declared)
     //
-    // So §5's sentence is true per list *position*, not per document, and an earlier change
-    // corrects it. This test exists so the correction cannot be reverted by
+    // So §5's sentence is true per list *position*, not per document, and this test records
+    // the correction. This test exists so the correction cannot be reverted by
     // someone who finds `*` in a saved file and reads §5 as written.
     const { doc } = await parseWithDiagnostics('* a\n- b\n');
     expect(serialize(doc)).toBe('- a\n\n* b\n');
@@ -803,8 +803,8 @@ describe('the degrade table is §3.3\'s, and a subset of it', () => {
 
   it('`linkReference` is registered now, and the reason it was absent is written down', () => {
     // This test used to assert the *absence* of `linkReference` — the row
-    // was named in the message, and the guard was there to stop an earlier slice
-    // taking a later one's subject. An earlier change has landed, so the guard has changed
+    // was named in the message, and the guard was there to stop one change
+    // taking a later one's subject. The later one has landed, so the guard has changed
     // rather than been deleted: it now asserts the *presence*, and keeps the
     // reason, because the absence had a reason and a reader who finds a
     // registered handler will not know that 0.1.5 already resolved this one.

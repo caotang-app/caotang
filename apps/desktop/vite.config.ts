@@ -61,7 +61,7 @@ export default defineConfig(({ command }) => ({
     // Windows, and the e2e suite's baseURL probes http://127.0.0.1:5173 (IPv4),
     // so webServer never becomes reachable and Playwright times out at 60s.
     host: '127.0.0.1',
-    // CAOTANG_E2E_PORT lets parallel checkouts (agent worktrees) each run the suite against
+    // CAOTANG_E2E_PORT lets parallel checkouts each run the suite against
     // their own server instead of reusing whichever one already holds 5173.
     port: Number(process.env['CAOTANG_E2E_PORT'] ?? 5173),
     strictPort: true,

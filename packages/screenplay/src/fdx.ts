@@ -11,11 +11,11 @@
  *
  * The scene-number attribute and the header element are the two encodings D11 calls
  * implementation-time residue. Their source read (Screenplain's FDX writer, rsdoiel/fdx) is not
- * complete, so both are unverified against a Final Draft file (knownGaps).
+ * complete, so both are unverified against a Final Draft file (a known gap).
  *
  * FDX is a flat, machine-written format with no entities beyond the five predefined ones
  * and numeric references, so it is read here with a small reader rather than a parser
- * dependency (the C19/C28 vendor-if-dormant posture).
+ * dependency (the vendor-if-dormant posture).
  */
 
 import { printedText, sceneNumberOf, stripSceneNumber } from './classify.js';
@@ -207,7 +207,7 @@ export function renderFdx(blocks: readonly FlatBlock[], opts: FountainRenderOpti
         const printed = printedText(el.text);
         const number = sceneNumberOf(printed);
         const properties = length !== undefined ? `<SceneProperties Length="${length.lengthEighths}" Page="${length.page}"/>` : '';
-        // The number is kept verbatim from the heading. Its attribute name is unverified (knownGaps).
+        // The number is kept verbatim from the heading. Its attribute name is unverified (a known gap).
         const attrs = number !== null ? ` Number="${escapeXml(number)}"` : '';
         body.push(paragraphXml('Scene Heading', stripSceneNumber(printed), properties, attrs));
         scene += 1;

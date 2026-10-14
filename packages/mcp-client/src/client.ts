@@ -7,7 +7,7 @@
  * `indexedTools()`, `describe()`. Everything that changes a persisted setting goes through a
  * method here and then calls `onChange`, which is where the app writes the settings.
  *
- * **The three states are not two** (E1). `configured` means there is no successful listing this
+ * **The three states are not two.** `configured` means there is no successful listing this
  * session. `connected` means a listing arrived and a pin changed or a tool is new, so the tools
  * wait for a review. `healthy` means the listing matches the reviewed pins and the tools may be
  * searched. A connection that works and a tool that can be called are different signals, and this
@@ -38,7 +38,7 @@ import { diffPins, hasDelta, listingFingerprint, pinsAfterReview, pinStateOf, ty
 import { corsProbe, createStreamableHttpWire, WireError, type McpWire, type WireAnnotations, type WireCallResult, type WireDeps, type WireFactory, type WireTool } from './wire.js';
 
 /** §3.3: the reachable-but-blocked message, verbatim. */
-export const CORS_REFUSAL = 'server reachable but refuses browser connections (CORS). Desktop build (Phase 3) connects without this restriction.';
+export const CORS_REFUSAL = 'server reachable but refuses browser connections (CORS). The desktop app on the roadmap connects without this restriction.';
 
 /**
  * A server that speaks none of the revisions Caotang offers: 2026-07-28, or a 2024 or 2025 revision (§3.3, §12 D17). The

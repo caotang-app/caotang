@@ -21,7 +21,7 @@ test.afterEach(({ page }) => {
 });
 
 /**
- * exporter.md §2 and §5 with the m9 options: the dialogue table's character limit is a recipe setting, shown for the dialogue table
+ * exporter.md §2 and §5 with the recipe options: the dialogue table's character limit is a recipe setting, shown for the dialogue table
  * only and kept with the recipe; and a single item compiles with the recipe's title page, as a whole manuscript does.
  */
 

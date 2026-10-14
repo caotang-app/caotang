@@ -1,10 +1,10 @@
-# Dialogue narrative — branching game-narrative authoring on Ink (M2, post-v0.1)
+# Dialogue narrative — branching game-narrative authoring on Ink (post-v0.1)
 
 > Status: built, except where a section says otherwise.
 > Scope: Biggest data-model lift in the track (graph + conditions + localization) — sequenced last (media-track §3). Attaches to `project-store` (node kind + Ink file), `corkboard` (graph-view variant), `exporter` (Ink + dialogue table), `coherence` (deterministic graph checks), `codex` (speaker resolution).
 > Cross-refs: node kinds = [project-format.md](project-format.md) §2 media note · findings model = [coherence.md](coherence.md) §3/§5.1 · exporter seam = [exporter.md](exporter.md) §2/§3 · harness registry = [agent-harness.md](agent-harness.md) §3 · loc shape = [dialogue-narrative.md](dialogue-narrative.md) §6.
 
-## 1. Verdict (D2, adopted)
+## 1. Verdict (adopted)
 
 - **Ink is the authored/interchange format** — ownable plain text (files-ownable invariant holds), strongest ecosystem proof, maintained JS runtime+compiler (inkjs), engine coverage (Unity/Godot/Unreal). **Caotang authors Ink; engines consume compiled story JSON. Caotang never builds a scripting language** — Ink/Yarn already *are* the scripting layers; articy's expresso + simulation is a product-scale feature set deliberately under-built (rejected).
 - **Yarn (Twee 3) = v0.3 import candidate; articy JSON = read-only import reference; Twine import strips logic with an honest report** (StorySplice pattern: report the stripped-macro count — "branch structure is portable, conditional logic is not").
@@ -21,15 +21,15 @@ tree[].kind: 'branching'          // marker on that container (graph-view trigge
 tree[].type: 'beat'               // a beat/line node inside a dialogue container (leaf of the graph) — the dialogue package's vocabulary names it, but no binder command creates one (see below); the binder holds the container only
 ```
 
-- **Dialogue container = a document-like node whose body file is raw Ink** (`docs/<id>.ink`). the Ink body has **no front matter**: the file is raw Ink and valid Ink on its own, and it is written under the node's kind, not as `.md` (project-format §3). An older `.md` container still loads, and the next save writes the `.ink` file. `binder.create` makes a dialogue container with `type: 'dialogue'`; its kind defaults to `branching`, so the `kind` key is optional for it (command-bus §9). The Ink editor saves through `doc.write` on the autosave; adding line ids is a confirmation followed by the same write, so it needs no command of its own. **Decision (adopting the D2 data model as Ink-native):** the branch structure lives in the Ink text itself (knots = beats, diverts = links) — **the binder holds the container, not per-beat nodes.** Rationale: Ink's own text is the proven authoring surface (Inky), per-beat binder nodes would fight the weave structure (gather/threads/inline diverts don't map to a tree), and the graph view reads the *parsed* Ink, not a parallel node graph (single source of truth, ownable files). Rejected: beat-per-node tree model (articy-shaped; double bookkeeping with the Ink file; breaks round-trip).
-- Container metadata (per-kind metadata, additive): `speaker?: string` (codex entry id — default speaker), `locBaseline?: string` (locale code of the authored language, default project `language` when C24 lands), `engineTarget?: 'ink-json' | 'yarn-csv' | 'generic-csv'` (the default compile target hint; recipes carry the truth).
+- **Dialogue container = a document-like node whose body file is raw Ink** (`docs/<id>.ink`). the Ink body has **no front matter**: the file is raw Ink and valid Ink on its own, and it is written under the node's kind, not as `.md` (project-format §3). An older `.md` container still loads, and the next save writes the `.ink` file. `binder.create` makes a dialogue container with `type: 'dialogue'`; its kind defaults to `branching`, so the `kind` key is optional for it (command-bus §9). The Ink editor saves through `doc.write` on the autosave; adding line ids is a confirmation followed by the same write, so it needs no command of its own. **Decision (the data model is Ink-native):** the branch structure lives in the Ink text itself (knots = beats, diverts = links) — **the binder holds the container, not per-beat nodes.** Rationale: Ink's own text is the proven authoring surface (Inky), per-beat binder nodes would fight the weave structure (gather/threads/inline diverts don't map to a tree), and the graph view reads the *parsed* Ink, not a parallel node graph (single source of truth, ownable files). Rejected: beat-per-node tree model (articy-shaped; double bookkeeping with the Ink file; breaks round-trip).
+- Container metadata (per-kind metadata, additive): `speaker?: string` (codex entry id — default speaker), `locBaseline?: string` (locale code of the authored language, default project `language`), `engineTarget?: 'ink-json' | 'yarn-csv' | 'generic-csv'` (the default compile target hint; recipes carry the truth).
 
 ### 2.2 Ink authoring contract
 
-- **Body = valid Ink.** Caotang adds no syntax. Structural validation (loose ends, dead ends, unknown diverts) runs **inkjs compile in-browser** (zero deps, MIT — D2 evidence) on save/autosave and on export; compile **errors/warnings surface as deterministic findings** (§5) — the same findings-inbox UX as coherence, zero new check classes.
+- **Body = valid Ink.** Caotang adds no syntax. Structural validation (loose ends, dead ends, unknown diverts) runs **inkjs compile in-browser** (zero deps, MIT) on save/autosave and on export; compile **errors/warnings surface as deterministic findings** (§5) — the same findings-inbox UX as coherence, zero new check classes.
 - **Line IDs (minted by Caotang, never hand-typed):** every line that will be spoken/exported may carry a `# lineId: l_XXXXXXXXXX` tag; Caotang's save path can add tags automatically when the dialogue table export is used (opt-in per container: `autoLineIds: true`), minting `l_` + 10 Crockford base32 (same generator family as node/codex ids) **stably per line** — ids persist across edits of the line's text, die with the line (no reuse). This is Caotang's `#line:`-class contract (Yarn's shape, vendor-neutral).
 - **Speakers:** `Speaker: text` lines resolve against codex characters (cue-style, like screenplay.md §4 — a mention source); unresolved speakers are the `script.cue-collision`-class info finding (§5).
-- **Variables/conditions:** authored in Ink text as-is; Caotang's UI may *display* declared variables (parse pass lists `VAR`/`LIST` declarations) but **v1-of-track authors logic only in text** (no visual condition builder — articy ceiling rejection). Yarn 3's `when:`-header storylet pattern recorded as the **v0.3 storylet idea** (D2: conditions-as-template-fields covers the 80% case first).
+- **Variables/conditions:** authored in Ink text as-is; Caotang's UI may *display* declared variables (parse pass lists `VAR`/`LIST` declarations) but **v1-of-track authors logic only in text** (no visual condition builder — articy ceiling rejection). Yarn 3's `when:`-header storylet pattern recorded as the **v0.3 storylet idea** (conditions-as-template-fields covers the 80% case first).
 
 ### 2.3 Parse layer (ink-shaped, Caotang-owned)
 
@@ -48,13 +48,13 @@ interface DialogueGraph {         // derived view over the Ink body (never store
 ## 3. Editor integration
 
 - Raw-Ink text editing + **syntax decoration styling** (the screenplay.md §3 pattern, same decision & rationale: text-first editing, decoration styling from the parse, no Ink-typed PM schema in the first landing; revisit trigger identical). Ink is already plain-text-native (Inky's model), so no "live margins" analog is needed.
-- **Graph view = corkboard variant over the parse** (D2 verdict; media-track M2's "graph view alongside corkboard"): nodes as cards on a laid-out canvas (auto-layout: layered top-down by graph distance from the entry knot — pure function, deterministic), choice labels as edges; click = jump to the knot's line in the text (view state, `view.setGraphFocus` — view class, ephemeral). **View-only: graphs are not editable canvases in v1-of-track** (editing happens in Ink text; articy-style drag-wiring is the rejected ceiling). Layout is a pure projection with a stable seed (eval-stable).
-- Inspector: container metadata (default speaker picker, engineTarget, autoLineIds toggle) + parse-derived stats (knots, choices, warnings count). Beat-level editing stays in text (A1).
+- **Graph view = corkboard variant over the parse** (§1 verdict; the media track's "graph view alongside corkboard"): nodes as cards on a laid-out canvas (auto-layout: layered top-down by graph distance from the entry knot — pure function, deterministic), choice labels as edges; click = jump to the knot's line in the text (view state, `view.setGraphFocus` — view class, ephemeral). **View-only: graphs are not editable canvases in v1-of-track** (editing happens in Ink text; articy-style drag-wiring is the rejected ceiling). Layout is a pure projection with a stable seed (eval-stable).
+- Inspector: container metadata (default speaker picker, engineTarget, autoLineIds toggle) + parse-derived stats (knots, choices, warnings count). Beat-level editing stays in text (§9 A1).
 
 ## 4. Export (two renderers at the exporter seam)
 
-- **Ink passthrough:** the container's Ink body compiles (inkjs) → **compiled story `.ink.json`** emitted per container (engine consumption target; D2: engines consume compiled JSON). `format: 'ink-json'` at the exporter seam; compile log includes inkjs compile warnings verbatim (the acceptance gate: **0 errors**; warnings listed).
-- **Dialogue table (`DialogueTableRenderer`, CSV/XLSX at the spreadsheet gate):** the universal engine/loc surface — columns `lineId, speaker, text, context, charLimit` (D3-consistent with VO; D2: Yarn/Ink-tag/Netflix all conform). `context` = knot path + codex-resolved speaker display name; `charLimit` = a **recipe option** (exporter.md §2; set in the export dialog's Character limit field, or in `recipe.save`'s options): a subtitle-style constraint when set, a whole number from 1 to 10000 (e.g. 42 chars — Netflix spec class); empty = unconstrained. Scope = selected containers; binder order.
+- **Ink passthrough:** the container's Ink body compiles (inkjs) → **compiled story `.ink.json`** emitted per container (engine consumption target; engines consume compiled JSON). `format: 'ink-json'` at the exporter seam; compile log includes inkjs compile warnings verbatim (the acceptance gate: **0 errors**; warnings listed).
+- **Dialogue table (`DialogueTableRenderer`, CSV/XLSX at the spreadsheet gate):** the universal engine/loc surface — columns `lineId, speaker, text, context, charLimit` (consistent with VO; Yarn/Ink-tag/Netflix all conform). `context` = knot path + codex-resolved speaker display name; `charLimit` = a **recipe option** (exporter.md §2; set in the export dialog's Character limit field, or in `recipe.save`'s options): a subtitle-style constraint when set, a whole number from 1 to 10000 (e.g. 42 chars — Netflix spec class); empty = unconstrained. Scope = selected containers; binder order.
 - **Import (v0.2-of-track):** whole-story `.ink` import → container per top-level knot-cluster (knot → section folders where depth warrants — the screenplay.md §2.2 structure-mapping discipline); Twee 3 import (v0.3 candidate): passages → knots, links → choices, **macros/logic stripped with the honest per-story report** ("N logic blocks stripped — Twine story formats are programming environments").
 
 ## 5. Coherence: deterministic graph checks (zero model calls)
@@ -73,8 +73,8 @@ VO/loc completeness ("every line has an id when the table is exported") is a **v
 
 - **Shape:** `lineId, speaker, text, context, charLimit` (CSV; UTF-8, RFC 4180 quoting). One row per speakable line (dialogue lines + choice labels — choice labels carry their own ids, suffixed `_c`).
 - **Stability contract:** ids mint once per line, stored in the Ink tag; line text edits never change the id; deleting a line retires the id (never reused); renaming a container never touches ids. Localization = translate the CSV against stable ids → string tables (Yarn's documented loop, vendor-neutral).
-- **VO:** the same table is the VO script (speaker + text + id = the auditionable/recordable unit; per-vendor audio extensions stay vendor-side — D2's WTWTLW dual-use precedent).
-- **Spreadsheet stack (XLSX) decision** is shared with the storyboard shot-list (storyboard.md §8-A4) — one decision, two consumers.
+- **VO:** the same table is the VO script (speaker + text + id = the auditionable/recordable unit; per-vendor audio extensions stay vendor-side — the WTWTLW dual-use precedent).
+- **Spreadsheet stack (XLSX) decision** is shared with the storyboard shot-list (storyboard.md §8) — one decision, two consumers.
 
 ## 7. Harness tools (the track's rows 22 and 23; the registry holds 26 rows, agent-harness §10)
 
@@ -98,8 +98,8 @@ The numbers in the first column are the track's own, as this spec gives them, an
 
 | # | Item | Status |
 |---|---|---|
-| A1 | Ink-text-first authoring (no per-beat tree nodes, no visual logic builder) | Explicit (D2); revisit trigger: users demand structure-level editing the text layer can't express. |
-| A2 | inkjs as the compile/validate dependency (MIT, zero deps, in-browser) | Evidence-backed; vendor-if-dormant posture (C19/C28 pattern) applies. |
+| A1 | Ink-text-first authoring (no per-beat tree nodes, no visual logic builder) | Explicit (§1); revisit trigger: users demand structure-level editing the text layer can't express. |
+| A2 | inkjs as the compile/validate dependency (MIT, zero deps, in-browser) | Evidence-backed; vendor-if-dormant posture applies. |
 | A3 | Auto line-ids are opt-in per container | Explicit; always-on minting would churn files writers hand-edit. |
-| A4 | Yarn/Twee import at v0.3; articy JSON read-only reference | Explicit (D2); import-first order: Ink (v0.2) → Twee (v0.3) → articy (opportunistic). |
+| A4 | Yarn/Twee import at v0.3; articy JSON read-only reference | Explicit (§1); import-first order: Ink (v0.2) → Twee (v0.3) → articy (opportunistic). |
 | A5 | Play/test mode parked v0.3 | Explicit. |

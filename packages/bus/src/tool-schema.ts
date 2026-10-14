@@ -17,7 +17,7 @@
  * tagged union on one key. It is not a general JSON Schema implementation, and
  * `validate.ts` (the harness) says exactly which keywords it enforces.
  *
- * **Why this file is in the bus (m8-integration).** A media module declares its
+ * **Why this file is in the bus.** A media module declares its
  * tools in the registry's entry shape, and that shape needs `param` and
  * `toJsonSchema`. The harness imports those modules, so a module that imported
  * them from the harness would close a cycle. This file has no imports, so the

@@ -3,7 +3,7 @@
  * [§8](../../../docs/architecture/extensibility.md) (config UX) and [ui-modules.md §5.1](../../../docs/architecture/ui-modules.md)
  * (`AppSettings.mcp`).
  *
- * Server configs are **app settings, never project files** (E4): a repo-committed
+ * Server configs are **app settings, never project files**: a repo-committed
  * `mcp.json` is the delivery channel that made Cursor's MCPoison possible, and the shape
  * here has no field a project could carry. Everything in this file is pure: it parses,
  * checks and serialises, and the caller decides where the bytes live.
@@ -14,7 +14,7 @@
  * - **Load is per entry.** A malformed server object is dropped with a named warning and
  *   the rest load (§3.2, §8).
  * - **Import is per entry.** One malformed entry in a JSON import is refused by name and
- *   the rest are kept, where Cursor drops the whole file over one wrong value (E1, §8).
+ *   the rest are kept, where Cursor drops the whole file over one wrong value (§8).
  * - **Clamp at save.** At most twenty servers (A8). The clamp names what it dropped.
  */
 
@@ -58,7 +58,7 @@ export interface McpServerConfig {
   key: string;
   /** The label the person chose. */
   name: string;
-  /** v0.2 has exactly one transport. stdio joins at Phase 3 (extensibility §1). */
+  /** v0.2 has exactly one transport. stdio joins with the desktop build (extensibility §1). */
   transport: 'http';
   /** A normalised endpoint: `https://…`, or `http://` only on loopback. */
   url: string;
@@ -69,7 +69,7 @@ export interface McpServerConfig {
   enabledTools?: string[];
   /** The "trusted for reads" grant. Off by default; may be turned on only after a review (§3.4 step 4a). */
   trustReads: boolean;
-  /** Qualified tool name → the pin the person last reviewed. Changes only on an explicit review (E4). */
+  /** Qualified tool name → the pin the person last reviewed. Changes only on an explicit review. */
   pinnedTools: Record<string, ToolPin>;
   addedAt: string;
 }
@@ -304,7 +304,7 @@ export interface ImportResult {
  *
  * An import creates servers; it never carries a key, a pin or a trust grant. A pin in a file
  * would be a review the person never made, and a trust grant in a file would bypass the review
- * the settings card requires (E4). A bearer entry is refused, because a token is entered in the
+ * the settings card requires. A bearer entry is refused, because a token is entered in the
  * server card and never read from a file. Duplicate URLs and entries past the limit are refused by name.
  */
 export function parseServerImport(text: string, options: { existing: readonly McpServerConfig[]; now: string; newKey: () => string }): ImportResult {

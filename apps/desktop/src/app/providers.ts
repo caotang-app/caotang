@@ -235,7 +235,7 @@ export class ProviderService {
   }
 
   /**
-   * The built-in demo profile, which the demo intents run on whichever profile is active (context-assembly §6, the M10 row).
+   * The built-in demo profile, which the demo intents run on whichever profile is active (context-assembly §6).
    * It is made again when the writer has removed it, and it is never made active here: a demo run names it by id, and a
    * mock profile never reaches the egress guard (provider-gateway §4).
    */

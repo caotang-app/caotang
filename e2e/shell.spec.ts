@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 import { createProject, projectIdOf, trace, waitForSaved } from './support.js';
 
 /**
- * The M0 smoke tests, rewritten for the M4 shell. The wiring they asserted (the store
+ * The smoke tests of the app shell. The wiring they asserted (the store
  * builds a valid manifest, the bundle resolves through Vite) is now asserted by every
  * suite that creates a project; these keep the boot path itself under test.
  */

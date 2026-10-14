@@ -17,7 +17,7 @@ import { fieldIf, modelField, refName, visualSentences } from './shared.js';
 export const WAN_2_6 = defineTemplate({
   id: 'wan-2.6',
   displayName: 'Wan 2.6',
-  provisional: 'The payload field names, the prompt_extend default and the best-take fields are unverified until C29 checks them against Alibaba’s Wan documentation.',
+  provisional: 'The payload field names, the prompt_extend default and the best-take fields are unverified until they are checked against Alibaba’s Wan documentation.',
   limits: {
     modes: ['t2v', 'i2v'],
     durations: [5, 10, 15],

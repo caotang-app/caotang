@@ -41,7 +41,7 @@ interface FormatOption {
   readonly help: string;
 }
 
-/** The formats the exporter ships (exporter.md §3, §5 and media-track M6), in two groups: the prose, then the media. */
+/** The formats the exporter ships (exporter.md §3, §5 and media-track.md "one story, many outputs"), in two groups: the prose, then the media. */
 const FORMAT_GROUPS: readonly { readonly name: string; readonly formats: readonly FormatOption[] }[] = [
   {
     name: 'Prose',
@@ -64,7 +64,7 @@ const FORMAT_GROUPS: readonly { readonly name: string; readonly formats: readonl
       { format: 'shot-list-csv', label: 'Shot list (.csv)', help: 'Each shot in order, with its size, angle, movement and duration.' },
     ],
   },
-  // The coherence report (media-track M6, Review): the findings file and its run history, for reading outside Caotang.
+  // The coherence report (media-track.md, Review): the findings file and its run history, for reading outside Caotang.
   {
     name: 'Review',
     formats: [
@@ -474,7 +474,7 @@ async function zipFiles(files: readonly { readonly name: string; readonly bytes:
 }
 
 /**
- * What a compile's file holds, in the words of its format (media-track M6). A script counts its scenes and sections, a
+ * What a compile's file holds, in the words of its format (media-track.md). A script counts its scenes and sections, a
  * table its lines and containers, a shot list or a prompt pack its shots, and an Ink story its containers. A prose format
  * counts chapters, scenes and words, as it always has. The counts are the compile's own, so the sentence says what was written.
  */

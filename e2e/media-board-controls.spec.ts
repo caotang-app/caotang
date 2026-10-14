@@ -1,7 +1,7 @@
 /**
- * The controls of the media views (storyboard.md §3.1–3.2, screenplay.md §3, ui-modules §0.4): the card sizes of the shot board (M3),
- * the arrow keys and the names of the mode switches (F-07), the words the shot editor shows for camera values (F-08), and the lightbox's
- * focus, which stays inside it and returns to the picture that opened it (F-05). The tests use the keyboard and the names a screen reader
+ * The controls of the media views (storyboard.md §3.1–3.2, screenplay.md §3, ui-modules §0.4): the card sizes of the shot board,
+ * the arrow keys and the names of the mode switches, the words the shot editor shows for camera values, and the lightbox's
+ * focus, which stays inside it and returns to the picture that opened it. The tests use the keyboard and the names a screen reader
  * hears, as a writer on a keyboard would.
  */
 
@@ -34,7 +34,7 @@ async function storyboardWithShot(page: Page): Promise<Locator> {
   return page.getByRole('article', { name: 'Shot 1: New shot' });
 }
 
-test('the card sizes show what storyboard.md 3.1 names: S the number and picture, M adds the title, one spec row and the coverage, L adds the action, status and label (M3)', async ({
+test('the card sizes show what storyboard.md 3.1 names: S the number and picture, M adds the title, one spec row and the coverage, L adds the action, status and label', async ({
   page,
 }) => {
   const card = await storyboardWithShot(page);
@@ -100,7 +100,7 @@ test('the card sizes show what storyboard.md 3.1 names: S the number and picture
   await expect(card.locator('.card-labels .chip-label')).toHaveText('Main unit');
 });
 
-test('at S the footer is hidden from sight, and a key that reaches Fields brings it into view (M3)', async ({ page }) => {
+test('at S the footer is hidden from sight, and a key that reaches Fields brings it into view', async ({ page }) => {
   const card = await storyboardWithShot(page);
   await page.getByRole('radio', { name: /^S: Small cards/ }).click();
   const footer = card.locator('.sb-foot');
@@ -115,7 +115,7 @@ test('at S the footer is hidden from sight, and a key that reaches Fields brings
   await expect.poll(async () => (await footer.boundingBox())?.width ?? 0).toBeGreaterThan(1);
 });
 
-test('the Board and Prompt pack switch take the arrow keys, and their names are their visible words (F-07)', async ({ page }) => {
+test('the Board and Prompt pack switch take the arrow keys, and their names are their visible words', async ({ page }) => {
   await storyboardWithShot(page);
   const board = page.getByRole('radio', { name: 'Board', exact: true });
   const pack = page.getByRole('radio', { name: 'Prompt pack', exact: true });
@@ -133,7 +133,7 @@ test('the Board and Prompt pack switch take the arrow keys, and their names are 
   await expect(board).toBeFocused();
 });
 
-test('the Script, Source and Pages switch of a screenplay scene takes the arrow keys, Home and End (F-07)', async ({ page }) => {
+test('the Script, Source and Pages switch of a screenplay scene takes the arrow keys, Home and End', async ({ page }) => {
   await createProject(page, PROJECT);
   await makeUnder(page, 'Manuscript', 'New screenplay scene here');
   const script = page.getByRole('radio', { name: 'Script', exact: true });
@@ -152,7 +152,7 @@ test('the Script, Source and Pages switch of a screenplay scene takes the arrow 
   await expect(script).toBeFocused();
 });
 
-test('the shot editor names camera values in words, and keeps the stored value (F-08)', async ({ page }) => {
+test('the shot editor names camera values in words, and keeps the stored value', async ({ page }) => {
   await storyboardWithShot(page);
   const angle = page.getByLabel('Camera angle');
   await expect(angle.locator('option', { hasText: 'Bird’s-eye view' })).toHaveCount(1);
@@ -165,7 +165,7 @@ test('the shot editor names camera values in words, and keeps the stored value (
   await expect(angle).toHaveValue('birds');
 });
 
-test('the lightbox keeps Tab inside itself, and Escape gives focus back to the picture that opened it (F-05)', async ({ page }) => {
+test('the lightbox keeps Tab inside itself, and Escape gives focus back to the picture that opened it', async ({ page }) => {
   const card = await storyboardWithShot(page);
   await page.getByLabel('Choose an image file for shot 1').setInputFiles({ name: 'frame.png', mimeType: 'image/png', buffer: PNG });
   await expect(card.locator('img')).toBeVisible();

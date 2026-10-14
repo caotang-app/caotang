@@ -53,10 +53,10 @@ describe('the tool-level permission matrix', () => {
   const writeConfirm = TOOL_METADATA.filter((meta) => meta.risk === 'write-confirm').map((meta) => meta.name);
   const writeAuto = TOOL_METADATA.filter((meta) => meta.risk === 'write-auto').map((meta) => meta.name);
 
-  // m8 adds two write-confirm tools (codex.import, coherence.review) and one write-auto tool
-  // (coherence.setFindingStatus, restricted to `fixed` by the coherence tool's own rule). m8-integration adds the
+  // The extensions add two write-confirm tools (codex.import, coherence.review) and one write-auto tool
+  // (coherence.setFindingStatus, restricted to `fixed` by the coherence tool's own rule); the
   // storyboard and prompt-pack modules' write tools: shots.derive and prompt.draft (write-confirm), and the
-  // write-auto shots.annotate. m8-integration's media track adds the dialogue module's dialogue.draft (write-confirm,
+  // write-auto shots.annotate; and the dialogue module's dialogue.draft (write-confirm,
   // dialogue-narrative.md §7); its read, dialogue.table, is not in either list.
   it('lists the write-confirm and write-auto tools the matrix covers', () => {
     expect(writeConfirm.sort()).toEqual([

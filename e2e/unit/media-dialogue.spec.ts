@@ -132,7 +132,7 @@ test.describe('the compile and the declarations', () => {
     expect(model.stats.errors).toBe(model.errors.length);
   });
 
-  test('a compile error names its line once, in the writer’s words (L6)', () => {
+  test('a compile error names its line once, in the writer’s words', () => {
     const body = ['-> start', '=== start ===', 'Ana: Hello.', '-> nowhere'].join('\n');
     const [error] = dialogueModelOf(DOC, body, [character('Ana')]).errors;
     expect(error).toMatch(/^line \d+: /);

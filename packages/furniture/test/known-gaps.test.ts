@@ -1,9 +1,8 @@
 /**
  * The manifest round trip for the furniture lists, as the store writes them.
  *
- * These two tests were `it.fails` while the store's manifest serializer wrote a goal with `"name": undefined` and dropped
- * a saved filter's scope root. The furniture workstream fixed both in packages/store, so they are plain tests now: a
- * regression in the serializer fails them. The updatedAt bump matrix, which was a `todo` here, is tested in
+ * The store's manifest serializer must not write a goal with `"name": undefined`, and must keep a saved filter's scope
+ * root: a regression in the serializer fails these tests. The updatedAt bump matrix is tested in
  * packages/store/test/furniture-commands.test.ts with the commands that make the bumps.
  */
 import { createEmptyManifest, serializeManifest } from '@caotang/store';

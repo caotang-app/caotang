@@ -273,7 +273,7 @@ export function Home({ store, services, onOpened, onRunDemo, notices }: HomeProp
 
   /**
    * Asks the writer to confirm a removal. A project another tab has open is not offered for removal: the list says where it is, and the
-   * removal would be refused anyway (`removeProject` takes the project's lease, DS-5).
+   * removal would be refused anyway (`removeProject` takes the project's lease).
    */
   const askRemove = (project: ProjectSummary): void => {
     void openElsewhere(project.id).then((elsewhere) => {

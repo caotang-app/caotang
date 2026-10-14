@@ -72,7 +72,7 @@ export interface FindingView {
   readonly checkId: string;
   /**
    * Whether "Fix with agent" can plan a fix for it: its primary passage (binder order, `primaryQuoteOf`) is in a scene the agent drafts. A dialogue passage is not
-   * one (the draft writes beats, not a rewrite of a passage), so such a finding offers no Fix (L1).
+   * one (the draft writes beats, not a rewrite of a passage), so such a finding offers no Fix.
    */
   readonly fixable: boolean;
 }

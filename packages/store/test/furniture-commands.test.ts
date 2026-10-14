@@ -1,6 +1,6 @@
 /**
  * The writing-furniture commands end to end, and the `updatedAt` bump matrix — binder-filters §2.1 item 4,
- * goals-progress §4, and this work's `known-gaps` `todo` that this file replaces.
+ * goals-progress §4.
  *
  * Every test dispatches a real command through the shipped `execute()` over the store's own state, with the shipped undo
  * store, so the assertion that matters is what the manifest holds afterwards and whether `undo()` put it back. A refused

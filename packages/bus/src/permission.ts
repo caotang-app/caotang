@@ -23,10 +23,8 @@
  *   approves a hard-denied command through a plan is the one that distinguishes the
  *   hard-deny path from §4's `never` bullet** — it exists in
  *   `test/permission.test.ts` — but the sweep over every flow is what pins the
- *   *ordering*, because a plan is not an inherited grant. (Corrected 2026-10-02,
- * this paragraph called the plan test *"the test that matters"* for
- *   the ordering. Re-derived in both directions — moving hard-deny below the
- *   inherited-grant branch fails exactly 1 test, and it is not that one.)
+ *   *ordering*, because a plan is not an inherited grant. (Moving hard-deny below the
+ *   inherited-grant branch fails exactly 1 test, and it is not the plan test.)
  *
  * ## `never` and hard-deny are two different lists, and the difference is load-bearing
  *
@@ -86,7 +84,7 @@ export const HARD_DENY_CLASSES: readonly HardDenyClass[] = [
  *
  * **Exactly one member in v0.1, and the count is asserted.** The other three classes
  * have no command to attach to (§4's own reasons are above). A second member cannot
- * be added without a test failing that names it — the same treatment an earlier change gives
+ * be added without a test failing that names it — the same treatment the registry gives
  * §9's three `various` rows, because a growing exemption-shaped list is how a gate
  * quietly stops refusing things.
  *
@@ -126,10 +124,9 @@ export interface PermissionContext {
    * **The gate reads whether this is present, never what it says** — §4 gates an
    * internal primitive *"never individually gated"*, so the compound tool's own
    * grant is what decided, and `PermissionGrant.risk` reports the descriptor's class.
-   * The value is the caller's record of where the grant came from. (Corrected
-   * 2026-10-02: this comment claimed the value *"keeps the gate's own
-   * answer legible in a log"*, and no such field exists — `via: 'inherited'` is the
-   * whole of what the answer carries.)
+   * The value is the caller's record of where the grant came from; the gate's
+   * answer carries no copy of it — `via: 'inherited'` is the whole of what the
+   * answer carries.
    */
   readonly inheritedGrant?: AgentRisk;
 }

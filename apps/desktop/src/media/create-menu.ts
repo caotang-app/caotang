@@ -1,5 +1,5 @@
 /**
- * The binder's entries for making a media node (media-track M1-M3): a screenplay scene, a storyboard, a shot card and a
+ * The binder's entries for making a media node (screenplay, dialogue and storyboard; media-track.md): a screenplay scene, a storyboard, a shot card and a
  * dialogue container. The rules for which kind goes where live here, with the media kinds, and the binder only asks for
  * the entries a node earns. Every create is a `binder.create`, so the bus checks it (storyboard.md §2.1: a shot lives in
  * a storyboard folder; dialogue-narrative.md §2.1: a container is `branching`), and a refusal reaches the binder's error line.

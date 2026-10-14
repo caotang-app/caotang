@@ -1,9 +1,9 @@
 /**
- * The §5 / C20 fixture corpus, for the C16 preflight.
+ * The §5 / §13 fixture corpus, for the Tiptap preflight.
  *
  * Transcribed from [editor-engine.md] §5's dialect-contract paragraph, which
  * enumerates the groups as: structural, lists, emphasis/inline,
- * links/images, blocks, Caotang-specific — plus the four C22 Obsidian-spacing
+ * links/images, blocks, Caotang-specific — plus the four Obsidian-spacing
  * samples and §13 D2's `%%` / `@` plain-text guarantee.
  *
  * Each entry carries the group it belongs to so §2's result table is grouped
@@ -58,9 +58,9 @@ export const LISTS: CorpusEntry[] = [
   { name: 'list-loose', group: 'lists', input: '- one\n\n- two', expect: 'exact' },
   { name: 'list-nested-3-level', group: 'lists',
     input: '- level one\n  - level two\n    - level three', expect: 'exact',
-    note: '§5 `listItemIndent: "one"` (C22)' },
+    note: '§5 `listItemIndent: "one"`' },
   { name: 'list-tab-indented', group: 'lists', input: '- one\n\t- nested', expect: 'degrade',
-    note: 'tab indentation is not canonical; C22 rejected `listItemIndent: "tab"`' },
+    note: 'tab indentation is not canonical; §5 rejects `listItemIndent: "tab"`' },
   { name: 'list-task-item', group: 'lists', input: '- [ ] undone\n- [x] done', expect: 'degrade',
     note: '§3.3: task lists are NOT in the v0.1 schema' },
 ];
@@ -145,18 +145,18 @@ export const CAOTANG: CorpusEntry[] = [
     note: '§5 step 1 strips YAML front matter BEFORE the pipeline, and @caotang/store owns that — so the corpus takes the body projection only. Recorded separately: feeding raw front matter straight into remark-prosemirror does NOT strip it (see `FRONT_MATTER_NOT_STRIPPED`).' },
 ];
 
-/* --- C22 Obsidian spacing samples (added 2026-09-22) --------------------- */
+/* --- Obsidian spacing samples ------------------------------------------- */
 export const OBSIDIAN_SPACING: CorpusEntry[] = [
   { name: 'obsidian-4space-nested', group: 'obsidian',
     input: '- one\n    - nested four-space', expect: 'degrade',
-    note: 'C22: Obsidian 4-space imports normalize behind the re-style notice' },
+    note: 'Obsidian 4-space imports normalize behind the re-style notice' },
   { name: 'obsidian-loose-list', group: 'obsidian',
     input: '- one\n\n  paragraph in item', expect: 'exact' },
   { name: 'obsidian-blank-line-list', group: 'obsidian',
     input: '- one\n\n- two', expect: 'exact' },
   { name: 'obsidian-heading-spacing', group: 'obsidian',
     input: '#Title\n\nno space after hash', expect: 'degrade',
-    note: 'C22 spacing sample' },
+    note: 'Obsidian spacing sample' },
 ];
 
 export const CORPUS: CorpusEntry[] = [

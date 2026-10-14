@@ -1,7 +1,7 @@
 /**
  * Asset ids — storyboard.md §2.2's `a_XXXXXXXXXX.<ext>` filenames.
  *
- * The same Crockford base32 family as node and codex ids (project-format A4), with the
+ * The same Crockford base32 family as node and codex ids (project-format.md), with the
  * `a_` prefix. `@caotang/ids` fixes its prefix union at `p | n | c | cmd`, so this module
  * borrows the family's generator and swaps the prefix, the way `packages/coherence/src/ids.ts`
  * does for `f_`, `r_` and `w_`. The body is ten characters from the same randomness, and the

@@ -1,5 +1,5 @@
 /**
- * Mock provider tests — the M0 exit criterion.
+ * Mock provider tests — the headless-import requirement.
  *
  * "mock provider importable headless" means: importable in a plain Node process,
  * no DOM, no network, no clock. These tests run in the default `node` environment.

@@ -73,7 +73,7 @@ export interface VideoVendorTemplate {
   readonly grammarHints: string;
   /**
    * Set while the template's payload field names, limits or best-take fields are not yet verified
-   * against the vendor's own documentation (§9, A3; C29). The text says what is unverified. Every
+   * against the vendor's own documentation (§9, A3). The text says what is unverified. Every
    * export of the template then carries a warning row, and the JSON and Markdown packs state the
    * note. Removing the field is the act of verifying the template.
    */

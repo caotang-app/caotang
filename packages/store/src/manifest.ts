@@ -81,9 +81,9 @@ export interface TreeNode {
   synopsis: string;
   /** ≤ 50_000 chars, plain Markdown, not a docs/ file in v0.1 */
   notes: string;
-  /** additive 2026-09-17 (A15a) — absent = node never matches date criteria */
+  /** additive — absent = node never matches date criteria */
   createdAt?: string;
-  /** additive 2026-09-17 (A15a) — app-owned; structure ops deliberately do not bump it */
+  /** additive — app-owned; structure ops deliberately do not bump it */
   updatedAt?: string;
   /**
    * The media-track kind marker (project-format.md §2, media note): `screenplay` on a document, `storyboard` on a
@@ -118,7 +118,7 @@ export type CodexIncludePolicy = 'always' | 'detected' | 'never' | 'manual';
  * codex.md §2's `EntrySource`. `from`, `to` and `extractedAt` are in the spec, and
  * they are optional here so a manifest written before they were kept still loads;
  * the serializer writes whichever are present, so a citation is not shortened on
- * the way to disk (B-debt item 8).
+ * the way to disk.
  */
 export interface CodexSource {
   docId: string;
@@ -145,7 +145,7 @@ export interface CodexEntry {
    * mentions this entry. Additive in format v1; absent reads as none, and the serializer omits the key when there are none.
    */
   visualRefs?: string[];
-  /** additive 2026-09-12 (D5) — missing on load = 'manual' */
+  /** additive (codex.md §10 K4) — missing on load = 'manual' */
   origin: 'manual' | 'agent' | 'import';
   sources: CodexSource[];
   /**
@@ -180,7 +180,7 @@ export interface SavedFilter {
 export interface ProjectGoal {
   id: string;
   nodeId: string;
-  /** `words`, or `chars` (goals-progress §9.2). Absent in a manifest written before m9 means words. */
+  /** `words`, or `chars` (goals-progress §9.2). Absent (an older manifest) means words. */
   metric: 'words' | 'chars';
   /** `project` (the default, absent when unset), or a weekly or monthly session window (goals-progress §9.3). */
   kind?: 'project' | 'weekly' | 'monthly';

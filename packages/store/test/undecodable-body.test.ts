@@ -144,7 +144,7 @@ function copyOf(state: Parameters<typeof writeProject>[1]): Parameters<typeof wr
   return copy;
 }
 
-describe('a document file that is not UTF-8 survives a copy and a write that prunes nothing (DS-1, probe B)', () => {
+describe('a document file that is not UTF-8 survives a copy and a write that prunes nothing', () => {
   it('the bytes are unchanged and the write does not throw, through readProject, a copy of the state, and writeProject', async () => {
     const { fs, docId } = await writtenProject();
     const path = `docs/${docId}.md`;

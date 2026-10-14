@@ -3,8 +3,7 @@
  *
  * ## What these tests are for, given that §9's closed set has no applies here
  *
- * An earlier change and an earlier change attach the project applies, and they attach them
- * **store-side** (`packages/store/src/commands.ts` for the five) because §1
+ * The project applies are attached **store-side** (`packages/store/src/commands.ts` for the five) because §1
  * says the bus does not own project state — so the bus's own `COMMAND_REGISTRY`
  * can only run the three `view.*` names, which §2 makes ephemeral and which
  * therefore need no store. This file is about the pipeline, not about a project's
@@ -284,7 +283,7 @@ describe('§3 — execute() runs the seven steps in the order §3 fixes', () => 
   });
 
   it('consults §4 before it applies: an agent write-confirm with no plan is refused', () => {
-    // §3's step 2, made reachable. An earlier change proved the *gate* refuses; this proves the
+    // §3's step 2, made reachable. `permission.test.ts` proves the *gate* refuses; this proves the
     // *pipeline* stops on it, which is a different claim and a different bug.
     const applied: unknown[] = [];
     const { bus, log, undo } = harness();
@@ -386,7 +385,7 @@ describe('§3 — execute() runs the seven steps in the order §3 fixes', () => 
     // The **whole** row, field for field against §8's interface. This used to
     // assert six of the ten and pass — the other four did not exist, and a
     // `toEqual` over the fields that *were* there cannot notice a required field
-    // that is absent. An earlier change added the four, and the assertion is written so that
+    // that is absent. The four are in the row now, and the assertion is written so that
     // dropping one again fails here rather than passing quietly.
     expect(view).toEqual({
       at: 1_760_000_000_000,
@@ -402,7 +401,7 @@ describe('§3 — execute() runs the seven steps in the order §3 fixes', () => 
       affected: [],
       // §8's digest, and the only place a view event is visible.
       summary: 'switched the active document',
-      // §8's `tokensSpent` has no envelope field to echo and the gateway is M3,
+      // §8's `tokensSpent` has no envelope field to echo and the gateway owns it,
       // so the key is absent rather than zero.
       tokensSpent: undefined,
     });
@@ -983,16 +982,16 @@ describe('the three view commands, through the shipped registry with no fakes', 
     // the set above is not "everything that happens to have a descriptor". The count below is the five view
     // names; the total is asserted further down, and `test/registry.test.ts` holds the names §9 does not tabulate.
     expect(withApply.length).toBe(5);
-    // 22 before m8-integration. `mcp.invoke` (extensibility §6) is the twenty-third: a descriptor here, its apply
+    // 22 core names. `mcp.invoke` (extensibility §6) is the twenty-third: a descriptor here, its apply
     // injected by the store registry, so it is not in `withApply`. The exceptions are listed in registry.test.ts.
-    // m8-integration adds `storyboard.create`, `shot.create` and `shot.setMeta` as well, so 26 in all.
-    // m9 (project export) adds seven more: 26 + 7 = 33 (project.rename, project.setMetadata, project.importAsset,
+    // The storyboard adds `storyboard.create`, `shot.create` and `shot.setMeta` as well, so 26 in all.
+    // Project export adds seven more: 26 + 7 = 33 (project.rename, project.setMetadata, project.importAsset,
     // vocabulary.upsert, vocabulary.remove, recipe.save, recipe.delete). Their descriptors are here; their applies are the store's.
-    // m4-furniture adds `binder.saveFilter`, `binder.deleteFilter`, `project.saveGoal` and `project.deleteGoal`: 33 + 4
+    // Saved filters and goals add `binder.saveFilter`, `binder.deleteFilter`, `project.saveGoal` and `project.deleteGoal`: 33 + 4
     // = 37. Their applies are the store's too, so `withApply` above still counts only the five bus-side view applies.
-    // m8 (run history) adds `coherence.discardRun`, a descriptor here with its apply in the store: 37 + 1 = 38.
-    // r6 (storyboard) adds `shot.importImage`, a descriptor here with its apply in the store: 38 + 1 = 39. m6-script adds
-    // `screenplay.import`, `dialogue.importInk` and `dialogue.setMeta`, descriptors here and applies in the store: 39 + 3 = 42.
+    // The run history adds `coherence.discardRun`, a descriptor here with its apply in the store: 37 + 1 = 38.
+    // The storyboard's image import adds `shot.importImage`, a descriptor here with its apply in the store: 38 + 1 = 39. The
+    // script imports add `screenplay.import`, `dialogue.importInk` and `dialogue.setMeta`, descriptors here and applies in the store: 39 + 3 = 42.
     expect(COMMAND_NAMES.length).toBe(42);
   });
 

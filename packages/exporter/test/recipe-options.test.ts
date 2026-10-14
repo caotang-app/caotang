@@ -88,7 +88,7 @@ function holdRecipe(state: ProjectState, recipe: ExportRecipe): void {
   state.manifest.recipes = [...kept, recipe];
 }
 
-// m9 fix: a project that predates recipes has no `recipes` key and holds the default (exporter.md §4). The exporter offers that
+// A project that predates recipes has no `recipes` key and holds the default (exporter.md §4). The exporter offers that
 // default and the bus checks an export's recipe name against the same list, and both take the name from the bus's one constant.
 describe('the default recipe a project that predates recipes holds (exporter.md §4)', () => {
   it('is the one recipe the exporter lists when none is stored, under the bus’s name for it', () => {

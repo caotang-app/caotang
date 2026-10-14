@@ -30,7 +30,7 @@ export function StaleTabNotice({ onExport, onReload }: StaleTabNoticeProps): Rea
   // (unsent-copy.ts stopKeptInBrowser). A copy an earlier stop left does not count.
   const kept = useSyncExternalStore(subscribeStop, () => stopKeptInBrowser(browserStorage()));
   // Why this tab stopped (integrity-model.ts `StopCause`): another tab stored newer text, or another tab upgraded Caotang's storage, which a reload of this
-  // tab carries on from once the updated Caotang is the one this tab runs (DS-6).
+  // tab carries on from once the updated Caotang is the one this tab runs.
   const updated = useSyncExternalStore(subscribeStopCause, stopCause) === 'updated';
   const resume = updated ? 'carry on with the updated Caotang' : 'carry on from the saved text';
 

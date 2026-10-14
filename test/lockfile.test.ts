@@ -3,29 +3,28 @@
  *
  * ## Why this file exists
  *
- * `test/lockfile.ts` was written for the Vite 8 toolchain. pnpm 12 writes `pnpm-lock.yaml` as more than one YAML document,
- * and both lockfile guards — this repo's `test/toolchain-floor.test.ts` and
- * `packages/editor-audit/test/pins.test.ts` — were reading the *first* one,
- * which is pnpm's own self-management record. They reported a 15-package tree.
+ * pnpm 12 writes `pnpm-lock.yaml` as more than one YAML document, and a lockfile
+ * guard — this repo's `test/toolchain-floor.test.ts` and
+ * `packages/editor-audit/test/pins.test.ts` — that reads the *first* one reads
+ * pnpm's own self-management record, a 15-package tree.
  *
- * The fix was a selector that asks a **semantic** question — which document
- * declares root `devDependencies:` — and **throws unless exactly one document
- * answers it**. Its own header states why the throw is there: *"A selector that
- * cannot fail is how both guards were broken in the first place, and the fix
- * must not reproduce that."*
+ * `test/lockfile.ts` is a selector that asks a **semantic** question — which
+ * document declares root `devDependencies:` — and **throws unless exactly one
+ * document answers it**. The throw is the point: a selector that cannot fail would
+ * reproduce the very fault it exists to avoid.
  *
- * ## What was missing, and how it was found
+ * ## Why the throw needs its own tests
  *
- * **The throw was held by nothing.** Both consumers call the selector once, at
+ * **Nothing else holds the throw.** Both consumers call the selector once, at
  * module scope, on the real lockfile — which qualifies exactly once — so the
- * throw is unreachable from the suite. Measured on 2026-10-03:
- * changing `project.length !== 1` to `project.length > 99` leaves **all 566
- * tests green across all 31 files**. The same mutation run on the *return*
- * value instead (`project[0]` → `withPackages[0]`, the literal 22:3x bug) fails
- * **11** tests, so the guards are not blind — they are blind to the one
- * property the selector was written to guarantee, and only to that one.
+ * throw is unreachable from the rest of the suite: weakening
+ * `project.length !== 1` to `project.length > 99` leaves every other test
+ * green. The same mutation run on the *return* value instead (`project[0]` →
+ * `withPackages[0]`) fails many tests, so the guards are not blind — they are
+ * blind to the one property the selector was written to guarantee, and only to
+ * that one.
  *
- * That asymmetry is the finding. "It throws if the format changes" is a claim
+ * "It throws if the format changes" is a claim
  * about a *future* file, so it reads like a comment; a control that would catch
  * its removal has to be built out of synthetic input, because no real lockfile
  * in this repo can reach the branch.
@@ -86,7 +85,7 @@ describe('the project lockfile selector', () => {
   it('throws when two documents qualify, rather than taking the first of them', () => {
     // The shape a future pnpm could produce, and the one the header names: a
     // parser that "picks whichever document it finds first" is exactly what
-    // broke both guards on 2026-10-02.
+    // reads a 15-package tree as the whole tree.
     const project = projectLockfile(raw);
     const ambiguous = `${project}\n---\n${project}`;
 

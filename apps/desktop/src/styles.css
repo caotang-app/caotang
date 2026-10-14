@@ -715,7 +715,7 @@ button.chip {
   display: none;
 }
 
-/* L3: a draft sits under the text it follows, with its Apply bar. The 50vh floors keep the focus document tall while the writer types;
+/* A draft sits under the text it follows, with its Apply bar. The 50vh floors keep the focus document tall while the writer types;
    while a draft is in the editor they come off, and the ghost's own surface never takes one (it would push the bar half a screen down). */
 .caotang-editor-ghost .ProseMirror {
   min-height: 0;
@@ -1381,7 +1381,7 @@ dialog.export-dialog::backdrop {
   min-width: 0;
 }
 
-/* m4 furniture: the filter bar's keyword and window fields, the notes read view with agent dividers, the inspector goals,
+/* The filter bar's keyword and window fields, the notes read view with agent dividers, the inspector goals,
    and the editor's session ring (binder-filters §5, ui-modules §4.1, goals-progress §2.1). */
 .filter-keywords,
 .filter-dates {
@@ -2743,7 +2743,7 @@ dialog.confirm::backdrop {
   }
 }
 
-/* m4 furniture: the writing history in the binder footer (goals-progress §9.1). */
+/* The writing history in the binder footer (goals-progress §9.1). */
 .history-body {
   display: grid;
   gap: 8px;

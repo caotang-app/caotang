@@ -1,13 +1,13 @@
 /**
  * The §10 extension set, mounted for the **bundle audit** and nothing else.
  *
- * This is the entry point `vite build` compiles so the C16 preflight can grep
+ * This is the entry point `vite build` compiles so the editor preflight can grep
  * the emitted bundle for Tiptap Cloud / Pro network calls. §2's claim — "MIT
  * core, fully offline, zero cloud calls" — is a *policy-level* claim until a
  * build says otherwise, and this file is the build.
  *
  * It deliberately does NOT construct an `Editor`, does not mount a view, and
- * is not imported by the app. An earlier change is a gate, not the M5 editor: the extensions
+ * is not imported by the app. This package is a gate, not the editor (`@caotang/editor`): the extensions
  * are referenced so the bundler pulls them in, and the exports are read back
  * only to prove the tree is non-empty.
  */
@@ -51,9 +51,9 @@ export const extensionSet = [
   Placeholder.configure({ placeholder: 'Begin the scene…' }),
   Dropcursor,
   Gapcursor,
-  // §10 names "History/UndoRedo (Lane 1; exact export name per v3 line
-  // confirmed at C16)" — the v3 name is `UndoRedo`, and this is the
-  // confirmation C16 deferred.
+  // §10 names "History/UndoRedo (Lane 1)" and leaves the exact v3 export
+  // name to be confirmed by the preflight: the v3 name is `UndoRedo`, and
+  // this line is that confirmation.
   UndoRedo,
   CharacterCount,
 ];
@@ -62,7 +62,7 @@ export const extensionSet = [
  * The changeset module §8's ghost-diff rendering depends on, plus the lazy
  * `diff-match-patch` §2 pins for the anchor ladder. Both are referenced so the
  * bundler includes them: a bundle audit that excluded them would be auditing
- * less than M5 will ship.
+ * less than the editor ships.
  *
  * `@tiptap/pm/changeset` re-exports `prosemirror-changeset` wholesale — the
  * real surface is `Change`, `ChangeSet`, `Span`, `simplifyChanges`, and there
@@ -77,7 +77,7 @@ export const anchorLadder = {
  * Build the extension list without a DOM. `Editor` is constructed with
  * `element: null`, which is the headless form — it exercises every extension's
  * `addExtensions`/`addGlobalAttributes` so their code is really in the bundle,
- * without a view. This is an audit artefact; M5 owns the real editor.
+ * without a view. This is an audit artefact; `@caotang/editor` owns the real editor.
  */
 export const buildHeadlessEditor = (): Editor =>
   new Editor({

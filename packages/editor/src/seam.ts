@@ -55,7 +55,7 @@
  * §4's own words: *"offsets map to nearest position; the anchor ladder is the
  * verification layer above them"*.
  *
- * ## What is deliberately absent, named so it cannot be read as M5 finishing
+ * ## What is deliberately absent, named so it cannot be read as the editor finishing
  *
  * The Tiptap adapter and its `mount` are **not in this file**, and that is the
  * point: this module stays headless. They live in `src/tiptap/`, reached through
@@ -65,8 +65,7 @@
  * `captureAnchor` here only reads the selection, and the adapter takes the revision
  * from the store because §9 makes the store its owner.
  *
- * **§7's two-lane undo used to be on that list and is not any more** (An earlier change,
- * 2026-10-05): it is `./lanes.js`, the one place that reads `historyExcluded`
+ * **§7's two-lane undo is not on that list**: it is `./lanes.js`, the one place that reads `historyExcluded`
  * and the one that writes `addToHistory: false`. It left this list because the
  * thing that kept it out was not a scope decision — §7's mechanism is
  * `EditorState` + transactions with no view, so it was buildable headless the
@@ -122,7 +121,7 @@ export interface GhostController {
  * §4's carrier. **The diagnostics half of `ParseResult`, passed through
  * untouched** — and that is the whole contract.
  *
- * A planning decision settled this carrier's shape from §4's
+ * This carrier's shape settles §4's
  * ambiguity — *"the carrier is named, its shape is not"* — with two requirements
  * that pull against each other in their spelling: the carrier "carries exactly
  * the per-node `LossWarning[]` that `parseWithDiagnostics` returns — same array,
@@ -171,7 +170,7 @@ export interface EditorInstance {
    * edit-anchors.md §2 — from the selection. `null` when the selection is collapsed, and `null`
    * when it is longer than the anchor's bound of 2000 characters: §2 bounds `exact`, so a longer
    * target splits into several anchored steps, each captured from its own selection. An anchor
-   * that carried more text would be refused at apply time, and never resolve (M5 finding 5).
+   * that carried more text would be refused at apply time, and never resolve.
    */
   captureAnchor(): TextAnchor | null;
   /** Scroll into view + select (agent "show me" affordances). */
@@ -179,7 +178,7 @@ export interface EditorInstance {
   /**
    * `editor.insert` primitive: inserts `text` at the caret, or at the end of a selection.
    *
-   * **The text is body Markdown** (M5 finding 8). It is read the way §5 reads a body, so `*x*`
+   * **The text is body Markdown**. It is read the way §5 reads a body, so `*x*`
    * inserts emphasis that saves as `_x_`, and a space at either edge of the text is kept. One
    * paragraph joins the text around the insertion point; several blocks join it at their ends.
    * The text takes its own marks. A primitive never throws for content: offsets map to the
@@ -222,8 +221,7 @@ export interface ProjectionBlock {
  * always** — that equality is what makes the two conversions inverses instead of
  * projections, so it is asserted over the whole corpus rather than assumed here.
  *
- * **A leaf is one run, or one run per escape it carries, and an earlier change is
- * why the second exists.** §4 says the map "records a run per text leaf, equally
+ * **A leaf is one run, or one run per escape it carries.** §4 says the map "records a run per text leaf, equally
  * long on both sides", and both halves of that sentence are load-bearing: the
  * lengths make the pair a retraction, and the run is what lets the identity hold
  * *"at every offset inside a located run, which is every offset a caret can
@@ -265,10 +263,8 @@ export interface ProjectionMap {
 /** How a run was located. `standalone` is the common case; the other two are
  *  measured, not hypothetical.
  *
- * **Produced and asserted per leaf since 2026-10-06,.** This field
- *  used to be declared here and carried by nothing, so neither the code nor the
- *  suite could state which locator located a given run; a review measured the split by
- *  instrumenting `locate` over the whole §13 corpus: **72 of 76 runs resolve on
+ * **Produced and asserted per leaf.** Instrumenting `locate` over the whole
+ *  §13 corpus gives the split: **72 of 76 runs resolve on
  *  the first search, 4 on the second** (`nested-emphasis`'s three, and the fence
  *  whose content is backticks), and **the third search fires zero times**. The map
  *  now records the split per run, `seam.test.ts` asserts it **per leaf** rather
@@ -318,7 +314,7 @@ const escapeTolerant = (text: string): RegExp =>
 
 /**
  * Where `text` begins inside `standalone`, and the slice of `standalone` it
- * occupies — **the leaf's body spelling**. An earlier change.
+ * occupies — **the leaf's body spelling**.
  *
  * This exists because the search `locate` used is `-1` on precisely the leaves
  * that carry an escape. §5 writes a leaf as `wrapper + escape(text) + wrapper`,
@@ -387,10 +383,10 @@ interface SpellingSegment {
 /**
  * A body spelling cut at its escapes into the pieces that map 1:1 onto the leaf's
  * text, so that **every run the map records is equally long on both sides** — §4's
- * invariant, kept rather than amended. An earlier change.
+ * invariant, kept rather than amended.
  *
- * This is the choice the row named as *not available* and that turned out to be
- * the only one that is: a span that covers the leaf's matched text cannot also be
+ * This choice looks unavailable at first and turns out to be the only one that
+ * is: a span that covers the leaf's matched text cannot also be
  * equally long while the PM text differs, so the run cannot be widened — but the
  * leaf does not need one run. A leaf whose spelling is ` and 2. c\*d` for the text
  * ` and 2. c*d` is two runs (` and 2. c`, `d`) and one gap of one character, and that
@@ -405,7 +401,7 @@ interface SpellingSegment {
  * `html-raw-inline` and `obsidian-heading-spacing`. `escape-bracket`'s run read
  * `not \[a link` against the PM text `not [a link]` — the backslash inside a run that
  * cut the closing bracket off. Every one of them now reads the same string on both
- * sides, which is the assertion an earlier change adds.
+ * sides, which is what the seam tests assert.
  *
  * A spelling with no escape yields exactly one segment covering all of it, so the
  * overwhelmingly common case is unchanged: the §13 corpus's 76 runs and its
@@ -601,8 +597,7 @@ function topBlocks(doc: PmNode): Array<{ node: PmNode; from: number }> {
  * The prefix algorithm, named so it can be a fallback and an oracle. Each block's end is
  * the length of `serialize` of the document truncated to that block, which is exact by
  * construction (it is what a save of that prefix writes) and **quadratic**: every block
- * re-renders everything before it. A 400-paragraph document took 6.4 s this way (M5 finding
- * 6), so it is no longer the mechanism, only the answer `blockSpans` is checked against.
+ * re-renders everything before it. A 400-paragraph document took 6.4 s this way, so it is no longer the mechanism, only the answer `blockSpans` is checked against.
  */
 export const prefixBlockSpans = (doc: PmNode, body: string): ProjectionBlock[] => {
   const nodes = topBlocks(doc);
@@ -651,7 +646,7 @@ const spanEnds = (body: string, texts: readonly string[]): number[] | null => {
 };
 
 /**
- * Every block's span, from **one** save-path render (dialect.ts's recorder, which an earlier change built
+ * Every block's span, from **one** save-path render (dialect.ts's recorder, built
  * for the banner) and a single pass over the body. O(n) where the prefix algorithm was
  * O(n²). The two agree on every block of a document with no empty block, which the
  * projection tests assert over the §13 corpus; an empty block's span is empty under this
@@ -701,10 +696,9 @@ export const buildProjectionMap = (doc: PmNode): ProjectionMap => {
         return;
       }
       // **One run per escape-free segment of the leaf's body spelling**, and the
-      // spelling is what advances the cursor. Both halves are an earlier change and
-      // they are the same change: the old code advanced by `text.length` against a
-      // body that holds `text` plus its escapes, so every leaf after the first one
-      // carrying an escape started its search inside the previous leaf's tail.
+      // spelling is what advances the cursor. Both halves belong together: advancing
+      // by `text.length` against a body that holds `text` plus its escapes would
+      // start every leaf after the first escaped one inside the previous leaf's tail.
       const base = blocks[i]!.bodyStart + hit.at;
       for (const segment of segmentsOf(hit.spelling)) {
         runs.push({
@@ -780,8 +774,8 @@ const locate = (
     // not symmetric -- a link's is `[text](url)`, so splitting the difference
     // would place the run inside the URL -- so where the text falls inside the
     // serialization is walked (`escapeAwareSpelling`) rather than assumed to be
-    // the start. An earlier change: `standalone.indexOf(text)` is -1 for every leaf whose
-    // spelling carries an escape, and the `+ 0` that stood in for it placed the
+    // the start: `standalone.indexOf(text)` is -1 for every leaf whose
+    // spelling carries an escape, and a `+ 0` standing in for it placed the
     // run on the **wrapper's** first character -- measured, `**a\*b**` located
     // its leaf at body 0 where the leaf starts at 2, and the identical code
     // path located `**ab**` correctly at 2.
@@ -802,19 +796,16 @@ const locate = (
   if (raw >= 0) return { at: raw, spelling: text, matched: 'raw' };
   // 3. Escape-tolerant, because §5 escapes on the way out and both searches
   //    above look for unescaped text.
-  //    MEASURED, AND IT CONTRADICTS WHAT THIS COMMENT USED TO CLAIM. A review
-  //    instrumented `locate` over the whole §13 corpus: this search returns null
-  //    for every one of the 76 runs, and replacing its regexp with one that can
-  //    never match leaves all 234 editor tests green. It therefore locates
-  //    **nothing** — not `escape-bracket`, `html-raw-block`, `html-raw-inline` or
-  //    `footnote-reference`, which an earlier draft of this comment named as its
-  //    four users. All four resolve on search 1, because §5 leaves those
-  //    sequences unescaped. Kept: the asymmetry is real for a case the corpus
-  // does not cover. And it is **no longer unexercised** — the map
-  //    records the locator per run, and `seam.test.ts` drives this branch with a
+  //    Measured: over the whole §13 corpus this search returns null for every
+  //    one of the 76 runs, so the corpus locates **nothing** here. That includes
+  //    `escape-bracket`, `html-raw-block`, `html-raw-inline` and
+  //    `footnote-reference`, which all resolve on search 1, because §5 leaves
+  //    those sequences unescaped. Kept: the asymmetry is real for a case the
+  //    corpus does not cover. It is exercised all the same: the map records
+  //    the locator per run, and `seam.test.ts` drives this branch with a
   //    hand-built shape and asserts `matched: 'escaped'` on it, so a regexp here
-  //    that can never match is now red rather than invisible.
-  // What the match returns is the **spelling**, escapes and all, so the
+  //    that can never match fails that test.
+  //    What the match returns is the **spelling**, escapes and all, so the
   //    run it produces can be cut at them. The optional `\` in the pattern is
   //    what makes the match tolerant; the spelling it captured is what makes
   //    the placement exact.
@@ -828,8 +819,8 @@ const locate = (
 // ---------------------------------------------------------------------------
 
 /**
- * One banner entry: the members merged, and **how many**. A planning decision: *"a group that
- * reports '1' where two nodes warned is a lie about the input"*, so `nodes` is
+ * One banner entry: the members merged, and **how many**. A group that
+ * reports '1' where two nodes warned is a lie about the input, so `nodes` is
  * not optional and the corpus test sums it against the input length.
  */
 export interface LossWarningGroup {
@@ -856,18 +847,17 @@ export interface LossWarningGroup {
  * Order is the input's order of first appearance, verbatim — **which is not
  * document order, and used to be read as if it were.**
  *
- * **Corrected.** This comment said *"so a banner
- * reads top to bottom in the order the constructs were met"*, and that stopped
- * being true when an earlier change started appending §3.3's merged-inline-run warnings
+ * It does **not** read top to bottom in the order the constructs were met:
+ * §3.3's merged-inline-run warnings are appended
  * **after** the compile (`pipeline.ts`, deliberately: one ordering rule for one
  * list). The array is therefore handlers-then-structural, and a document whose
  * merged-run loss sits *above* a degrade construct hands the banner the higher
  * line last. Measured on `_gone and _struck_ together_` + a `<div>` three lines
  * below: the array is `[unsupported-node:html@5, lossy-structure:emphasis@1]` and
- * the groups read **5, 1**. The sort this comment promised is not missing by
- * accident and not a bug here — **grouping must not reorder**, because that change's
+ * the groups read **5, 1**. A sort is not missing by
+ * accident and not a bug here — **grouping must not reorder**, because the warning
  * carrier contract is "no merging, no reordering, no dedupe" — so whether the
- * *product* wants a top-to-bottom banner is an earlier change, not this function.
+ * *product* wants a top-to-bottom banner is a separate decision, not this function's.
  *
  * What is pinned here instead is the true rule, so the next reader inherits a
  * fact rather than a wish: the order is preserved exactly as given

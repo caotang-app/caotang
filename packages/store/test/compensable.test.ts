@@ -28,8 +28,8 @@
  * `captureBody` reads the prior body **once** and fans it out twice: into the
  * `sink(...)` call that becomes the §5.1 durable row, and into the
  * `{ before, revision }` it returns, which is what the undo closure restores.
- * Those are independent, and **no single mutation can break both** — a review measured
- * the pair, and the two numbers are the only honest description of what each
+ * Those are independent, and **no single mutation can break both** — both were measured,
+ * and the two numbers are the only honest description of what each
  * mutation tests:
  *
  * | mutation | site | fails |
@@ -61,10 +61,10 @@
  * fully reversible group. A family that only worked with a store attached would
  * be a family whose undo depends on a caller remembering to attach one.
  *
- * ## the obligation, discharged
+ * ## The registration refusal is not reached
  *
- * A planning decision settled that the pipeline's step-5 registration refusal is correct
- * behaviour, and left one thing for an earlier change: a test that says the refusal is *not
+ * The pipeline's step-5 registration refusal is correct behaviour, and it
+ * needs one more test: a test that says the refusal is *not
  * reached* because the applies capture correctly. That is the first test in the
  * last describe block, and it asserts the outcome is `ok` for all five — a
  * `registrationRefusal` would be an `internal` error naming the command.
@@ -239,8 +239,8 @@ describe('§5 — a body snapshot is the restore artifact, and it is captured be
   });
 
   it('an undo moves the revision up, so a plan made against the undone text cannot overwrite newer text', () => {
-    // Regression for the ABA case: write an earlier change (rev 1), write an earlier change (rev 2), undo an earlier change (rev 3, body an earlier change),
-    // type C at rev 3, then a plan drafted against an earlier change at rev 2 must be refused rather than
+    // Regression for the ABA case: write A (rev 1), write B (rev 2), undo B (rev 3, body A),
+    // type C at rev 3, then a plan drafted against B at rev 2 must be refused rather than
     // overwriting C. With the undo re-asserting rev 1, rev 2 came back and the stale write matched.
     const h = harness();
     const start = getRevision(h.state, LANDING);
@@ -540,7 +540,7 @@ describe('§5.1 rule 7 — the snapshot lives in the runtime store, never the ar
       );
       const rows = await readBodySnapshots(store, 'p_9XK2M4Q7RZ');
       expect(rows).toHaveLength(1);
-      // The original capture is intact. A review measured why this line is weaker than
+      // The original capture is intact. This line is weaker than
       // it reads: `add` -> `put` leaves all 27 of these tests green, because the
       // in-transaction `get` in `writeBodySnapshot` refuses first — and
       // neutralising that `get` leaves exactly this one failing, because `add`
@@ -554,8 +554,7 @@ describe('§5.1 rule 7 — the snapshot lives in the runtime store, never the ar
 
   it('a capture for a document with NO row is accepted and persisted — a measured gap', async () => {
     // `writeBodySnapshot`'s doc comment claimed it *"refuses a capture for a
-    // document with no row"*. A review measured the opposite and corrected the
-    // comment; this pins the measurement so the gap is a fact the suite carries
+    // document with no row"*, and the opposite is true; this pins the measurement so the gap is a fact the suite carries
     // rather than a sentence a reader has to trust.
     //
     // **This is not a blessing.** The transaction spans `[SNAPSHOT_STORE]` alone,
@@ -826,7 +825,7 @@ describe('the registration refusal is never reached, because the captures are co
   });
 
   it('the bus registry still refuses the five, and without an exporter the store registry implements eighteen of the twenty', () => {
-    // Both halves of the split an earlier change pinned, extended to this slice. A bus registry
+    // Both halves of the bus/store registry split, extended to these applies. A bus registry
     // that quietly started implementing a name, and a store registry that quietly
     // stopped, each fail here.
     for (const partial of FIVE) {
@@ -839,18 +838,18 @@ describe('the registration refusal is never reached, because the captures are co
     }
     const registry = createProjectCommandRegistry({ clock });
     const implemented = Object.values(registry).filter((entry) => entry.apply !== undefined);
-    // 5 `view.*` (the three + M4's `view.setExpanded` and `view.setCorkboardScope`)
-    // + 6 `inverse` (An earlier change, and `binder.create`) + 5 `compensable` +
-    // The `codex.upsert` and `project.deleteNode`, and m8's two coherence applies (inverse
-    // undo, coherence.md §7.1). What is left of the twenty-two is M9's two export names,
+    // 5 `view.*` (the three + `view.setExpanded` and `view.setCorkboardScope`)
+    // + 6 `inverse` (including `binder.create`) + 5 `compensable` +
+    // `codex.upsert` and `project.deleteNode`, and the two coherence applies (inverse
+    // undo, coherence.md §7.1). What is left of the twenty-two is the two export names,
     // which register only with an injected exporter — and `commands.test.ts` pins the same
     // count from the other side, so a slice that implemented the wrong name cannot pass by
     // adjusting one of them.
-    // m9 adds six applies that need no injected port (project.rename, project.setMetadata, vocabulary.upsert,
+    // Project export adds six applies that need no injected port (project.rename, project.setMetadata, vocabulary.upsert,
     // vocabulary.remove, recipe.save, recipe.delete): 20 + 6 = 26. project.importAsset needs the asset port.
-    // m4-furniture adds four implemented names (binder.saveFilter, binder.deleteFilter, project.saveGoal,
-    // project.deleteGoal): 26 + 4 = 30. m8 adds the run discard (compensable undo, coherence.md §7.1): 30 + 1 = 31.
-    // m6-script adds the two imports and the container settings, all compensable and needing no port: 31 + 3 = 34.
+    // Saved filters and goals add four implemented names (binder.saveFilter, binder.deleteFilter, project.saveGoal,
+    // project.deleteGoal): 26 + 4 = 30. The run history adds the run discard (compensable undo, coherence.md §7.1): 30 + 1 = 31.
+    // The script imports add the two imports and the container settings, all compensable and needing no port: 31 + 3 = 34.
     expect(implemented).toHaveLength(34);
   });
 

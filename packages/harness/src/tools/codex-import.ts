@@ -1,12 +1,12 @@
 /**
- * `codex.import` — a write-confirm registry extension beside `doc.import` (codex.md §2, §7; D5).
+ * `codex.import` — a write-confirm registry extension beside `doc.import` (codex.md §2, §7).
  *
  * **Why a separate verb.** `codex.write` stamps every entry it creates `origin: 'agent'`. The
- * import of a large worldbuilding project showed what that costs: the writer's own worldbuilding came in
+ * cost is that a writer's own imported worldbuilding would come in
  * as the agent's drafts. Canon ranks by origin (codex.md §2, coherence.md §4.3), so an import stamped `agent` would
  * lose to the writer's canon it is. This verb carries the `import` provenance on the bus command
  * this tool builds (`PreparedCommand.provenance`, command-bus §2), so the caller's params never name
- * the origin (D5): an op that tried would be refused by `codex.upsert`'s closed key set.
+ * the origin: an op that tried would be refused by `codex.upsert`'s closed key set.
  *
  * **Shape.** Create-only, at most 20 entries per call. Each entry becomes one `codex.upsert` create
  * op that also attaches it to the one document its text was imported into, with one citation into

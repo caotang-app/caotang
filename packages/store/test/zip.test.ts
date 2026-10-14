@@ -85,16 +85,14 @@ describe('§7 zip bundle', () => {
 
   it('strips every control character from a project name, the class the searchable-sources guard refuses', () => {
     // §7 puts `<project-name>` in a filename, so the strip has to cover the
-    // whole C0 range and DEL. An earlier change rewrote this exact class as escapes because
-    // the literal-byte form made `zip.ts` unsearchable, and a rewrite of a
+    // whole C0 range and DEL. The class is written as escapes because the
+    // literal-byte form made `zip.ts` unsearchable, and a rewrite of a
     // character class with no assertion on it is a change nobody can tell from
     // no change — so the assertion is over **the whole class**, written out.
     //
-    // A review corrected the claim this comment used to make. It
-    // said the class was "pinned as the class rather than one character at a
-    // time" while pinning four characters of it: narrowing the source class to
-    // `[\u0000-\u0001\u001f\u007f]` — 4 of its 33 members — left all 24 tests
-    // in this file green. Written out, that same narrowing drops 29 members and
+    // Pinning only a few characters is not enough: narrowing the source class to
+    // `[\u0000-\u0001\u001f\u007f]` — 4 of its 33 members — would leave a
+    // spot-check green. Written out, that same narrowing drops 29 members and
     // this test fails, which is the whole point of writing it out.
     //
     // Escapes, not literal bytes — writing the bytes here would reproduce in a
@@ -325,8 +323,7 @@ describe('§7 import guardrails', () => {
   });
 
   /**
-   * The boundary of that forward compatibility, measured rather than assumed —
-   * A review.
+   * The boundary of that forward compatibility, measured rather than assumed.
    *
    * **The bundle is a text bundle.** `importProjectZip` decodes every entry with a
    * non-fatal UTF-8 decoder and `ArtifactFs` stores strings, so an entry that is
@@ -346,7 +343,7 @@ describe('§7 import guardrails', () => {
    * make this decoder fatal, because a fatal decode would *refuse* a bundle rather
    * than carry it.
    */
-  it('carries text entries and binary entries byte-exactly (B-debt item 8 lifted the binary limit)', async () => {
+  it('carries text entries and binary entries byte-exactly', async () => {
     const state = sample();
     const zip = await exportProjectZip(state, { now: NOW });
     const entries = unzipSync(zip.bytes);
@@ -377,7 +374,7 @@ describe('§7 import guardrails', () => {
 
     // The binary limit, inverted. This test used to assert that a non-UTF-8 entry
     // came back damaged, and said that when it stopped being damaged the test should
-    // be inverted. `ArtifactFs` now carries bytes (B-debt item 8), so the entry is
+    // be inverted. `ArtifactFs` now carries bytes, so the entry is
     // kept as it was written, and the boundary it used to record is gone.
     const gotBinary = snap['future/image.png']!;
     expect(gotBinary).toBeInstanceOf(Uint8Array);

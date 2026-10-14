@@ -67,7 +67,7 @@ describe('the scene-metadata patch rule (coherence.md §5.2, §5.2.1)', () => {
   it('keeps linear as absence, and refuses a timeline mode outside the §5.2.1 enum', () => {
     const linear = applySceneMetaPatch(SCENE, { timelineMode: 'flashback' }, { timelineMode: 'linear' }, context);
     expect(linear.ok && linear.meta).toEqual({});
-    // `time-skip` is deferred to backlog C33 (coherence.md §5.2.1, D10), so the enum must refuse it.
+    // `time-skip` is deferred (coherence.md §5.2.1), so the enum must refuse it.
     const deferred = applySceneMetaPatch(SCENE, undefined, { timelineMode: 'time-skip' }, context);
     expect(deferred.ok).toBe(false);
     if (!deferred.ok) expect(deferred.error).toContain('valid modes are');

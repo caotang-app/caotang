@@ -3,7 +3,7 @@
  *
  * ## What this file is, and where the refusal is
  *
- * An earlier change made an apply report `{ affected, summary }` and made `execute()` **refuse**
+ * An apply reports `{ affected, summary }`, and `execute()` **refuses**
  * a dispatch that reported nothing, so that half of §8 is already enforced at
  * runtime: a store apply that forgot to report cannot return `ok`. That is why
  * this file is not a test of *whether* the applies report — the pipeline's own
@@ -36,8 +36,8 @@
  * assertion is the guard**: every name in `createProjectCommandRegistry()` must
  * appear here exactly once. A new apply therefore cannot be added without deciding
  * what its row says, and cannot be added by forgetting, which is the whole failure
- * mode an earlier change exists to close. That is the same shape as the permission matrix guard
- * An earlier change took from the registry instead of listing it.
+ * mode this file exists to close. That is the same shape as the permission matrix guard,
+ * which takes its names from the registry instead of listing them.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -148,7 +148,7 @@ interface Case {
   readonly digestMentions: string;
   /** The case needs a coherence file in the state: the coherence applies change one. */
   readonly coherence?: boolean;
-  /** The case needs a dialogue container in the state (m6-script): the settings command names one. */
+  /** The case needs a dialogue container in the state: the settings command names one. */
   readonly dialogue?: boolean;
 }
 
@@ -217,7 +217,7 @@ const CASES: readonly Case[] = [
     digestMentions: 'keyword',
   },
   {
-    // m8 (coherence.md §7.1): the scene's declarations change, and the row names the scene it changed.
+    // coherence.md §7.1: the scene's declarations change, and the row names the scene it changed.
     name: 'coherence.setSceneMeta',
     params: { docId: STORM, patch: { dayOffset: 3 } },
     titles: ['The Storm'],
@@ -236,7 +236,7 @@ const CASES: readonly Case[] = [
     coherence: true,
   },
   {
-    // m8 (coherence.md §7.1, §8): a run leaves the history with the untouched findings it made. The findings name no
+    // coherence.md §7.1, §8: a run leaves the history with the untouched findings it made. The findings name no
     // scene in the row, because the run is a set of derived state rather than a change to one document.
     name: 'coherence.discardRun',
     params: { runId: RUN_ID },
@@ -342,7 +342,7 @@ const CASES: readonly Case[] = [
     titles: [],
     digestMentions: 'offset 320',
   },
-  // M4's two binder-and-corkboard view events, held to the same claim: they name
+  // The two binder-and-corkboard view events, held to the same claim: they name
   // a node and affect none.
   {
     name: 'view.setExpanded',
@@ -356,7 +356,7 @@ const CASES: readonly Case[] = [
     titles: [],
     digestMentions: 'showed a container on the corkboard',
   },
-  // m9 (project export): the six applies that need no injected port. Each reports the row §8 asks for. The seventh,
+  // Project export: the six applies that need no injected port. Each reports the row §8 asks for. The seventh,
   // `project.importAsset`, is implemented only with the asset port, and its row is asserted in commands-project.test.ts.
   {
     name: 'project.rename',
@@ -396,7 +396,7 @@ const CASES: readonly Case[] = [
     titles: [],
     digestMentions: 'deleted the recipe "Manuscript"',
   },
-  // m4-furniture's four commands (binder-filters §5, goals-progress §4). Each names a list, not a node, so the row
+  // The saved-filter and goal commands (binder-filters §5, goals-progress §4). Each names a list, not a node, so the row
   // has no affected entries; the two deletes act on the filter and the goal the fixture seeds.
   {
     name: 'binder.saveFilter',
@@ -449,7 +449,7 @@ describe('§8 — the activity row for every shipped store apply', () => {
     // The checklist is over the names that **carry an apply**, not over every name.
     // The store registry is the bus's own plus the thirteen project applies, so the
     // two ways to be wrong are separate: a name with an apply and no case (a new
-    // command, unasserted — the defect an earlier change is about), and a name with a case and no
+    // command, unasserted — the defect this file is about), and a name with a case and no
     // apply (a case asserting something that cannot run).
     const implemented = Object.entries(registry)
       .filter(([, entry]) => typeof entry.apply === 'function')
@@ -464,15 +464,15 @@ describe('§8 — the activity row for every shipped store apply', () => {
     expect(covered).toEqual(implemented);
     expect(new Set(covered).size).toBe(covered.length);
 
-    // The unimplemented names are M9's exporter pair, and naming them here is what stops this list from quietly
-    // becoming shorter: if the exporter landed, this assertion fails and demands a row for it. m8-integration adds
+    // The unimplemented names are the exporter pair, and naming them here is what stops this list from quietly
+    // becoming shorter: if the exporter landed, this assertion fails and demands a row for it. There are also
     // four names that register only when their injected half is supplied (`mcp.invoke`, extensibility §6, and the
     // storyboard module's three shot commands), so with nothing injected they are unimplemented too, and the
     // rows they write are asserted in their own test files (mcp-invoke-injection, shot-commands).
-    // m9 adds `project.importAsset`, which registers only with the asset port injected (commands-project.ts), so it is
+    // `project.importAsset` registers only with the asset port injected (commands-project.ts), so it is
     // unimplemented here for the same reason `mcp.invoke` is. Its row is asserted with the port in its own test file.
-    // r6 (storyboard) adds `shot.importImage`, which registers only with both the asset port and the storyboard port, so it
-    // is unimplemented here too. Its row is asserted with both ports in `commands-storyboard-r6.test.ts`.
+    // `shot.importImage` registers only with both the asset port and the storyboard port, so it
+    // is unimplemented here too. Its row is asserted with both ports in `commands-shot-image.test.ts`.
     expect(withoutApply).toEqual([
       'export.compile',
       'export.compileSelection',
@@ -556,14 +556,14 @@ describe('§8 — the activity row for every shipped store apply', () => {
     expect(rows[1]!.summary).toContain('as it was');
   });
 
-  it('every row carries source: native, and none carries a tokensSpent in M2', () => {
+  it('every row carries source: native, and none carries a tokensSpent', () => {
     const h = harnessOver(fixture());
     h.run(cmd('notes.set', { nodeId: STORM, notes: 'Rain all night.' }));
     const row = h.row('notes.set');
     // §8 reserves 'mcp' for the v0.2 client and says "default 'native'". Stamped,
     // so a reader never infers it from the absence of a tag.
     expect(row.source).toBe('native');
-    // The gateway is M3 and no turn has run, so a 0 here would be a measurement
+    // The cost is the gateway's to measure, so a 0 here would be a measurement
     // nobody took.
     expect(row.tokensSpent).toBeUndefined();
   });
@@ -586,7 +586,7 @@ describe('§8 — the activity row for every shipped store apply', () => {
 /** The fixture, in miniature: a tree with real titles and a codex entry. */
 function fixture(): ProjectState {
   const state = createProjectState(createEmptyManifest('The Lighthouse Keeper', OPENED));
-  // One saved filter and one goal, so the two m4 delete cases have a record to remove.
+  // One saved filter and one goal, so the two delete cases have a record to remove.
   state.manifest.filters = [
     { id: 'q_FIXTURE001', name: 'Drafts', criteria: { statusId: 'draft' }, createdAt: OPENED.toISOString(), updatedAt: OPENED.toISOString() },
   ];

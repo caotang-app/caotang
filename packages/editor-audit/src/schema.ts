@@ -1,10 +1,10 @@
 /**
- * The §3 Caotang ProseMirror schema, built for the C16 preflight.
+ * The §3 Caotang ProseMirror schema, built for the Tiptap preflight.
  *
- * This is NOT the M5 editor. It is the minimum surface the §5 fixture corpus
+ * This is NOT the editor (`@caotang/editor`). It is the minimum surface the §5 fixture corpus
  * needs in order to run through remark-prosemirror at all: a schema is a
  * required argument to both `remarkProseMirror` and `fromProseMirror`, so a
- * corpus run without one measures nothing (C19: the library's own suite is 5
+ * corpus run without one measures nothing (the library's own suite is 5
  * shapes — the corpus is the real instrument).
  *
  * Node and mark sets are transcribed from [editor-engine.md] §3.1/§3.2, names

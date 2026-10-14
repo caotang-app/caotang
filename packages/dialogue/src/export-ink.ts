@@ -8,7 +8,7 @@
 
 import { compileInk, type InkMessage } from './compile.js';
 
-/** The recipe format name `export.compile` takes for this renderer (exporter.md §2, media-track M6). */
+/** The recipe format name `export.compile` takes for this renderer (exporter.md §2, the one-source compile). */
 export const INK_JSON_FORMAT = 'ink-json';
 
 export const INK_JSON_MIME = 'application/json';

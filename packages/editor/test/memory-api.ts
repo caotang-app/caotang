@@ -124,7 +124,7 @@ const createInstance = (
    * The single dispatch point, and the only place `laneOpts` is read. Every
    * mutating member of §4's interface funnels here, so a member that forgot to
    * pass its option would be a lane that silently does not exist — which is the
-   * defect an earlier change was cut for, and the reason the plumbing is here rather than at
+   * defect the two-lane undo has to rule out, and the reason the plumbing is here rather than at
    * each call site.
    */
   const apply = (tr: Transaction, laneOpts?: LaneOptions): void => {
@@ -144,7 +144,7 @@ const createInstance = (
     if (from === null || to === null) return;
     const [start, end] = from <= to ? [from, to] : [to, from];
     // The text is body Markdown, read by the same function the Tiptap adapter uses
-    // (`insertionOf`, M5 finding 8), so the fixture and the product cannot disagree about
+    // (`insertionOf`), so the fixture and the product cannot disagree about
     // what `*x*` inserts. Fitting across a block boundary is ProseMirror's, as it is in the
     // adapter: `replace`, not `insertText`, which is smart and can move the range.
     //
@@ -227,7 +227,7 @@ const createInstance = (
 
     // §9's rule, verbatim: "words = block text split on whitespace; chars =
     // body-projection length". Delegated to `@caotang/store`'s `countBody` rather
-    // than spelled out here — an earlier change added the store's live producer for
+    // than spelled out here — the store has the live producer for
     // `derived.wordCounts` (which §2 requires and which had no writer), and a
     // second literal copy of the rule here is exactly what docs/decisions.md
     // rejected when it refused a count inside `sessions.ts`: *"two word-count

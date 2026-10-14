@@ -25,7 +25,7 @@ export interface AssetListing {
 /**
  * The asset records of the project's `assets/` folder, keyed by asset id. `version` is the session's version, so a
  * new asset appears on the next change the session makes. `listing` says whether that list has come back: a picture that
- * is not in it is only missing once it has (F-08). With no folder the list cannot be read, so the listing is `failed`.
+ * is not in it is only missing once it has. With no folder the list cannot be read, so the listing is `failed`.
  *
  * `assets` must keep its identity while the project is open: the effect below runs on it. The App memoizes the one
  * `ArtifactFs` per attached folder (README, "Stable identity"). A new object each render lists the folder again.
@@ -100,7 +100,7 @@ export function useImageUrl(assets: ArtifactFs | undefined, assetId: string | nu
 /**
  * The codex entries a media view reads (the speakers of a dialogue container, the cues of a scene). The store changes an entry in place,
  * so the array keeps its identity when an entry is renamed, given an alias or removed; a memo keyed on the array would keep the names it
- * read before the change (dialogue L7). This hook returns a new array whenever the names, aliases, types or case rules change, so a memo
+ * read before the change. This hook returns a new array whenever the names, aliases, types or case rules change, so a memo
  * keyed on it is read again, the way the Findings scan reads the codex.
  */
 export function useCodexEntries(session: ProjectSession): readonly CodexEntry[] {

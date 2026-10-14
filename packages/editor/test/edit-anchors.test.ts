@@ -9,7 +9,7 @@
  * `anchor.from`/`anchor.to` unconditionally would pass every "it resolved" assertion
  * in this file. So every successful resolution here is checked three ways: the
  * **method** it claims, the **range** it names, and — the one that catches a
- * constant-offset bug of the kind an earlier change measured in the projection map — that the body
+ * constant-offset bug of the kind the projection map once had — that the body
  * at the returned range is the anchored text, or scores at least §3's floor against
  * it. A resolution that reports a method and moves the cursor nowhere is the failure
  * this row exists to prevent.
