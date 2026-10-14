@@ -1,0 +1,80 @@
+import { writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+import react from '@vitejs/plugin-react';
+import { defineConfig, type Plugin } from 'vite';
+
+// The notices generator is a plain module with types beside it (tools/third-party-notices.d.mts).
+import { generateNotices, NOTICES_FILE } from '../../tools/third-party-notices.mjs';
+
+const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url));
+
+/**
+ * Writes THIRD-PARTY-NOTICES.md beside the build, so a copy of dist/ carries the notices of what it holds. MIT and
+ * Apache-2.0 both require the notices to travel with copies of the software. The text comes from the lockfile, for the
+ * production dependencies of this app (tools/third-party-notices.mjs), so it names what the build contains.
+ */
+function thirdPartyNotices(): Plugin {
+  return {
+    name: 'caotang-third-party-notices',
+    apply: 'build',
+    closeBundle() {
+      const text = generateNotices({ root: REPO_ROOT, filters: ['./apps/desktop'] });
+      writeFileSync(fileURLToPath(new URL(`dist/${NOTICES_FILE}`, import.meta.url)), text);
+    },
+  };
+}
+
+/** The nonce the dev server puts on the tags it injects itself. Dev only: the built app carries no nonce. */
+const DEV_NONCE = 'caotang-dev';
+
+/**
+ * The dev server injects an inline script (React Fast Refresh's preamble) and inline styles (CSS modules as <style>
+ * tags), and talks to its HMR socket. It marks its own tags with a nonce (html.cspNonce below), so the dev page runs the
+ * policy in index.html with that nonce admitted and `ws:` added to connect-src — and nothing else relaxed, so a style
+ * attribute or an inline script the app itself writes is refused in dev exactly as in the build.
+ */
+function devCsp(): Plugin {
+  return {
+    name: 'caotang-dev-csp',
+    apply: 'serve',
+    transformIndexHtml: {
+      order: 'pre',
+      handler(html) {
+        return html.replace(/(http-equiv="Content-Security-Policy"\s+content=")([^"]*)(")/, (_match, open: string, policy: string, close: string) => {
+          const relaxed = policy
+            .replace("script-src 'self'", `script-src 'self' 'nonce-${DEV_NONCE}'`)
+            .replace("style-src 'self'", `style-src 'self' 'nonce-${DEV_NONCE}'`)
+            .replace('connect-src *', 'connect-src * ws:');
+          return `${open}${relaxed}${close}`;
+        });
+      },
+    },
+  };
+}
+
+export default defineConfig(({ command }) => ({
+  plugins: [react(), thirdPartyNotices(), devCsp()],
+  ...(command === 'serve' ? { html: { cspNonce: DEV_NONCE } } : {}),
+  server: {
+    // Bind the IPv4 loopback explicitly. Vite otherwise binds ::1 (IPv6) only on
+    // Windows, and the e2e suite's baseURL probes http://127.0.0.1:5173 (IPv4),
+    // so webServer never becomes reachable and Playwright times out at 60s.
+    host: '127.0.0.1',
+    // CAOTANG_E2E_PORT lets parallel checkouts (agent worktrees) each run the suite against
+    // their own server instead of reusing whichever one already holds 5173.
+    port: Number(process.env['CAOTANG_E2E_PORT'] ?? 5173),
+    strictPort: true,
+  },
+  // `vite preview` serves the built app for the production smoke test (e2e/prod-smoke.spec.ts). The Playwright config sets
+  // CAOTANG_E2E_PREVIEW_PORT per checkout, so two runs at once do not share a preview server.
+  preview: {
+    host: '127.0.0.1',
+    port: Number(process.env['CAOTANG_E2E_PREVIEW_PORT'] ?? 4173),
+    strictPort: true,
+  },
+  build: {
+    outDir: 'dist',
+    sourcemap: true,
+  },
+}));

@@ -1,0 +1,30 @@
+{
+  "name": "@caotang/harness",
+  "version": "0.1.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "description": "Agent tool registry — the v0.1 frozen tool surface, dispatched through the command bus (agent-harness.md §3, extensibility.md §7)",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@caotang/bus": "workspace:*",
+    "@caotang/codex": "workspace:*",
+    "@caotang/coherence": "workspace:*",
+    "@caotang/context": "workspace:*",
+    "@caotang/dialogue": "workspace:*",
+    "@caotang/editor": "workspace:*",
+    "@caotang/gateway": "workspace:*",
+    "@caotang/ids": "workspace:*",
+    "@caotang/mcp-client": "workspace:*",
+    "@caotang/store": "workspace:*",
+    "@caotang/storyboard": "workspace:*",
+    "@caotang/video-prompt-pack": "workspace:*"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "name": "@caotang/editor",
+  "version": "0.1.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "description": "M5 editor — the §3 Caotang ProseMirror schema, the §5 Markdown pipeline and the §4 Tiptap adapter (ARCHITECTURE editor-engine.md §3, §4, §5)",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./tiptap": "./src/tiptap/index.ts"
+  },
+  "dependencies": {
+    "@handlewithcare/remark-prosemirror": "0.1.5",
+    "@caotang/store": "workspace:*",
+    "@tiptap/core": "3.31.4",
+    "@tiptap/extension-blockquote": "3.31.4",
+    "@tiptap/extension-bold": "3.31.4",
+    "@tiptap/extension-bullet-list": "3.31.4",
+    "@tiptap/extension-code": "3.31.4",
+    "@tiptap/extension-code-block": "3.31.4",
+    "@tiptap/extension-document": "3.31.4",
+    "@tiptap/extension-hard-break": "3.31.4",
+    "@tiptap/extension-heading": "3.31.4",
+    "@tiptap/extension-horizontal-rule": "3.31.4",
+    "@tiptap/extension-image": "3.31.4",
+    "@tiptap/extension-italic": "3.31.4",
+    "@tiptap/extension-link": "3.31.4",
+    "@tiptap/extension-list-item": "3.31.4",
+    "@tiptap/extension-list-keymap": "3.31.4",
+    "@tiptap/extension-ordered-list": "3.31.4",
+    "@tiptap/extension-paragraph": "3.31.4",
+    "@tiptap/extension-strike": "3.31.4",
+    "@tiptap/extension-text": "3.31.4",
+    "@tiptap/extensions": "3.31.4",
+    "@tiptap/pm": "3.31.4",
+    "diff-match-patch": "1.0.5",
+    "fastest-levenshtein": "1.0.16",
+    "remark-gfm": "4.0.1",
+    "remark-parse": "11.0.0",
+    "remark-stringify": "11.0.0",
+    "unified": "11.0.5"
+  },
+  "devDependencies": {
+    "@caotang/bus": "workspace:*",
+    "@caotang/editor-audit": "workspace:*",
+    "@types/mdast": "4.0.4",
+    "jsdom": "29.1.1"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  }
+}

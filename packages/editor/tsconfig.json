@@ -1,0 +1,19 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // DOM is here for `lib.dom` types only — the editor package is headless
+    // and runs in vitest's `node` environment (M0's exit criterion is "mock
+    // provider importable headless", and §4 requires the *interface* to be
+    // importable headless, not the engine). §3's schema and §5's pipeline touch
+    // no DOM interface at runtime; the types are what reference them.
+    "lib": ["ES2023", "DOM"],
+    "types": ["node"],
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"],
+  // `test/seam.test.ts` writes two *deliberately broken* copies of its in-memory
+  // `EditorApi` here to prove the interface is checked in both directions, and
+  // removes them when it finishes. They are excluded so a crashed run cannot
+  // leave `pnpm typecheck` red on files no slice is meant to keep.
+  "exclude": ["test/.tsc-control"]
+}

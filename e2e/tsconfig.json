@@ -1,0 +1,12 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    // The e2e suites import the app's pure modules and the store's sources to test them
+    // headless, and those use DOM types (IndexedDB, File System Access). This config carries
+    // the DOM lib for that; the root tsconfig, which has none, cannot check them.
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node", "vite/client"],
+    "noEmit": true
+  },
+  "include": ["./**/*.ts", "../apps/desktop/src/app/**/*.ts"]
+}

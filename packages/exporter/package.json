@@ -1,0 +1,33 @@
+{
+  "name": "@caotang/exporter",
+  "version": "0.1.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "description": "M9 compile pipeline — select, flatten, render, emit (exporter.md §2–§4) with the DOCX and EPUB renderers (§3, §3a) and the media-track formats (media-track M6)",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@caotang/bus": "workspace:*",
+    "@caotang/dialogue": "workspace:*",
+    "@caotang/screenplay": "workspace:*",
+    "@caotang/store": "workspace:*",
+    "@caotang/storyboard": "workspace:*",
+    "@caotang/video-prompt-pack": "workspace:*",
+    "docx": "9.9.0",
+    "fflate": "0.8.3",
+    "remark-parse": "11.0.0",
+    "unified": "11.0.5"
+  },
+  "devDependencies": {
+    "@likecoin/epubcheck-ts": "0.7.0",
+    "@types/mdast": "4.0.4",
+    "sax": "1.6.1"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  }
+}

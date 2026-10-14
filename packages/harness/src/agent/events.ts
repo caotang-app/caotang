@@ -1,0 +1,119 @@
+/**
+ * What an agent turn emits and what it returns — agent-harness §2 (the report), §5 (the activity
+ * log and the checkpoint row) and §8 (the stream the panel renders).
+ *
+ * These are plain values. The session emits them in order; a panel renders them, and an eval
+ * asserts on them. Nothing here depends on a renderer.
+ */
+
+import type { CommandError } from '@caotang/bus';
+
+import type { LayerReport } from '@caotang/context';
+
+import type { AskBack } from '../plan.js';
+import type { PlanCardView, PlanEdit, StatusCard } from './cards.js';
+import type { Finding } from './drafting.js';
+
+/** One tool call as it ran, in order. An eval's trace matcher reads these (agent-harness §9). */
+export interface TraceEntry {
+  readonly tool: string;
+  readonly callId: string;
+  /** `ok` ran and succeeded; `refused` was refused by its gate, its validation or its apply; `not-run` a step a failure stopped before. */
+  readonly outcome: 'ok' | 'refused' | 'not-run';
+  readonly code?: CommandError['code'];
+  readonly params: Readonly<Record<string, unknown>>;
+}
+
+/** One card decision the turn was asked for, and what the user chose. */
+export interface CardRecord {
+  readonly kind: 'plan' | 'confirm' | 'auto';
+  readonly tools: readonly string[];
+  readonly decision: 'approved' | 'cancelled' | 'auto';
+  /** How many times the card was edited before the decision. */
+  readonly edits: number;
+  /** How many times the user asked for a draft again. */
+  readonly retries: number;
+}
+
+/** What one step of a turn did, for the report. */
+export interface StepRecord {
+  readonly index: number;
+  readonly tool: string;
+  readonly expect: string;
+  readonly status: 'done' | 'failed' | 'cancelled';
+  readonly summary?: string;
+  readonly data?: Readonly<Record<string, unknown>>;
+  readonly error?: string;
+}
+
+export type TurnStatus = 'replied' | 'applied' | 'failed' | 'cancelled';
+
+/** The compact turn summary (agent-harness §2 step 5): what changed, the undo group, and what it cost. */
+export interface TurnReport {
+  readonly turnId: string;
+  readonly status: TurnStatus;
+  /** The reply's text, when the turn ended with an answer. */
+  readonly text?: string;
+  readonly summary: string;
+  readonly steps: readonly StepRecord[];
+  readonly cards: readonly CardRecord[];
+  readonly trace: readonly TraceEntry[];
+  /** The bus undo group the turn's writes sit in. Reversing it is "restore to before this turn". */
+  readonly undoGroupId?: string;
+  /** Present when the turn stopped on something the user has to act on (agent-harness §2 step 4). */
+  readonly askBack?: AskBack;
+  /** Tokens this turn spent, read from the gateway's per-turn ledger rows (provider-gateway §6). */
+  readonly tokens: { readonly promptTokens: number; readonly completionTokens: number; readonly requests: number };
+  /** What the context assembly left out of the prompt, and why (context-assembly §5). */
+  readonly dropped: readonly string[];
+  /** The model calls the turn made, in order, including retries. */
+  readonly modelCalls: number;
+}
+
+/**
+ * A decision the user makes on a card. A plan can be edited, and the edited card is shown again before it runs.
+ * `acceptTruncated` is the explicit consent a cut draft needs: the provider stopped it at its output
+ * limit, and approval keeps the cut text (context-assembly §5). Without it, a cut draft is not approvable.
+ */
+export type Decision =
+  | { readonly action: 'approve'; readonly acceptTruncated?: boolean }
+  | { readonly action: 'cancel' }
+  | { readonly action: 'retry' }
+  | { readonly action: 'edit'; readonly edits: readonly PlanEdit[] };
+
+/** A card that is waiting for a decision. The session asks `decide` with it and does not run anything until it answers. */
+export interface PendingCard {
+  readonly kind: 'plan' | 'confirm';
+  readonly turnId: string;
+  readonly card: PlanCardView;
+}
+
+export type TurnPhase = 'started' | 'planning' | 'awaiting-approval' | 'running' | 'retrying' | 'done' | 'failed' | 'cancelled';
+
+export type AgentEvent =
+  | { readonly type: 'turn'; readonly turnId: string; readonly phase: TurnPhase }
+  | { readonly type: 'model.delta'; readonly turnId: string; readonly delta: string }
+  /**
+   * A scene draft's text as the model writes it (agent-harness §8): the ghost region of the scene streams it, and the completed
+   * draft replaces it. `start` marks the first delta of a draft (or a redraft), so the region is emptied before the text arrives.
+   */
+  | { readonly type: 'draft.delta'; readonly turnId: string; readonly docTitle: string; readonly delta: string; readonly start?: boolean }
+  | { readonly type: 'context'; readonly turnId: string; readonly layers: readonly Pick<LayerReport, 'id' | 'tokens'>[]; readonly dropped: readonly string[] }
+  | { readonly type: 'card'; readonly turnId: string; readonly card: StatusCard }
+  | { readonly type: 'plan'; readonly turnId: string; readonly card: PlanCardView }
+  /** The ghost-preview handoff (agent-harness §8): a generated draft, waiting for apply, retry or discard. */
+  | { readonly type: 'ghost'; readonly turnId: string; readonly callId: string; readonly docTitle: string; readonly text: string; readonly words: number; readonly cut?: boolean }
+  | { readonly type: 'findings'; readonly turnId: string; readonly callId: string; readonly findings: readonly Finding[] }
+  | { readonly type: 'ladder'; readonly turnId: string; readonly callId: string; readonly attempt: number; readonly askBack: AskBack }
+  /** The checkpoint row (command-bus §5): the turn's undo group, and the label that says what one click does. */
+  | { readonly type: 'checkpoint'; readonly turnId: string; readonly undoGroupId: string; readonly label: string; readonly note?: string }
+  | { readonly type: 'report'; readonly turnId: string; readonly report: TurnReport };
+
+/** The label every checkpoint row carries (agent-harness §5, an earlier change 2026-09-10). */
+export const CHECKPOINT_LABEL = 'restore to before this turn';
+
+/**
+ * The note a checkpoint row carries when the turn called an external tool (extensibility §6, "Undo semantics for mixed turns"):
+ * restoring the turn reverses Caotang's own changes, and cannot reverse what the external server did.
+ */
+export const EXTERNAL_CHECKPOINT_NOTE = 'External side effects are not reversible. Restoring this turn puts back Caotang’s own changes only.';

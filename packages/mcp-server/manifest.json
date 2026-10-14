@@ -1,0 +1,43 @@
+{
+  "manifest_version": "0.3",
+  "name": "caotang-mcp",
+  "display_name": "Caotang",
+  "version": "0.1.0",
+  "description": "Serve a Caotang writing project to an MCP host: read it, and, when you allow it, change it.",
+  "long_description": "Caotang's tools over MCP, on stdio. The project stays in its folder on your computer, and the server makes no network connection. The project is read-only until you turn on \"Allow changes\" in this extension's settings. Then a write tool either asks you to confirm it in the host before it changes anything, or applies at once. Each tool's description says which.",
+  "author": {
+    "name": "The Caotang Authors"
+  },
+  "server": {
+    "type": "node",
+    "entry_point": "server/caotang-mcp.mjs",
+    "mcp_config": {
+      "command": "node",
+      "args": [
+        "${__dirname}/server/caotang-mcp.mjs",
+        "serve",
+        "--stdio",
+        "--project",
+        "${user_config.project_folder}"
+      ],
+      "env": {
+        "CAOTANG_MCP_ALLOW_WRITES": "${user_config.allow_writes}"
+      }
+    }
+  },
+  "user_config": {
+    "project_folder": {
+      "type": "directory",
+      "title": "Project folder",
+      "description": "The Caotang project folder to serve. It must already hold a project.",
+      "required": true
+    },
+    "allow_writes": {
+      "type": "boolean",
+      "title": "Allow changes",
+      "description": "Off by default, so the assistant can only read the project. Turn it on to let the assistant change the project. Some changes still ask you to confirm them first.",
+      "required": false,
+      "default": false
+    }
+  }
+}

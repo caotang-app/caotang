@@ -1,0 +1,64 @@
+/* The editor status bar's daily target as a control (goals-progress §4): the session ring and today's line are one button, and the small
+   form that sets the target opens above it. Every colour is a workspace token, so both themes read correctly. */
+
+.target-quick-set-control {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.target-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.1rem 0.3rem;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.target-button:hover {
+  background: var(--accent-soft);
+}
+
+.target-quick-set {
+  position: absolute;
+  bottom: calc(100% + 0.4rem);
+  left: 0;
+  z-index: 10;
+  display: grid;
+  gap: 0.5rem;
+  width: 16rem;
+  max-width: calc(100vw - 2rem);
+  padding: 0.75rem;
+  color: var(--ink);
+  background: var(--raised);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.target-quick-set-field {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.9em;
+}
+
+.target-quick-set-field input {
+  font: inherit;
+  min-width: 0;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: var(--panel);
+  color: inherit;
+}
+
+.target-quick-set-actions {
+  display: flex;
+  gap: 0.4rem;
+  justify-content: flex-end;
+}

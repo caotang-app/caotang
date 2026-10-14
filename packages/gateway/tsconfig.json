@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // DOM is here for `lib.dom`'s IndexedDB and WebCrypto interfaces, which the browser
+    // key vault is typed against (§7). It is not a DOM at runtime: the transport runs
+    // on `fetch`, and the vault's tests run against the store's headless IDB binding.
+    "lib": ["ES2023", "DOM"],
+    "types": ["node"],
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"]
+}

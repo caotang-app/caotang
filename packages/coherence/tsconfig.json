@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // DOM is here for the IndexedDB types that @caotang/store's public index
+    // re-exports (its runtime store is browser-targeted). Types only; this
+    // package never touches a DOM at runtime.
+    "lib": ["ES2023", "DOM"],
+    "types": ["node"],
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"]
+}

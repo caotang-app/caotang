@@ -1,0 +1,758 @@
+/*
+ * The rules for the surfaces this workstream adds: MCP & tools, the findings tab, the scene declarations and the codex section
+ * of the inspector, the binder's filter bar and footer. They use the shell's tokens (styles.css), so a theme change reaches them
+ * with the rest of the app. Two state colours are added here, because the shell has none: a healthy or verified green, and
+ * the warm amber the review uses. Both are redefined for dark mode.
+ */
+
+:root {
+  --ok: #3d7a4f;
+  --ok-soft: #e3efe6;
+  --review: #8a6512;
+  --review-soft: #f5edd6;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --ok: #8fcaa0;
+    --ok-soft: #1f2e24;
+    --review: #e0b862;
+    --review-soft: #332b17;
+  }
+}
+
+:root[data-theme='dark'] {
+  --ok: #8fcaa0;
+  --ok-soft: #1f2e24;
+  --review: #e0b862;
+  --review-soft: #332b17;
+}
+
+/* ------------------------------------------------------------------ *
+ * Shared pieces
+ * ------------------------------------------------------------------ */
+
+.rail-badge {
+  display: inline-block;
+  min-width: 1.4em;
+  margin-inline-start: 0.4em;
+  padding: 0 0.4em;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.75em;
+  line-height: 1.6;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.risk-badge {
+  display: inline-block;
+  padding: 0 0.5em;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  font-size: 0.8em;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.risk-badge.is-write {
+  border-color: var(--review);
+  color: var(--review);
+  background: var(--review-soft);
+}
+
+.status-chip {
+  display: inline-block;
+  padding: 0 0.5em;
+  border-radius: 999px;
+  font-size: 0.8em;
+  border: 1px solid var(--line);
+  color: var(--ink-soft);
+}
+
+.status-chip.is-open {
+  border-color: var(--review);
+  color: var(--review);
+}
+
+.status-chip.is-fixed {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+.form-message.is-info {
+  color: var(--ink-soft);
+}
+
+/* ------------------------------------------------------------------ *
+ * MCP & tools (Settings)
+ * ------------------------------------------------------------------ */
+
+.mcp-section {
+  display: grid;
+  gap: 1rem;
+}
+
+.mcp-master {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.mcp-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+
+.mcp-servers {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.mcp-server {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--raised);
+  padding: 0.75rem 0.9rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.mcp-server-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.mcp-server-name {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.mcp-server-url {
+  margin: 0.15rem 0 0;
+  color: var(--muted);
+  font-size: 0.85em;
+  overflow-wrap: anywhere;
+}
+
+.mcp-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.1rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+
+.mcp-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--dot-empty);
+}
+
+.mcp-state.is-connected .mcp-dot {
+  background: var(--review);
+}
+
+.mcp-state.is-healthy .mcp-dot {
+  background: var(--ok);
+}
+
+.mcp-detail,
+.mcp-auth {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.9em;
+}
+
+.mcp-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+/* The warning beside Connect: it sits on the button's line, and wraps under it on a narrow card. */
+.mcp-connect-note {
+  align-self: center;
+  margin: 0;
+  max-width: 32rem;
+}
+
+.mcp-trust {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.9em;
+}
+
+.mcp-token,
+.mcp-add,
+.mcp-io,
+.mcp-review {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.mcp-review {
+  border: 1px solid var(--review);
+  border-radius: var(--radius);
+  background: var(--review-soft);
+  padding: 0.6rem 0.75rem;
+}
+
+.mcp-review h5 {
+  margin: 0;
+}
+
+.mcp-review-tools {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.mcp-review-tools p {
+  margin: 0 0 0.2rem;
+}
+
+.mcp-description {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 0;
+  padding: 0.5rem 0.6rem;
+  border-radius: 6px;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 0.85em;
+}
+
+.mcp-pin {
+  font-size: 0.8em;
+  color: var(--ink-soft);
+}
+
+.mcp-pin.is-new,
+.mcp-pin.is-changed {
+  color: var(--review);
+}
+
+.mcp-pin.is-verified,
+.mcp-pin.is-unchanged {
+  color: var(--ok);
+}
+
+.mcp-tools {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+
+.mcp-tools th,
+.mcp-tools td {
+  text-align: start;
+  padding: 0.3rem 0.4rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.mcp-import-result {
+  border-left: 3px solid var(--line-strong);
+  padding-inline-start: 0.6rem;
+}
+
+.mcp-export {
+  width: 100%;
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 0.85em;
+}
+
+/* ------------------------------------------------------------------ *
+ * Findings (the left rail tab)
+ * ------------------------------------------------------------------ */
+
+.findings {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  align-content: start;
+}
+
+.findings-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.findings-head .eyebrow {
+  margin: 0;
+}
+
+.findings-count {
+  color: var(--muted);
+  font-size: 0.85em;
+  font-variant-numeric: tabular-nums;
+}
+
+.findings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.findings-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.9em;
+}
+
+.findings-section {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.findings-section-title {
+  margin: 0.25rem 0 0;
+  font-size: 0.8em;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.findings-section.is-error .findings-section-title {
+  color: var(--danger);
+}
+
+.findings-section-count {
+  font-variant-numeric: tabular-nums;
+}
+
+.finding {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--raised);
+  padding: 0.6rem 0.7rem;
+  display: grid;
+  gap: 0.35rem;
+  box-shadow: var(--shadow);
+}
+
+.finding-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.finding-type {
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 0.8em;
+  color: var(--ink-soft);
+}
+
+.finding-message {
+  margin: 0;
+}
+
+.finding-expected,
+.finding-source {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88em;
+}
+
+.finding-quotes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.finding-quote {
+  all: unset;
+  cursor: pointer;
+  font-family: var(--manuscript);
+  font-style: italic;
+  color: var(--ink);
+  border-inline-start: 2px solid var(--accent);
+  padding-inline-start: 0.5rem;
+  text-align: start;
+}
+
+.finding-quote:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.finding-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.finding-dismiss {
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  padding: 0.7rem 0.8rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.dismiss-reasons {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.dismiss-reasons legend {
+  font-weight: 600;
+  padding: 0;
+  margin-bottom: 0.25rem;
+}
+
+.dismiss-reason {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.1rem 0.45rem;
+  align-items: start;
+}
+
+.dismiss-reason .dismiss-tooltip {
+  grid-column: 2;
+}
+
+.dismiss-note {
+  display: grid;
+  gap: 0.25rem;
+}
+
+/* ------------------------------------------------------------------ *
+ * Inspector: codex section and scene declarations
+ * ------------------------------------------------------------------ */
+
+.codex-section .codex-attach {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.codex-mentions {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.mention-chips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.mention-chip {
+  cursor: pointer;
+}
+
+.mention-count {
+  margin-inline-start: 0.35rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.8em;
+  font-variant-numeric: tabular-nums;
+}
+
+.scene-meta > summary {
+  cursor: pointer;
+}
+
+.scene-meta[open] > summary {
+  margin-bottom: 0.4rem;
+}
+
+.scene-field {
+  display: grid;
+  gap: 0.2rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.9em;
+}
+
+.scene-chips {
+  display: grid;
+  gap: 0.3rem;
+  margin-bottom: 0.6rem;
+}
+
+/* ------------------------------------------------------------------ *
+ * Binder: filter bar and footer
+ * ------------------------------------------------------------------ */
+
+.binder-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.4rem;
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.filter-text {
+  width: 100%;
+}
+
+.filter-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.35rem;
+}
+
+/* The rail is narrow: every field in it may shrink to its column, and none may force the rail wider. */
+.binder-filters input,
+.binder-filters select,
+.binder-footer input,
+.binder-footer select,
+.binder-footer button,
+.findings select,
+.scene-field input,
+.scene-field select,
+.finding-dismiss textarea,
+.filter-naming input {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.binder-filters,
+.binder-footer,
+.footer-section,
+.goal,
+.saved-filter,
+.findings,
+.finding,
+.mcp-server,
+.mcp-review,
+.codex-section,
+.scene-meta {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.filter-row select {
+  flex: 1 1 8rem;
+  min-width: 0;
+}
+
+.filter-status {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.88em;
+}
+
+.filter-naming {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.5rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--raised);
+}
+
+.binder-footer {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.6rem 0.6rem 0.8rem;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+  margin-top: auto;
+}
+
+.footer-section {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.footer-title {
+  margin: 0;
+  font-size: 0.78em;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.saved-filters,
+.goal-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.saved-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+/* A warning chip takes a line of its own under the row, so the apply button keeps the rail's width. */
+.saved-filter .filter-chip {
+  flex: 0 0 100%;
+}
+
+.saved-filter-apply {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: start;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--raised);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.saved-filter-apply.is-applied {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.goal {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.45rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--raised);
+}
+
+.goal-sentence {
+  margin: 0;
+  font-size: 0.9em;
+}
+
+.goal-progress {
+  width: 100%;
+  height: 0.5rem;
+  accent-color: var(--accent);
+}
+
+.goal-line,
+.goal-pace {
+  margin: 0;
+  font-size: 0.82em;
+  color: var(--ink-soft);
+}
+
+.goal-pace {
+  color: var(--accent);
+}
+
+.goal.is-overdue .goal-line,
+.goal.is-target-missing .goal-line {
+  color: var(--danger);
+}
+
+.goal-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.35rem;
+  align-items: end;
+  font-size: 0.85em;
+}
+
+.goal-add input,
+.goal-add select {
+  width: 100%;
+}
+
+.goal-add label {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.goal-actions,
+.goal-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+/* The footer's one line for the nearest goal (goals-progress §4): a button that reads as text, and wraps within the rail. */
+.goal-summary {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  padding: 0.3rem 0.4rem;
+  font: inherit;
+  font-size: 0.9em;
+  color: inherit;
+  text-align: start;
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.goal-summary:hover {
+  border-color: var(--line-strong);
+}
+
+.binder-totals {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 0.82em;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.sprint-reading {
+  margin: 0;
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.sprint-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.sprint-length {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.85em;
+}

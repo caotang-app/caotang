@@ -1,0 +1,1127 @@
+/*
+ * The media views (media-track M1–M4). Every colour is a token from styles.css, so dark mode follows the shell.
+ * The classes that match the shell's own (`.card`, `.chip`, `.segmented`, `.empty-state`, `.findings`, `.badge`) are
+ * reused as they are; what is new here is prefixed `sp-` (screenplay), `sb-` (storyboard), `pp-` (prompt pack) or
+ * `dlg-` (dialogue), so nothing in the shell's stylesheet is changed by loading this one.
+ */
+
+/* ------------------------------------------------------------------ *
+ * Shared frame: the header of a media view, and the view's own box
+ * ------------------------------------------------------------------ */
+
+.media-view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 12px 24px 24px;
+  overflow: auto;
+}
+
+.media-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.media-title {
+  margin: 2px 0 0;
+  font-family: var(--manuscript);
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.media-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.media-view select {
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--raised);
+  color: var(--ink);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.media-view .badge.is-error {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.media-view .badge {
+  margin-right: 6px;
+}
+
+/* ------------------------------------------------------------------ *
+ * Screenplay (screenplay.md §3): the formatted script, the source, the side panel
+ * ------------------------------------------------------------------ */
+
+.sp-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 18px;
+  align-items: start;
+}
+
+.sp-page {
+  max-width: 62ch;
+  margin: 0 auto;
+  padding: 28px 32px 40px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--raised);
+  box-shadow: var(--shadow);
+  font-family: 'Courier Prime', 'Courier New', Courier, monospace;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.sp-title-page {
+  text-align: center;
+  padding: 5em 0 4em;
+}
+
+.sp-title-page p {
+  margin: 0 0 1.2em;
+}
+
+.sp-title-key {
+  color: var(--muted);
+}
+
+.sp-scene {
+  margin: 1.8em 0 0.8em;
+  font-size: 13.5px;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.sp-action {
+  margin: 0.9em 0;
+  white-space: pre-line;
+}
+
+.sp-block {
+  margin: 0.9em 0;
+}
+
+.sp-character {
+  margin: 0.9em 0 0 22ch;
+  font-weight: 700;
+}
+
+.sp-parenthetical {
+  margin: 0 0 0 16ch;
+  color: var(--muted);
+}
+
+.sp-dialogue {
+  margin: 0 0 0 10ch;
+  max-width: 35ch;
+  white-space: pre-line;
+}
+
+.sp-transition {
+  margin: 1.2em 0;
+  text-align: right;
+  font-weight: 700;
+}
+
+.sp-centered {
+  margin: 1.2em 0;
+  text-align: center;
+}
+
+.sp-section {
+  margin: 1.2em 0 0.4em;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.sp-break {
+  margin: 1.8em 0;
+  border: none;
+  border-top: 1px dashed var(--line-strong);
+}
+
+/* Dual dialogue (screenplay.md §3): the two blocks draw side by side, each in its own column. */
+.sp-dual {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 2ch;
+  align-items: start;
+  margin: 0.9em 0;
+}
+
+.sp-dual .sp-character {
+  margin-left: 6ch;
+}
+
+.sp-dual .sp-parenthetical {
+  margin-left: 4ch;
+}
+
+.sp-dual .sp-dialogue {
+  margin-left: 2ch;
+  max-width: none;
+}
+
+.sp-source {
+  width: 100%;
+  min-height: 60vh;
+  resize: vertical;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--raised);
+  color: var(--ink);
+  font-family: 'Courier Prime', 'Courier New', Courier, monospace;
+  font-size: 13.5px;
+  line-height: 1.5;
+  white-space: pre;
+  tab-size: 4;
+}
+
+.sp-source:focus {
+  outline: 2px solid var(--focus);
+  outline-offset: 0;
+}
+
+.sp-side {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.sp-readout {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.sp-readout div {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--raised);
+}
+
+.sp-readout dt {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.sp-readout dd {
+  margin: 2px 0 0;
+  font-size: 18px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.sp-readout-chip {
+  font-variant-numeric: tabular-nums;
+}
+
+.sp-scenes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sp-scene-link {
+  width: 100%;
+  font: inherit;
+  font-size: 12.5px;
+  padding: 5px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-soft);
+  text-align: left;
+  cursor: pointer;
+}
+
+.sp-scene-link:hover {
+  background: var(--panel);
+}
+
+.sp-scene-number {
+  color: var(--muted);
+}
+
+/* ------------------------------------------------------------------ *
+ * Storyboard (storyboard.md §3): the cards, the frame, the editor
+ * ------------------------------------------------------------------ */
+
+.sb-board {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sb-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.sb-bar .muted {
+  margin: 0;
+}
+
+/* The card size and the New shot button, at the end of the bar (zoom is shared with the corkboard, ui-modules §3.2). */
+.sb-bar-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.sb-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.sb-workspace.has-editor {
+  grid-template-columns: minmax(0, 1fr) 280px;
+}
+
+.sb-number {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.sb-frame {
+  margin: 0;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+}
+
+.sb-frame img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.sb-frame-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 8px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.sb-spec {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.sb-action {
+  margin: 0;
+  font-size: 13px;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.sb-notes {
+  margin: 0;
+}
+
+.sb-foot {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/*
+ * At S the footer (Earlier, Later, Fields) is hidden from sight but stays in the tab order. It shows as soon as focus is inside it,
+ * so the button a key reaches is in view (WCAG 2.4.7).
+ */
+.sb-foot.is-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.sb-foot.is-visually-hidden:focus-within {
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+
+.sb-step {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.sb-step .button {
+  padding: 2px 6px;
+  font-size: 12px;
+}
+
+.sb-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--raised);
+  box-shadow: var(--shadow);
+}
+
+.sb-editor .eyebrow {
+  margin: 0;
+}
+
+.sb-editor select,
+.sb-editor input[type='number'] {
+  width: 100%;
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--raised);
+  color: var(--ink);
+}
+
+.sb-editor .counter {
+  margin: -6px 0 0;
+  text-align: right;
+}
+
+/* ------------------------------------------------------------------ *
+ * Prompt pack (video-prompt-pack.md §5): the controls, the shots, the checks
+ * ------------------------------------------------------------------ */
+
+.pp-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pp-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px;
+}
+
+.pp-target {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 220px;
+}
+
+.pp-target > span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.pp-exports {
+  justify-content: flex-start;
+  margin: 0;
+}
+
+.pp-shots {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pp-shot {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--raised);
+  box-shadow: var(--shadow);
+  min-width: 0;
+}
+
+.pp-shot-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.pp-prompt {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.pp-note {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.pp-audio {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.pp-issue.is-error {
+  color: var(--danger);
+}
+
+.pp-mapped summary {
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.pp-mapped pre {
+  margin: 6px 0 0;
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--panel);
+  font-size: 11.5px;
+  overflow: auto;
+  max-height: 220px;
+}
+
+.pp-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* ------------------------------------------------------------------ *
+ * Dialogue (dialogue-narrative.md §3): the stats, the graph, the outline
+ * ------------------------------------------------------------------ */
+
+.dlg-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dlg-errors {
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-left: 3px solid var(--danger);
+  border-radius: var(--radius);
+  background: var(--danger-soft);
+  font-size: 13px;
+}
+
+.dlg-errors p {
+  margin: 0 0 4px;
+}
+
+.dlg-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 16px;
+  align-items: start;
+}
+
+.dlg-canvas-wrap {
+  min-width: 0;
+  max-height: 70vh;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
+.dlg-canvas {
+  position: relative;
+}
+
+.dlg-edges {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.dlg-edge {
+  fill: none;
+  stroke: var(--line-strong);
+  stroke-width: 1.5;
+}
+
+.dlg-edge.is-divert {
+  stroke-dasharray: 5 4;
+}
+
+/* A choice's label on its edge (M2). The halo is the panel's own colour, so the words read over the arrow and over another edge. */
+.dlg-edge-label {
+  font-size: 11.5px;
+  fill: var(--ink);
+  paint-order: stroke;
+  stroke: var(--panel);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+
+.dlg-arrowhead {
+  fill: var(--muted);
+}
+
+.dlg-node {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--raised);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+.dlg-node.is-selected {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.dlg-node.is-unreached {
+  border-style: dashed;
+  color: var(--ink-soft);
+}
+
+.dlg-node.is-flagged {
+  border-left: 3px solid var(--warn);
+}
+
+.dlg-node-name {
+  max-width: 100%;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dlg-node-meta {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.dlg-badge {
+  margin-right: 0;
+}
+
+.dlg-side {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.dlg-findings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dlg-finding {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dlg-finding:hover {
+  background: var(--panel);
+}
+
+.dlg-detail .inspector-meta {
+  margin-bottom: 4px;
+}
+
+.dlg-lines {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dlg-lines .is-choice {
+  color: var(--muted);
+}
+
+.dlg-line-id {
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.dlg-choices {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+}
+
+/* The Ink source, edited in place under the outline (DialogueView). Monospace, because the text is code the writer reads by its indent. */
+.dlg-source-edit .dlg-source-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dlg-source-edit .ink-source {
+  width: 100%;
+  min-height: 12em;
+  font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 12.5px;
+  line-height: 1.5;
+  white-space: pre;
+  overflow: auto;
+}
+
+.dlg-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--panel);
+}
+
+.dlg-confirm .field-note {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+/* ------------------------------------------------------------------ *
+ * Narrow windows: the side panels fall under the main column, and nothing overlaps
+ * ------------------------------------------------------------------ */
+
+@media (max-width: 900px) {
+  .sp-layout,
+  .dlg-layout,
+  .sb-workspace.has-editor {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .media-view {
+    padding: 12px 16px 24px;
+  }
+
+  .sp-page {
+    padding: 20px 18px 28px;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * r6 (storyboard): the image slot, the lightbox, the card drag, the notices, and the sections under a shot's fields
+ * ------------------------------------------------------------------ */
+
+.sb-card[draggable='true'] {
+  cursor: grab;
+}
+
+.sb-card.is-drop-target {
+  outline: 2px dashed var(--line);
+  outline-offset: 2px;
+}
+
+.sb-frame-button {
+  display: block;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+}
+
+.sb-notices {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--raised);
+}
+
+.sb-notices .field-note,
+.sb-notices .findings {
+  margin: 0;
+}
+
+.sb-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+}
+
+.sb-lightbox-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgb(0 0 0 / 0.72);
+}
+
+.sb-lightbox-frame {
+  position: relative;
+  margin: 0;
+  max-width: min(96vw, 1200px);
+  max-height: 84vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: #fff;
+}
+
+.sb-lightbox-frame img {
+  display: block;
+  max-width: 100%;
+  max-height: 78vh;
+  object-fit: contain;
+  border-radius: 6px;
+}
+
+.sb-lightbox-close {
+  position: relative;
+}
+
+.sb-editor-column {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.sb-image,
+.sb-coverage,
+.sb-prompt {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--raised);
+}
+
+.sb-image .field-label,
+.sb-coverage .field-label,
+.sb-prompt .field-label {
+  margin: 0;
+}
+
+.sb-image label,
+.sb-coverage label,
+.sb-prompt label,
+.sb-prompt .sb-reference label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.sb-image select,
+.sb-coverage select,
+.sb-prompt select,
+.sb-prompt input[type='text'],
+.sb-prompt input[type='number'],
+.sb-prompt textarea,
+.sb-coverage textarea {
+  width: 100%;
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+}
+
+.sb-cover-text {
+  font-family: inherit;
+  white-space: pre-wrap;
+}
+
+.sb-covers {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+}
+
+.sb-prompt-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px 10px;
+}
+
+.sb-prompt-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sb-check {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 8px !important;
+}
+
+.sb-references,
+.sb-take {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.sb-reference {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.4fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.sb-references:focus {
+  outline: 2px solid var(--line);
+  outline-offset: 2px;
+}
+
+.sb-checks {
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .sb-prompt-grid,
+  .sb-reference {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * m6-script: the source fields, the paginated preview and the import
+ * and container actions. The Source tab and the Ink source are drawn
+ * over a decoration layer (SourceField.tsx, source-decor.ts). The input
+ * and the layer take the same view class, so they share one set of
+ * metrics, and the layer is what the eye sees while the input keeps the
+ * caret, the selection and the text.
+ * ------------------------------------------------------------------ */
+
+.src-field {
+  position: relative;
+  min-width: 0;
+  /* The paper behind both layers: the input is transparent so the decorations show through it. */
+  background: var(--raised);
+  border-radius: var(--radius);
+}
+
+.src-field > .src-layer,
+.src-field > .src-input {
+  box-sizing: border-box;
+  margin: 0;
+  overflow: auto;
+  white-space: pre;
+  tab-size: 4;
+}
+
+.src-field > .src-input {
+  position: relative;
+  display: block;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--ink);
+  z-index: 1;
+}
+
+.src-field > .src-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  resize: none;
+  min-height: 0;
+  background: transparent;
+  border-color: transparent;
+  color: var(--ink);
+  pointer-events: none;
+}
+
+.src-layer .tok-heading,
+.src-layer .tok-cue,
+.src-layer .tok-knot,
+.src-layer .tok-stitch,
+.src-layer .tok-speaker,
+.src-layer .tok-section {
+  font-weight: 700;
+}
+
+.src-layer .tok-heading {
+  text-decoration: underline;
+}
+
+.src-layer .tok-paren,
+.src-layer .tok-transition,
+.src-layer .tok-centered,
+.src-layer .tok-break,
+.src-layer .tok-synopsis,
+.src-layer .tok-note,
+.src-layer .tok-decl,
+.src-layer .tok-comment,
+.src-layer .tok-tag {
+  color: var(--muted);
+}
+
+.src-layer .tok-synopsis,
+.src-layer .tok-comment {
+  font-style: italic;
+}
+
+.src-layer .tok-choice,
+.src-layer .tok-gather,
+.src-layer .tok-divert {
+  color: var(--accent, var(--ink));
+  font-weight: 600;
+}
+
+.src-layer .tok-cond {
+  color: var(--ink-soft, var(--ink));
+}
+
+/* The paginated preview (ScreenplayPreview.tsx): each page is a sheet, and each line sits at its own indent in characters. */
+.sp-preview {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.sp-page-sheet {
+  max-width: 612px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 24px 16px;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--raised);
+  box-shadow: var(--shadow);
+  font-family: 'Courier Prime', 'Courier New', Courier, monospace;
+  font-size: 12px;
+  line-height: 14px;
+  color: var(--ink);
+}
+
+.sp-page-sheet .sp-line {
+  margin: 0;
+  white-space: pre;
+}
+
+.sp-page-sheet .sp-line-scene {
+  font-weight: 700;
+}
+
+.sp-page-sheet .sp-line-more,
+.sp-page-sheet .sp-line-continued,
+.sp-page-sheet .sp-line-pageNumber {
+  color: var(--muted);
+}
+
+/* The import actions above the binder tree, and the Inspector's container settings. */
+.script-import {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 4px 0 8px;
+}
+
+.scene-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 900px) {
+  .sp-page-sheet {
+    padding: 16px 10px;
+  }
+}

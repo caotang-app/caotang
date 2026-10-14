@@ -1,0 +1,34 @@
+{
+  "name": "@caotang/mcp-server",
+  "version": "0.1.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "description": "Caotang as an MCP server — the harness registry over Streamable HTTP on 127.0.0.1, read-only by default (extensibility.md §9)",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "bin": {
+    "caotang-mcp": "./dist/caotang-mcp.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/node": "2.1.1",
+    "@modelcontextprotocol/server": "2.3.1",
+    "@caotang/bus": "workspace:*",
+    "@caotang/exporter": "workspace:*",
+    "@caotang/harness": "workspace:*",
+    "@caotang/ids": "workspace:*",
+    "@caotang/store": "workspace:*"
+  },
+  "devDependencies": {
+    "@anthropic-ai/mcpb": "2.1.2",
+    "@modelcontextprotocol/client": "2.3.1"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build": "vite build --config vite.config.ts",
+    "pack": "vite build --config vite.config.ts && node scripts/pack-mcpb.mjs"
+  }
+}

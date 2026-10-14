@@ -1,0 +1,37 @@
+{
+  "name": "@caotang/desktop",
+  "version": "0.1.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "description": "Caotang desktop shell — Vite + React + TS",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@caotang/bus": "workspace:*",
+    "@caotang/codex": "workspace:*",
+    "@caotang/coherence": "workspace:*",
+    "@caotang/dialogue": "workspace:*",
+    "@caotang/editor": "workspace:*",
+    "@caotang/exporter": "workspace:*",
+    "@caotang/furniture": "workspace:*",
+    "@caotang/gateway": "workspace:*",
+    "@caotang/harness": "workspace:*",
+    "@caotang/ids": "workspace:*",
+    "@caotang/mcp-client": "workspace:*",
+    "@caotang/screenplay": "workspace:*",
+    "@caotang/storyboard": "workspace:*",
+    "@caotang/store": "workspace:*",
+    "@caotang/video-prompt-pack": "workspace:*",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0"
+  }
+}

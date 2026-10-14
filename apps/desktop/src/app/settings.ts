@@ -1,0 +1,274 @@
+/**
+ * The app's settings, typed (ui-modules §5.1), with the clamps §5.2 states and the rule §5.1 gives for a stored value that
+ * is missing or wrong: it loads to its default, field by field, and the rest of the record is kept.
+ *
+ * What is not here, and why:
+ * - **Theme** stays in the browser's local storage (app/theme.ts). The page must choose its colours before its first paint,
+ *   which happens before any database is open, and the theme specs read that key directly.
+ * - **Provider profiles** are not settings. They live in the app database with their own store (providers.ts), because the
+ *   gateway owns their validation and their identity. The active profile is mirrored here only for the record §5.1 names.
+ * - **Coherence** (the checks a scan runs, the default scope, the cap on a review) and **MCP** are slices here, each read by its
+ *   own section (ui-modules §5.2). **Context budgets** are here too (the `context` record), and the assembler honours the
+ *   layers they name: the codex, the story so far and the continuity tail (context-assembly §3).
+ */
+
+import { DETERMINISTIC_CHECK_IDS, MAX_FINDINGS_CAP, MAX_FINDINGS_DEFAULT, type DeterministicCheckId } from '@caotang/coherence';
+import type { ContextConfig } from '@caotang/harness';
+import { DEFAULT_RETENTION, resolveRetentionConfig, type RetentionConfig } from '@caotang/store';
+import { EMPTY_MCP_SETTINGS, loadMcpSettings, type McpSettings } from '@caotang/mcp-client';
+
+/** The scopes a review or a scan can start with (coherence.md §6.2): one document, what changed since the last pass, the whole manuscript. */
+export const REVIEW_SCOPES = ['doc', 'changed', 'full'] as const;
+export type ReviewScope = (typeof REVIEW_SCOPES)[number];
+
+/**
+ * The Coherence slice (ui-modules §5.2): which deterministic checks run, the scope the Findings tab starts with, and the cap on
+ * findings one review may add. App-level, never a project file: a writer's choices about their checks belong to them, not to
+ * the book (the same reason the MCP slice is here).
+ */
+export interface CoherenceSettings {
+  /** The checks a scan runs, in registry order. Absent from storage reads as every check; an explicit empty list runs none. */
+  readonly enabledChecks: readonly DeterministicCheckId[];
+  readonly defaultReviewScope: ReviewScope;
+  /** The most findings one review run may add (coherence.md §7 tool 16). */
+  readonly maxFindings: number;
+}
+
+export const DEFAULT_COHERENCE_SETTINGS: CoherenceSettings = Object.freeze({
+  enabledChecks: Object.freeze([...DETERMINISTIC_CHECK_IDS]) as readonly DeterministicCheckId[],
+  defaultReviewScope: 'full',
+  maxFindings: MAX_FINDINGS_DEFAULT,
+});
+
+/** The autosave debounce the writer may choose (ui-modules §5.2: 100–5000 ms). The spec's own default is 800. */
+export const DEBOUNCE_MIN_MS = 100;
+export const DEBOUNCE_MAX_MS = 5000;
+export const DEFAULT_DEBOUNCE_MS = 800;
+
+/** The daily session target's range (goals-progress §2.1: clamp 0–100,000; zero is "no target"). */
+export const TARGET_MAX_WORDS = 100_000;
+
+/** The checkpoint limits the Data section lets a writer change. A value outside them loads to the default. */
+export const CHECKPOINT_CAP_MAX = 10_000;
+export const CHECKPOINT_DAYS_MAX = 3650;
+
+/**
+ * The context budgets the Context section lets a writer change (context-assembly §3, ui-modules §5.1). The total is the prompt's
+ * whole budget in tokens, and each layer budget is one layer's own cap. A value outside its range is clamped into it.
+ */
+export const CONTEXT_TOTAL_MIN = 4_000;
+export const CONTEXT_TOTAL_MAX = 200_000;
+export const CONTEXT_LAYER_MIN = 200;
+export const CONTEXT_LAYER_MAX = 50_000;
+
+/** The layers whose budgets the spec names as config-exposed: the codex (L2), the story so far (L4) and the continuity tail (L5). */
+export const CONTEXT_LAYERS = ['L2', 'L4', 'L5'] as const;
+export type ContextLayerId = (typeof CONTEXT_LAYERS)[number];
+
+export interface ContextSettings {
+  /** The total prompt budget in tokens. Absent means the profile's own default. */
+  readonly totalBudgetTokens?: number;
+  /** One layer's cap in tokens, for each layer the writer set. A layer absent here keeps its profile budget. */
+  readonly layerBudgets: Readonly<Partial<Record<ContextLayerId, number>>>;
+}
+
+export interface AppSettings {
+  readonly provider: {
+    /** The active profile's id, mirrored from the profile store. `null` when no profile exists yet. */
+    readonly activeProfileId: string | null;
+  };
+  readonly editor: {
+    /** The autosave debounce in milliseconds, clamped to 100–5000. */
+    readonly autosaveDebounceMs: number;
+    /** Whether focus mode hides the binder and the inspector (ui-modules §5.2). On unless the writer turns it off. */
+    readonly focusModeHideRails: boolean;
+  };
+  readonly session: {
+    /** The writer's daily target. Absent means no target is set (goals-progress §2.1). */
+    readonly dailyTargetWords?: number;
+  };
+  /** The checkpoint retention limits (command-bus §5.1, config-exposed). */
+  readonly retention: RetentionConfig;
+  readonly firstRun: {
+    /** Whether the first-run card has been dismissed. It is shown until the writer dismisses it. */
+    readonly dismissed: boolean;
+  };
+  /** The projects made by the first-run card, which the agent panel offers the demo intents for. */
+  readonly sampleProjectIds: readonly string[];
+  /**
+   * The MCP & tools slice (extensibility §3.1): the master switch and the server list. App-level, never a project file:
+   * a repository cannot carry it. Loaded entry by entry, so one broken server never blocks the rest of the settings.
+   */
+  readonly mcp: McpSettings;
+  /** The Coherence slice (ui-modules §5.2): the checks a scan runs, the default scope, and the cap on a review's findings. */
+  readonly coherence: CoherenceSettings;
+  /** The context budgets (context-assembly §3). Empty means the spec's defaults, which is what an unset record means. */
+  readonly context: ContextSettings;
+}
+
+export const DEFAULT_SETTINGS: AppSettings = Object.freeze({
+  provider: Object.freeze({ activeProfileId: null }),
+  editor: Object.freeze({ autosaveDebounceMs: DEFAULT_DEBOUNCE_MS, focusModeHideRails: true }),
+  session: Object.freeze({}),
+  retention: DEFAULT_RETENTION,
+  firstRun: Object.freeze({ dismissed: false }),
+  sampleProjectIds: Object.freeze([]) as readonly string[],
+  mcp: EMPTY_MCP_SETTINGS,
+  coherence: DEFAULT_COHERENCE_SETTINGS,
+  context: Object.freeze({ layerBudgets: Object.freeze({}) }),
+});
+
+/** A patch: any field may be given, and the rest keep their values. A `dailyTargetWords` of 0 clears the target. */
+export interface SettingsPatch {
+  readonly provider?: { readonly activeProfileId?: string | null };
+  readonly editor?: { readonly autosaveDebounceMs?: number; readonly focusModeHideRails?: boolean };
+  readonly session?: { readonly dailyTargetWords?: number };
+  readonly retention?: Partial<RetentionConfig>;
+  readonly firstRun?: { readonly dismissed?: boolean };
+  readonly sampleProjectIds?: readonly string[];
+  readonly mcp?: McpSettings;
+  readonly coherence?: Partial<CoherenceSettings>;
+  /** The whole context record: the Context section saves both budgets together, so a patch replaces them. */
+  readonly context?: ContextSettings;
+}
+
+/**
+ * The checks a stored list names, in registry order, with unknown and repeated names dropped. Absent (or not a list) reads
+ * as every check, so a record written before the section existed runs what it always ran.
+ */
+export function enabledChecksOf(value: unknown): readonly DeterministicCheckId[] {
+  if (!Array.isArray(value)) return DEFAULT_COHERENCE_SETTINGS.enabledChecks;
+  const named = new Set(value.filter((id): id is string => typeof id === 'string'));
+  return DETERMINISTIC_CHECK_IDS.filter((id) => named.has(id));
+}
+
+/** The review scope a stored value names, or the default when it names none. */
+export function reviewScopeOf(value: unknown): ReviewScope {
+  return (REVIEW_SCOPES as readonly unknown[]).includes(value) ? (value as ReviewScope) : DEFAULT_COHERENCE_SETTINGS.defaultReviewScope;
+}
+
+/**
+ * The MCP slice's load warnings for a stored record: one named line per entry the loader dropped. The settings themselves
+ * are loaded by {@link normalizeSettings}; this is what the start-up says about them, so nothing is dropped in silence.
+ */
+export function mcpLoadWarnings(raw: unknown, now: string = new Date().toISOString()): readonly string[] {
+  const source = isRecord(raw) ? raw : {};
+  return loadMcpSettings(source['mcp'], now).warnings;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** A whole number within `[min, max]`, or the fallback. */
+export function clampInteger(value: unknown, min: number, max: number, fallback: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
+  const whole = Math.round(value);
+  return Math.min(max, Math.max(min, whole));
+}
+
+/** The daily target: a whole number of words from 0 to the maximum, with 0 read as no target. */
+export function targetOf(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+  const whole = Math.min(TARGET_MAX_WORDS, Math.max(0, Math.round(value)));
+  return whole === 0 ? undefined : whole;
+}
+
+/**
+ * Settings as they load from storage or are patched in: unknown keys are ignored, a wrong type or an out-of-range number
+ * takes its default, and nothing throws. The result is always a complete `AppSettings`.
+ */
+export function normalizeSettings(raw: unknown): AppSettings {
+  const source = isRecord(raw) ? raw : {};
+  const provider = isRecord(source['provider']) ? source['provider'] : {};
+  const editor = isRecord(source['editor']) ? source['editor'] : {};
+  const session = isRecord(source['session']) ? source['session'] : {};
+  const retention = isRecord(source['retention']) ? source['retention'] : {};
+  const firstRun = isRecord(source['firstRun']) ? source['firstRun'] : {};
+  const samples = Array.isArray(source['sampleProjectIds']) ? source['sampleProjectIds'] : [];
+
+  const cap = clampInteger(retention['checkpointCap'], 1, CHECKPOINT_CAP_MAX, DEFAULT_RETENTION.checkpointCap);
+  const days = clampInteger(retention['checkpointDays'], 1, CHECKPOINT_DAYS_MAX, DEFAULT_RETENTION.checkpointDays);
+  const target = targetOf(session['dailyTargetWords']);
+  const coherence = isRecord(source['coherence']) ? source['coherence'] : {};
+
+  return {
+    provider: {
+      activeProfileId: typeof provider['activeProfileId'] === 'string' ? provider['activeProfileId'] : null,
+    },
+    editor: {
+      autosaveDebounceMs: clampInteger(editor['autosaveDebounceMs'], DEBOUNCE_MIN_MS, DEBOUNCE_MAX_MS, DEFAULT_DEBOUNCE_MS),
+      focusModeHideRails: typeof editor['focusModeHideRails'] === 'boolean' ? editor['focusModeHideRails'] : true,
+    },
+    session: target === undefined ? {} : { dailyTargetWords: target },
+    retention: resolveRetentionConfig({ checkpointCap: cap, checkpointDays: days }),
+    firstRun: { dismissed: firstRun['dismissed'] === true },
+    sampleProjectIds: samples.filter((id): id is string => typeof id === 'string' && id.length > 0).slice(0, 50),
+    mcp: loadMcpSettings(source['mcp'], new Date().toISOString()).settings,
+    coherence: {
+      enabledChecks: enabledChecksOf(coherence['enabledChecks']),
+      defaultReviewScope: reviewScopeOf(coherence['defaultReviewScope']),
+      maxFindings: clampInteger(coherence['maxFindings'], 1, MAX_FINDINGS_CAP, MAX_FINDINGS_DEFAULT),
+    },
+    context: normalizeContext(source['context']),
+  };
+}
+
+/** A budget as a whole number clamped into its range, or undefined when the stored value is not a number at all. */
+function budgetOf(value: unknown, min: number, max: number): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+  return clampInteger(value, min, max, min);
+}
+
+/** The context record as it loads: the total and each layer's cap clamped into range, and a missing value left unset. */
+export function normalizeContext(raw: unknown): ContextSettings {
+  const source = isRecord(raw) ? raw : {};
+  const layers = isRecord(source['layerBudgets']) ? source['layerBudgets'] : {};
+  const total = budgetOf(source['totalBudgetTokens'], CONTEXT_TOTAL_MIN, CONTEXT_TOTAL_MAX);
+  const layerBudgets: Partial<Record<ContextLayerId, number>> = {};
+  for (const id of CONTEXT_LAYERS) {
+    const value = budgetOf(layers[id], CONTEXT_LAYER_MIN, CONTEXT_LAYER_MAX);
+    if (value !== undefined) layerBudgets[id] = value;
+  }
+  return { ...(total === undefined ? {} : { totalBudgetTokens: total }), layerBudgets };
+}
+
+/** The assembler's config for these settings: the total and the layer caps the writer set. An unset value keeps the spec's default. */
+export function contextConfigOf(context: ContextSettings): ContextConfig {
+  return {
+    ...(context.totalBudgetTokens === undefined ? {} : { contextBudget: context.totalBudgetTokens }),
+    ...(Object.keys(context.layerBudgets).length === 0 ? {} : { layerBudgets: { ...context.layerBudgets } }),
+  };
+}
+
+/**
+ * The Context section's warn line (ui-modules §5.2): when the total is below the layer caps the writer set, together, the total
+ * cuts a layer before that layer reaches its own cap. Undefined when no total is set, or the total covers the caps.
+ */
+export function contextWarningOf(context: ContextSettings): string | undefined {
+  if (context.totalBudgetTokens === undefined) return undefined;
+  const caps = Object.values(context.layerBudgets).reduce<number>((sum, value) => sum + (value ?? 0), 0);
+  if (caps === 0 || context.totalBudgetTokens >= caps) return undefined;
+  return `The total (${context.totalBudgetTokens.toLocaleString('en-US')} tokens) is below the layer caps together (${caps.toLocaleString('en-US')} tokens), so a layer can be cut before it reaches its own cap.`;
+}
+
+/** Applies a patch to settings and normalises the result, so a patch cannot leave the record outside its clamps. */
+export function applyPatch(current: AppSettings, patch: SettingsPatch): AppSettings {
+  const next: Record<string, unknown> = {
+    provider: { ...current.provider, ...(patch.provider ?? {}) },
+    editor: { ...current.editor, ...(patch.editor ?? {}) },
+    session: {
+      ...current.session,
+      ...(patch.session === undefined
+        ? {}
+        : { dailyTargetWords: patch.session.dailyTargetWords ?? current.session.dailyTargetWords }),
+    },
+    retention: { ...current.retention, ...(patch.retention ?? {}) },
+    firstRun: { ...current.firstRun, ...(patch.firstRun ?? {}) },
+    sampleProjectIds: patch.sampleProjectIds ?? current.sampleProjectIds,
+    mcp: patch.mcp ?? current.mcp,
+    coherence: { ...current.coherence, ...(patch.coherence ?? {}) },
+    context: patch.context ?? current.context,
+  };
+  return normalizeSettings(next);
+}

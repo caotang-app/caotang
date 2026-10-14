@@ -1,0 +1,173 @@
+# Media views (media-track M1–M3)
+
+React views for the three media engines in the app: the screenplay scene, the storyboard board (with the video prompt
+pack as its second tab) and the dialogue container. The centre pane mounts them (`components/Workspace.tsx`), and the
+binder makes their nodes (`media/create-menu.ts`, through `binder.create`).
+
+## What a writer can do
+
+- **Make a node.** A chapter's context menu offers *New screenplay scene here*, *New storyboard here* and *New dialogue
+  here*. A storyboard's offers *New shot here*. Each is a `binder.create`, so the bus checks the kind and the parent. A
+  storyboard holds only shots, and a shot lives only in a storyboard: the bus refuses a move or a create that breaks either.
+- **Write a screenplay scene.** The Script tab draws the scene as it reads; the Source tab edits the Fountain text, with
+  the headings, cues, parentheticals, transitions and notes drawn in their own styles over it; the Pages tab shows the
+  scene paginated, read only. Enter at the end of a cue moves onto its dialogue, and Enter on an empty line after dialogue
+  starts action. Tab completes a half-typed cue from the cues in the scene and the codex's characters. All three write
+  through the session's autosave, which is the path the prose editor uses.
+- **Write a dialogue container.** The Ink text sits under the outline, with its knots, stitches, choices, diverts,
+  declarations and tags drawn in their own styles. Tab after a divert arrow completes the knot or stitch name. Clicking a
+  card in the graph moves the caret to that knot's header in the text. Each choice's label is drawn on its arrow, and the
+  choices list under the outline keeps it whole. The graph and the findings follow the text once the writer pauses (800 ms),
+  and a codex change (an alias, a rename) is read at once. A compile error shows its line once. *Add line ids to N lines* asks first, then writes an id tag into each line that has none. A
+  container whose `autoLineIds` is on also gets its ids when the writer pauses, and the caret stays where it was.
+- **Container settings.** The Inspector's *Container settings* section sets a dialogue container's default speaker (a
+  codex character), its engine target, its line-id opt-in and its locale. Each change is a `dialogue.setMeta` command.
+  The default speaker fills the speaker column of the dialogue table, and the line-id opt-in writes the missing ids into
+  the Ink on save. The engine target and the locale are recorded only (*What is not wired*, *Dialogue table and container settings*).
+- **Import a script or an Ink story.** The binder's *Import script* reads a `.fountain` or `.fdx` file: its sections become
+  folders, and its scenes become screenplay documents, in one undo step (`screenplay.import`). *Import Ink* reads a `.ink`
+  file, and makes one branching container for each knot cluster, in one undo step (`dialogue.importInk`). Text above the
+  first knot is not imported, and the status line says how many lines it was.
+- **Read a finding's quote.** A quote on a finding opens its passage in place. A screenplay scene switches to its Source tab
+  and selects the passage; a dialogue container selects it in its Ink text. The prose editor does the same for prose.
+- **Work a storyboard.** Each card shows its picture (or its alt text), its shot number and one spec row, and the header gives
+  the animatic total and how many shots are left out of it for want of a duration. *New shot* adds a card. The fields edit
+  through `shot.setMeta`. A card moves by dragging it onto another, or with Earlier and Later; either is a `binder.move`.
+  The card size control (S, M, L) is the corkboard's own, so one choice holds for both. S shows the number and the picture,
+  M adds the title, one spec row (the four spec parts, then the lens and the transition) and the coverage line, and L adds the
+  action, the status and the label (storyboard.md §3.1). At S the footer (Earlier, Later, Fields) is hidden but stays in the tab
+  order, and it shows once focus reaches it. The shot editor names a camera value in words (*Bird’s-eye view*, *Dolly in*) and
+  keeps the list's value underneath (`SHOT_ENUM_LABELS` in `@caotang/storyboard`). An empty storyboard gives the spec's copy.
+- **Derive shots, from the scene and from an empty board.** A scene with no storyboard folder yet (`<Scene Title> — Shots`)
+  offers *Derive shots from this scene* in its own view. An empty storyboard offers *Derive shots from “…”* for the one scene
+  beside it that has no shots folder (`derivableSceneOf`), says that the shots go in a new folder named for that scene, and
+  offers nothing when two or more scenes are open, or when it is a scene's own shots folder: derive makes a new folder, and
+  `storyboard.create` does not refuse a title that is taken, so a second folder for a scene would be made. Both offers send the
+  same request through `onAgentIntent`, which opens the agent drawer and submits it. The lookup and the request are unit-tested
+  (`e2e/unit/media-storyboard-board.spec.ts`), and the offers and their request are checked in `e2e/media-storyboard-board.spec.ts`.
+- **Give a shot a picture.** Choose a PNG, JPEG or WebP file in the shot's *Image* section, drop one on a card, or paste one
+  while the card is selected. The file is kept in the project's images and the shot names it, as one undo step
+  (`shot.importImage`). The section can also point the shot at an image the project already holds, or remove the picture. A
+  picture opens larger in the lightbox, and Escape closes it. A picture whose file has gone is dropped when the storyboard
+  opens, with a notice on the board.
+- **Cover script text.** The *Script coverage* section shows a scene's or a prose document's stored text. Select words in it and
+  cover them: the words are captured against the stored text, and the coverage is one `shot.setMeta`.
+- **Write a shot's prompt.** The *Prompt* section writes one target model's record for the shot: its camera, subject, action,
+  context and style, its audio, negative prompt, clip length, aspect ratio, resolution, seed, references and best take. Saving
+  writes it through `shot.setMeta`, and the other models' records stay as they were. The checks under the fields are the
+  engine's rows for this shot, and each one that names a field links to it.
+- **Read the prompt pack.** The Prompt pack tab lists each shot's prompt for one target model, the references it sends, and
+  which codex entries those references came from (and which entry was named but sent nothing, with the reason). Each check
+  there links back to its field on the board. The three exports are the JSON, Markdown and CSV packs.
+- **Compile.** The Compile dialog offers Fountain, Final Draft, the Ink story, the dialogue table and the shot list for
+  the selected item. Each compile is the bus's `export.compileSelection`, and a refusal (a line with no id, a selection
+  with no scene) is named in the dialog.
+
+## How the centre mounts a view
+
+`components/Workspace.tsx` asks `mediaViewFor(node, { session, ports, reveal, onRevealHandled, zoom, onZoom })` for the selected
+node. `reveal` is a passage a finding quotes: the view that holds the document selects it and calls `onRevealHandled`. `zoom` and
+`onZoom` are the card size the corkboard shares. `onAgentIntent`, which the scene's derive action and the empty board's derive action send
+their request through, is passed by the centre: it opens the agent drawer and submits the request (*What a writer can do*, *Derive shots*):
+
+| Node | View | Where it shows |
+|---|---|---|
+| document with `kind: 'screenplay'` | `ScreenplayView` | in the editor's centre, in place of the prose editor |
+| dialogue container (`type: 'dialogue'`) | `DialogueView` | in the editor's centre, in place of the prose editor |
+| folder with `kind: 'storyboard'` | `StoryboardView` | in place of the corkboard, which the board is in shot mode |
+| a shot | none of its own | its storyboard shows, because a card is edited on the board |
+
+Anything else returns `null`, and the centre shows what it showed before. A media document is never given to the prose
+editor (`activeDoc` skips it), so the editor and a media view never hold one document at once.
+
+Each view runs inside `MediaBoundary`, an error boundary, so a view that throws shows its fallback and the app keeps
+running.
+
+`mediaPortsFor(session)` is the one port the centre passes: `commitShot`, which sends every storyboard command through
+the bus (`commit.ts`), `importImage`, which stages a picture and runs `shot.importImage`, and `assets`, the project's images
+as an artifact store (`session.assets.artifactFs()`). The images are kept in the browser's own asset store
+(`packages/store/src/runtime/asset-store.ts`, its own IndexedDB database) and in the project folder when one is open, so a
+card's picture survives a reload with no folder attached.
+
+## Engine imports
+
+`engines.ts` is the only file in this folder that names an engine package. The desktop declares `@caotang/screenplay`,
+`@caotang/storyboard`, `@caotang/dialogue` and `@caotang/video-prompt-pack` as workspace dependencies, so the names are bare
+specifiers.
+
+One exception is open: `ScreenplayPreview.tsx` imports `paginate` and `LAYOUT` from `@caotang/screenplay` directly, because
+`engines.ts` does not re-export them yet. Moving the two names into `engines.ts` removes the exception.
+
+## What the store keeps
+
+- A node's `kind`, a shot's `shot` metadata and a container's `dialogue` metadata are written to `caotang.json` on the
+  node's line, and read back on load. An unknown kind string is kept; a metadata value of the wrong shape is dropped with
+  a notice.
+- A body is named for its kind: `docs/<id>.fountain` for a screenplay, `docs/<id>.ink` for a dialogue container, and
+  `docs/<id>.md` for prose. A `.md` written before a kind had its own file still loads, and the next save writes the
+  kind's file and removes that `.md`. A `.fountain` or `.ink` file no node owns is recovered as a screenplay or a dialogue container, under the
+  manuscript's `Recovered` folder, where the binder shows it. A raw Ink file has no title of its own and is named
+  *Recovered dialogue*.
+- A body whose node is deleted is removed on the next save, whatever its extension, so it does not come back on reopen.
+- A shot has no body. A dialogue container's Ink is written whole, with no front matter, because Ink has none.
+- A codex entry's `visualRefs` (the asset ids a prompt pack sends with it) is written to `caotang.json` and to its codex file
+  when there are some, and read back on load. The codex panel's *Visual references* section sets them, from the pictures
+  already in the project, and removes them. The prompt pack names the pictures for the scenes the entry appears in; Caotang
+  uploads none of them.
+
+## What is not wired
+
+1. **Images of a folder that cannot be attached.** A project opened from a folder whose attach is refused does not see that
+   folder's pictures when the project opens, so a reference to one may be dropped with a notice. The notice names it; the
+   file stays in the folder.
+2. **The dangling check** runs when the storyboard first opens, not when the project opens: the project-list open does not
+   settle the session (lifecycle.ts), and the board is the place a picture is shown.
+3. **Shot images, drop and paste, are tested through synthetic events.** The OS drag and the clipboard are not driven.
+4. **Prompt pack in the Compile dialog.** The Compile dialog does not offer the prompt pack: it is written for one vendor
+   template, which the Prompt pack tab chooses, and the dialog does not ask for one.
+5. **Dialogue table and container settings.** The dialogue table's character limit (`charLimit`) is a recipe option, set in the
+   export dialog's Character limit field when the dialogue table is chosen, so a `dialogue-csv` export from the app carries it.
+   The engine target is a hint for the compile, and the compile does not yet change its output for it. The locale
+   (`locBaseline`) is stored, and no table, compile or export reads it yet.
+6. **Screenplay source affordances.** Enter and Tab work on a cue, and the Source tab draws the parse. The element palette
+   beyond those keys (a menu of element types, and a key for each element) is not built.
+7. **Coverage in a file with carriage returns.** The text area shows the stored text with line feeds, so a selection in a
+   body stored with Windows line endings is located by its words, and a passage that appears twice is refused.
+8. **Page preview.** The Pages tab is `paginate()`'s output, read only, and it is not the PDF. The PDF belongs to the
+   export gate (screenplay.md §5.3), which is not built.
+9. **Ink line ids on import.** An imported container keeps the Ink as written. Line ids are minted by the Add line ids
+    action or by a container whose `autoLineIds` is on, not by the import.
+10. **The agent's derive plan is not verified.** The derive offers send their request to the agent (*What a writer can do*,
+    *Derive shots*), and the plan the agent proposes for it, its folder and its shots, needs a model that proposes shots, which
+    no test drives.
+11. **The card rows show the stored tokens.** A card's spec row (`MCU · birds · dolly-in · 4 s · 35mm · dissolve`) keeps the enum
+    values, as storyboard.md §3.1 writes the row. The shot editor shows the words.
+
+## Tests
+
+`e2e/unit/media-*.spec.ts` test the view models and the pure rules without a browser: the screenplay units, the storyboard
+cards, reorder and edit plans, the dialogue outline, graph and findings, the Ink save and confirm rules, the binder's
+media entries, the prompt-pack preview, the routing, and the rebase and caret rules. `e2e/unit/media-storyboard-images.spec.ts`
+covers picture files, the image commands, the animatic line and the durable asset store; `e2e/unit/media-storyboard-coverage.spec.ts`
+covers the script choices, the captured anchors and the coverage commands; `e2e/unit/media-prompt-authoring.spec.ts` covers the
+prompt draft and its record, the strict refusals, the vendor-preserving write, the field links and the codex consistency lines.
+`e2e/media-nodes.spec.ts` drives the app: each node is made from the binder and opens in its view, the text survives a reload,
+the graph follows the Ink, a shot is a `binder.create` and its fields survive a reload, and each of the five formats the Compile
+dialog offers (Fountain, Final Draft, the Ink story, the dialogue table and the shot list) compiles. `e2e/media-rebase.spec.ts`
+types, undoes and types again in each view, and checks that the second text survives a reload. `e2e/media-storyboard-images.spec.ts`
+chooses, drops and pastes a picture, looks at it in the lightbox, keeps it across a reload, and drops a reference whose file is gone.
+`e2e/media-storyboard-board.spec.ts` drags a card and checks the animatic header. `e2e/media-storyboard-coverage.spec.ts` covers
+selected script text and removes it. `e2e/media-prompt-authoring.spec.ts` writes a prompt, follows a check to its field, and follows
+a check on the pack tab back to the board. `e2e/media-prompt-provenance.spec.ts` sets an entry's visual reference in the stored
+project (the app has no control for it yet), and checks that the pack names the entry the reference came from.
+
+`e2e/media-reveal.spec.ts` clicks a finding's quote in a scene and in a container and reads the selection.
+`e2e/media-board-controls.spec.ts` covers the card sizes, the mode switches' keys and names, the editor's words and the lightbox's
+focus. `e2e/media-dialogue-views.spec.ts` covers the choice labels on the graph, the compile error's line and a codex alias that
+clears a speaker finding. `e2e/unit/media-storyboard-board.spec.ts` and `e2e/unit/media-radio-keys.spec.ts` test the label lookup,
+the derive scene and the radio keys without a browser.
+
+```
+CAOTANG_E2E_PORT=<your port> pnpm exec playwright test e2e/unit/media-
+CAOTANG_E2E_PORT=<your port> pnpm exec playwright test e2e/media-nodes.spec.ts
+```

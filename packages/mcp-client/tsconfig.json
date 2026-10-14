@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // DOM is here for the Request, Response and fetch types the Streamable HTTP
+    // transport is written against, and for `crypto.subtle` in the pin hashes. Nothing
+    // here runs in a browser DOM; the same reason `packages/codex` carries this lib.
+    "lib": ["ES2023", "DOM"],
+    "types": ["node"],
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"]
+}

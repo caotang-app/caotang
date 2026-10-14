@@ -1,0 +1,229 @@
+export {
+  COMMAND_NAMES,
+  FIXED_ROOT_IDS,
+  VIEW_COMMAND_NAMES,
+  isFixedRootId,
+} from './command.js';
+export type {
+  ApplyContext,
+  BinderCreateParams,
+  BinderMoveParams,
+  BinderRenameParams,
+  BinderSetMetaParams,
+  BinderSetSynopsisParams,
+  CodexAttachParams,
+  CodexSourceCitation,
+  CodexUpsertOp,
+  CodexUpsertParams,
+  CoherenceDiscardRunParams,
+  CoherenceSetFindingStatusParams,
+  CoherenceSetSceneMetaParams,
+  CommandProvenance,
+  ValidationCoherence,
+  ValidationFinding,
+  Command,
+  CommandApply,
+  CommandDescriptor,
+  CommandName,
+  CommandParams,
+  CommandRegistration,
+  CommandRegistry,
+  CommandStateFor,
+  DocWriteParams,
+  EditorInsertParams,
+  EditorReplaceRangeParams,
+  ExportCompileParams,
+  ExportCompileSelectionParams,
+  MetaPatch,
+  NotesAppendParams,
+  NotesSetParams,
+  Postcondition,
+  ProjectDeleteNodeParams,
+  UndoKind,
+  UndoPayload,
+  UndoScope,
+  ValidationCodexEntry,
+  ValidationDocument,
+  ValidationNode,
+  ValidationSnapshot,
+  ViewCommandName,
+  ViewSetActiveDocParams,
+  ViewSetCorkboardScopeParams,
+  ViewSetExpandedParams,
+  ViewSetScrollParams,
+  ViewSetSelectionParams,
+  ViewState,
+} from './command.js';
+export type { ActivityEntry, ActivityLog, ActivitySource } from './activity-log.js';
+export { createActivityLog } from './activity-log.js';
+export type { CommandError, CommandErrorCode, CommandErrorDetails, PerOpFailure, Result } from './result.js';
+export { ok, err } from './result.js';
+// m8-integration: the param shapes of the two injected families (the external call, and the storyboard shot commands).
+export type {
+  McpInvokeParams,
+  ShotCreateCommandParams,
+  ShotImportImageParams,
+  ShotSetMetaCommandParams,
+  StoryboardCreateCommandParams,
+} from './command.js';
+// r6 (storyboard): the shot image import's descriptor, by name, for the store's registration.
+export * as storyboardR6Commands from './descriptors-storyboard-r6.js';
+export * as commands from './descriptors.js';
+// m9 (project export): the project, recipe, vocabulary and cover-import descriptors, by name. The store reads them here.
+export * as projectCommands from './descriptors-project.js';
+export {
+  AUTHOR_MAX,
+  CHAR_LIMIT_MAX,
+  METADATA_PATCH_KEYS,
+  PROJECT_TITLE_MAX,
+  RECIPE_NAME_MAX,
+  VOCABULARY_NAME_MAX,
+  normalizeIsbn,
+} from './descriptors-project.js';
+export type {
+  ProjectImportAssetParams,
+  ProjectRenameParams,
+  ProjectSetMetadataParams,
+  RecipeDeleteParams,
+  RecipeOptionsParams,
+  RecipeSaveParams,
+  VocabularyKind,
+  VocabularyRemoveParams,
+  VocabularyUpsertParams,
+} from './command.js';
+export type { AgentRisk, HardDenyClass, PermissionContext, PermissionGrant, PermissionVia } from './permission.js';
+export {
+  HARD_DENIED,
+  HARD_DENY_CLASSES,
+  checkPermission,
+  hardDenyClass,
+} from './permission.js';
+export type { ResolvedRegistration } from './registry.js';
+export {
+  COMMAND_REGISTRY,
+  buildRegistry,
+  isCommandName,
+  lookupCommand,
+  lookupIn,
+  registeredNames,
+  resolveCommand,
+  resolveIn,
+} from './registry.js';
+export type { BusContext, ExecutionOutcome } from './pipeline.js';
+export { ApplyRefusal, execute, executeAsync } from './pipeline.js';
+export type { IdempotencyCache } from './idempotency.js';
+export { createIdempotencyCache } from './idempotency.js';
+export type { UndoDispatch, UndoEntry, UndoGroup, UndoGroupKind, UndoOutcome, UndoStore, UndoStoreOptions, UndoTarget } from './undo.js';
+export { applyContext, createUndoScope, createUndoStore } from './undo.js';
+export {
+  createViewState,
+  isViewState,
+  viewSetActiveDocApply,
+  viewSetCorkboardScopeApply,
+  viewSetExpandedApply,
+  viewSetScrollApply,
+  viewSetSelectionApply,
+} from './view.js';
+export { DECLARED_PARAMS, VARIOUS_PARAM_NAMES } from './params.js';
+export { HINT_READ_TREE } from './params.js';
+// m4-furniture: the saved-filter and project-goal params, named by the store and the harness's tool descriptors.
+export type {
+  BinderDeleteFilterParams,
+  BinderSaveFilterParams,
+  FurnitureRoot,
+  GoalComparatorParam,
+  GoalKindParam,
+  GoalMetricParam,
+  GoalResetDayParam,
+  ProjectDeleteGoalParams,
+  ProjectGoalParams,
+  ProjectSaveGoalParams,
+  SavedFilterParams,
+} from './descriptors-furniture.js';
+// The coherence rules the bus and the store share (coherence.ts). The coherence module re-exports them.
+export type {
+  CoherenceStatusName,
+  DismissalReasonName,
+  ScenePatch,
+  ScenePatchResult,
+  SceneMetaContext,
+  SceneMetaRecord,
+  TimelineModeName,
+} from './coherence.js';
+export {
+  COHERENCE_NOTE_LIMIT,
+  COHERENCE_STATUSES,
+  DISMISSAL_REASON_IDS,
+  SCENE_PATCH_KEYS,
+  TIMELINE_MODES,
+  applySceneMetaPatch,
+  coherenceNoteProblem,
+  findingTransition,
+  findingsDiscardedWith,
+  inverseScenePatch,
+  isEmptySceneMeta,
+  trimCoherenceNote,
+} from './coherence.js';
+// The run discard's descriptor (descriptors-coherence.ts). The store imports it for its registry row.
+export { coherenceDiscardRun } from './descriptors-coherence.js';
+// m6-script: the import and container-settings params and limits (descriptors-script.ts), named by the store, the desktop and
+// the dialogue package's parity test.
+export type {
+  DialogueImportInkParams,
+  DialogueMetaPatch,
+  DialogueSetMetaParams,
+  InkContainerParams,
+  ScreenplayImportParams,
+} from './descriptors-script.js';
+export {
+  DIALOGUE_ENGINE_TARGETS,
+  DIALOGUE_IMPORT_CONTAINERS_MAX,
+  DIALOGUE_IMPORT_TEXT_MAX,
+  DIALOGUE_META_KEYS,
+  SCREENPLAY_IMPORT_FORMATS,
+  SCREENPLAY_IMPORT_TEXT_MAX,
+} from './descriptors-script.js';
+/**
+ * codex.md §2's limits, shared with `@caotang/store`'s manifest validator rather
+ * than retyped there — see `descriptors.ts` for why this is the only direction
+ * the two packages can share one constant in.
+ */
+export {
+  CODEX_ALIAS_CHARS_MAX,
+  CODEX_ALIASES_MAX,
+  CODEX_DESCRIPTION_MAX,
+  CODEX_EXCLUDE_CHARS_MAX,
+  CODEX_EXCLUDE_MAX,
+  CODEX_NAME_MAX,
+  CODEX_SOURCES_MAX,
+  CODEX_SOURCE_QUOTE_MAX,
+  // video-prompt-pack.md §3: an entry's visual references, the most one entry carries. The harness's schema and the picker read it here.
+  CODEX_VISUAL_REFS_MAX,
+  KEYWORDS_MAX,
+  KEYWORD_CHARS_MAX,
+  SYNOPSIS_MAX,
+  EXPORT_FORMATS,
+  // The chapter rule's sentence: the binder's drop refusal and the bus's create refusal say the same words.
+  CHAPTERLESS_DOCUMENT_REFUSAL,
+} from './descriptors.js';
+
+// m8-integration: the shapes a tool package declares its tools with, so a media module needs no import of the harness
+// (which imports it). The harness re-exports each of them (schema.ts, errors.ts, types.ts).
+export { param, toJsonSchema } from './tool-schema.js';
+export type {
+  ArraySpec,
+  BooleanSpec,
+  EnumSpec,
+  FreeObjectSpec,
+  IntegerSpec,
+  JsonSchema,
+  ObjectSpec,
+  ParamSpec,
+  StringSpec,
+  TaggedSpec,
+  UnionSpec,
+} from './tool-schema.js';
+export { refusal, type RefusalOptions } from './refusal.js';
+export type { ToolValue } from './tool-value.js';
+// m9 (fix): the name a project with no recipes key holds (exporter.md §4). The exporter names its default recipe with it.
+export { DEFAULT_RECIPE_NAME } from './recipe-names.js';

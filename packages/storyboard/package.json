@@ -1,0 +1,21 @@
+{
+  "name": "@caotang/storyboard",
+  "version": "0.1.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "description": "Storyboard and shot planning — the shot node kind, the assets/ store, shot numbering, the shot-list CSV and contact-sheet renderers and the shots.* harness entries (storyboard.md, M3)",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@caotang/bus": "workspace:*",
+    "@caotang/ids": "workspace:*",
+    "@caotang/store": "workspace:*"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  }
+}

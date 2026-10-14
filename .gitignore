@@ -1,0 +1,32 @@
+node_modules/
+dist/
+build/
+coverage/
+.turbo/
+*.tsbuildinfo
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Claude Code's local state on this machine: agent worktrees (full repo copies), launch configs, session files.
+# Never part of the tree. Nothing under .claude/ is tracked, so a shared setting belongs in the docs, not here.
+.claude/
+
+# Local working projects (migrations, personal manuscripts) — never committed
+.local/
+
+# Local env — never commit provider keys
+.env
+.env.*
+*.env
+!.env.example

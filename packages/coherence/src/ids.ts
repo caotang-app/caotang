@@ -1,0 +1,39 @@
+/**
+ * Ids for the coherence module — the same Crockford base32 family as node and
+ * codex ids ([project-format.md A4](../../../docs/architecture/project-format.md)),
+ * with three prefixes of its own: `f_` finding, `r_` run, `w_` world rule (coherence.md §3, §4.1, §4.3).
+ *
+ * `@caotang/ids` owns the prefix union, and this module mints through it with its own
+ * prefix (the union widened for these three in this work, rather than
+ * borrowing `c` and swapping the prefix afterwards). The body is ten Crockford
+ * characters from the family's randomness, and the spec's uniqueness rule still
+ * applies: `taken` re-rolls on collision, and an exhausted re-roll is a throw.
+ */
+
+import { newId, type RandomBytes } from '@caotang/ids';
+
+export type CoherenceIdPrefix = 'f' | 'r' | 'w';
+
+const BODY_PATTERN = '[0-9ABCDEFGHJKMNPQRSTVWXYZ]{10}';
+
+/** True when `value` is `<prefix>_` followed by ten Crockford base32 characters. */
+export function isCoherenceId(prefix: CoherenceIdPrefix, value: unknown): value is string {
+  return typeof value === 'string' && new RegExp(`^${prefix}_${BODY_PATTERN}$`).test(value);
+}
+
+/**
+ * Mint an id not already in `taken`. `newId` re-rolls on collision itself; it falls
+ * back to a longer id only when every attempt collided, and a coherence id has to
+ * be the ten-character shape the spec fixes, so that fallback is refused here
+ * rather than stored. Exhausting the attempts is a bug in the randomness source,
+ * so it throws rather than returning a duplicate.
+ */
+export function mintCoherenceId(
+  prefix: CoherenceIdPrefix,
+  taken: ReadonlySet<string>,
+  randomBytes?: RandomBytes,
+): string {
+  const candidate = newId(prefix, { taken, ...(randomBytes ? { randomBytes } : {}), maxAttempts: 8 });
+  if (!taken.has(candidate) && isCoherenceId(prefix, candidate)) return candidate;
+  throw new Error(`could not mint a unique ${prefix}_ id after 8 attempts`);
+}

@@ -1,0 +1,90 @@
+/**
+ * `@caotang/screenplay` — the screenwriting engine, headless ([screenplay.md](../../../docs/architecture/screenplay.md),
+ * media-track M1).
+ *
+ * Fountain is parsed into a located element model and serialised back. A whole script
+ * imports as sections and scenes, and the scenes are paginated under the spec's constants.
+ * The result renders as Fountain (identity), FDX (typed paragraphs) and PDF (paginated).
+ *
+ * No agent tools are exported. screenplay.md §6 adds none for M1: the screenplay workflow
+ * rides the existing `scene.draft`, `doc.read`, `synopsis.fill` and `export.compile` tools.
+ * The `export.compile` format enum gains `fountain | pdf | fdx` at the integration step, which
+ * belongs to the exporter and the harness, not to this package.
+ *
+ * Nothing here touches the editor, the store or the network. The flattened block shape is
+ * the exporter's `FlatBlock`, declared structurally in `flat-block.ts` (the exporter depends on
+ * this package, so importing it back would be a workspace cycle; a parity test pins the two).
+ */
+
+export type { FlatBlock } from './flat-block.js';
+
+export {
+  FOUNTAIN_EXTENSION,
+  SCREENPLAY_KIND,
+  isScreenplayKind,
+  screenplayBodyPath,
+  type ScreenplayKind,
+} from './kind.js';
+
+export type { LocatedElement, ScreenplayElement, ScreenplayElementType, TextRange } from './types.js';
+
+export { printedText } from './classify.js';
+
+export { normaliseSource, parseFountain, type ParsedScreenplay, type SceneSpan } from './parse.js';
+
+export { serialiseFountain } from './serialise.js';
+
+export {
+  importFountainScript,
+  type ImportedNode,
+  type ImportedScene,
+  type ImportedScript,
+  type ImportedSection,
+} from './import.js';
+
+export { characterCueNames, cueKey, cueSpellingGroups, type CueSpellingGroup } from './cues.js';
+
+export {
+  FOUNTAIN_MIME,
+  createFountainRenderer,
+  renderFountain,
+  type FountainRenderOptions,
+  type FountainRenderResult,
+  type FountainRenderer,
+} from './render-fountain.js';
+
+export {
+  LAYOUT,
+  MINUTES_PER_PAGE,
+  estimatePageCount,
+  estimateRuntimeMinutes,
+  paginate,
+  sceneLengths,
+  type LayoutLine,
+  type LayoutPage,
+  type LineKind,
+  type PaginateOptions,
+  type SceneLength,
+} from './paginate.js';
+
+export { pdfString, writePdf, type PdfInfo, type PdfText } from './pdf.js';
+
+export {
+  PDF_MIME,
+  createPdfRenderer,
+  renderPdf,
+  type PdfRenderOptions,
+  type PdfRenderResult,
+  type PdfRenderer,
+} from './render-pdf.js';
+
+export {
+  FDX_MIME,
+  createFdxRenderer,
+  importFdx,
+  parseFdxParagraphs,
+  renderFdx,
+  type FdxParagraph,
+  type FdxRenderResult,
+  type FdxRenderer,
+} from './fdx.js';

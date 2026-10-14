@@ -1,0 +1,107 @@
+# Storyboard — shot node kind + corkboard variant (M3, post-v0.1)
+
+> Status: built, except where a section says otherwise.
+> Scope: Attaches to `project-store` (a node kind + metadata), `corkboard` (a variant view, **no new commands** — ui-modules §3 doctrine), `inspector` (metadata fields), `exporter` (shot-list CSV + contact-sheet PDF), `coherence` (deterministic coverage check).
+> Cross-refs: node-kind vocabulary = [project-format.md](project-format.md) §2 media note · corkboard = [ui-modules.md](ui-modules.md) §3 · shot metadata editor = [ui-modules.md](ui-modules.md) §4 (Inspector layout reserves the pattern via SceneMeta) · recipes = [exporter.md](exporter.md) §2/§3 · prompt-pack substrate = [video-prompt-pack.md](video-prompt-pack.md) §4 · findings = [coherence.md](coherence.md) §5.4.
+
+## 1. Verdict (D4, adopted)
+
+**Minimal viable storyboard = corkboard variant over an additive `shot` node kind + metadata — confirmed.** One data model, two export recipes (shot fields are *exactly* the camera half of an M4 prompt pack; D4 implication 5). No product to reject outright: the market is SaaS-collab (Boords, from $39/mo — its value is the cloud approval loop) or desktop-drawing (Storyboarder); Caotang's local-first, writer-centric variant is the unoccupied spot (consistent with A9's quadrant finding).
+
+**First-landing scope (v0.1-of-track):** shot node kind + storyboard corkboard variant + shot-list CSV export + PDF contact sheet. **Parked:** animatic MP4 (derived, heavy — parked), NLE/EDL interchange (production-pipeline territory — parked), paper-photo round-trip (recorded, not built).
+
+## 2. Data model
+
+### 2.1 Node kind + tree placement
+
+```ts
+tree[].type: 'shot'              // new node type joining root|folder|document (additive; loaders tolerant)
+tree[].kind: 'storyboard'        // container marker on the folder that holds shots (display hint for corkboard variant)
+```
+
+- **Hierarchy:** sequence → scene → shots, with **the script as the spine** (D4: every production tool links shots to script scenes; Storyboarder makes an imported scene the storyboard unit). A `shot` node lives under a document node's implicit shot container OR under a sibling folder marked `kind: 'storyboard'` — **adopted: sibling folder** (keeps the three-tier UI model untouched: folders contain nodes; a scene document's children would violate it). Default flow: "Derive shots" creates `<Scene Title> — Shots` folder under the scene's parent, `type: 'folder'`, `kind: 'storyboard'`, shots as its children.
+- **Where the derive offer sits:** the scene's own view offers *Derive shots from this scene* while no `<Scene Title> — Shots` folder exists beside it. An empty storyboard board offers *Derive shots from “<scene>”* only when exactly one screenplay scene beside it has no shots folder, and the board is not itself a scene's shots folder; the name in the button says which scene the request names, and the board's copy says the shots go in a new folder, `<Scene Title> — Shots`, not on that board (derive makes the folder; it does not fill the empty board). Both send the same request (`deriveIntentOf`) through the agent, and both are dropped once the scene has its folder, so derive never makes a second folder for one scene. Two offers for one request is kept on purpose: the scene view is where a writer chooses the scene, and the board offers only when that choice is already made.
+- Shots are real tree nodes: reorder/reparent/status/label/keywords/synopsis work via the existing command set; no new binder commands.
+- **`covers` back-link (the script↔shot sync point):** each shot carries optional references to the script elements it covers (see §3.2). There is **no live two-way sync** — D4: nobody maintains two-way sync; reverse invalidation is the deterministic coverage check (§5), not automatic rewrites.
+
+### 2.2 Shot record (per-kind metadata, additive manifest field)
+
+```ts
+interface ShotMeta {
+  image?: string;              // asset id — file inside the project folder; never a path outside it (project-format §2 no-outside-scope rule extends to assets)
+  imageAlt?: string;           // caption if the image is absent
+  shotSize?: 'WS'|'FS'|'MFS'|'MS'|'MCU'|'CU'|'ECU'|'OTS'|'POV'|'INSERT';  // fixed v1 enum (Boords/StudioBinder set, extended with OTS/POV)
+  cameraAngle?: 'eye'|'low'|'high'|'birds'|'worms'|'dutch'|'overhead';    // fixed v1 enum
+  cameraMovement?: 'static'|'pan'|'tilt'|'dolly-in'|'dolly-out'|'truck'|'crane'|'handheld'|'zoom'|'rack-focus';  // fixed v1 enum
+  lens?: string;               // free text ("35mm anamorphic") — free field, no enum
+  action?: string;             // ≤ 1000 chars — what happens in-frame
+  dialogue?: DialogueCoverage[];   // script-line references covered by this shot
+  durationSec?: number;        // seconds, ≥ 0; the animatic substrate
+  transition?: 'cut'|'dissolve'|'wipe'|'fade-in'|'fade-out'|'match-on-action';  // fixed v1 enum (outgoing transition)
+  vendorRefs?: VideoShotRef[]; // the M4 pack fields attach here — video-prompt-pack.md §4 (this field is RESERVED now, typed there)
+}
+interface DialogueCoverage { kind: 'fountain-element'; docId: string; anchor: TextAnchor; }   // edit-anchors.md §2 shape — the covered cue/dialogue/heading range
+```
+
+- **Contract rules (project-format §2 discipline):** unknown enum value on load → keep string, surface "unknown value" chip, never drop; unknown metadata fields → tolerated/dropped-with-notice per §6 unknown-tolerance; `image` dangling id → field dropped with load warning (same rule as codex `attachments`); `durationSec` missing → shot excluded from animatic computations and flagged by the coverage check.
+- **Asset storage:** `assets/` joins the project-folder layout (sibling of `docs/`; flat, opaque-id filenames `a_XXXXXXXXXX.<ext>`, PNG/JPEG/WebP v1, PSD-later per Storyboarder's precedent). Manifest-referenced only (§2 `image`); loaders ignore unknown files so the directory is additive with no manifest schema change; zip deliverable includes it; `ToC.md`-style human map not needed (images carry alt text). Images are content files (severity tier: content), snapshotted by the artifact write path; **images never leave the project folder** (no media storage beyond the project).
+- **shotNumber is derived, not stored** (Boords' auto frame numbers): rendered from sibling `order` at display/export time; renumbering is free on reorder. A user-facing "lock numbers" option is rejected — derivation is the point (Storyboarder renumbers on reorder).
+
+## 3. Editor & panel integration
+
+### 3.1 Corkboard variant (the storyboard view)
+
+- A folder with `kind: 'storyboard'` renders the corkboard in **shot mode**: cards = children in sibling order, card body = **image thumbnail** (asset, `<img>` from local asset path) + shot-number chip + one spec row (`shotSize · angle · movement · durationSec s`), S/M/L zoom mapping like ui-modules §3 (S = number + thumbnail only; M = + spec row; L = + action text + status/label).
+- **Gestures → commands** (ui-modules §3 doctrine): card reorder = `binder.move`; metadata edits = the selected card's Fields panel, saved by its Save shot control (as built, 2026-10-14: the Inspector does not draw the shot fields); new shot card = `binder.create` (context menu; type `shot` inside a storyboard-kind folder). **The module adds three bus commands** (2026-10-09; command-bus §9): `storyboard.create` makes the `<Scene Title> — Shots` folder, `shot.create` makes one shot card with its stored metadata, and `shot.setMeta` writes a whole stored shot value over the one it replaces. Each carries the fact its plan was made against (`storyboard.create`'s `scene`, `shot.setMeta`'s `expect`), and the apply refuses when that no longer holds, so an undo is the same command with the values swapped. Their guards belong to this module and run in the apply, which the store supplies through `ProjectCommandOptions.shots`. Zoom/asset-view state = view state.
+- Card image slot: click → lightbox zoom (view state); drag-and-drop an image file onto a card → asset import (`project.importAsset` internal op, one undo group, writes `assets/` + sets `image`). **Paste-from-clipboard** supported (the Storyboarder PSD-handoff lesson at 1% of the weight).
+- Empty state: "No shots — derive from the scene's script, or draw/import a frame." (the title of an editable board; the derive action is the one §2.1 places). A read-only board offers neither a derive nor a new frame, so its title is "No shots in this storyboard yet".
+- **Card contents by size.** The number chip, the picture (or its alt text) and the warnings (the unknown-value badge and the notes) show at every size. The warnings stay at S because a value the load kept as unknown must be seen (§2.2). Beyond that:
+  - **S** is the number and the picture only. Its footer (Earlier, Later, Fields) is hidden from sight but stays in the tab order, and it is drawn as soon as focus enters it.
+  - **M** adds the title, **one** spec row, and the coverage line (`N lines covered`). The spec row is `shotSize · cameraAngle · cameraMovement · durationSec s`, with `lens · transition` after it when they are set, so the camera values are in one row, not two.
+  - **L** adds the action text, the node's status chip, and its label chip. The status and the label are resolved through the project vocabulary, as the corkboard card resolves them: a status the vocabulary lacks reads `Unknown status`, and a node with none reads `No status`.
+  - **Deviation recorded:** the coverage line shows at M and L, although §3.1 names no coverage row. It is the one visible count of the §5 check, so it is kept at the sizes that show detail.
+
+### 3.2 Shot fields and prompt (the selected card)
+
+- Selecting a card opens its shot-fields block (§2.2), drawn in the board's Fields panel for that card, not in the Inspector (as built, 2026-10-14). It holds the image picker (project asset list, and the file, drop or paste pictures), the enum dropdowns (fixed enums above), the action textarea, the script coverage (**pick text in the open script doc → anchor captured fresh**, the Finding-evidence-capture pattern, coherence.md §6.3 — never stored as raw offsets alone), the durationSec number field and the transition picker. The fields are saved as one shot by its **Save shot** control, not by debounced autosave.
+- The prompt section (video-prompt-pack.md §2) keeps the text typed for each target model while the shot stays open, so a switch of vendor and back loses none of it (Media-1, 2026-10-14). A stored prompt that changes under the editor (an undo, or an agent's apply to this shot) replaces that vendor's unsaved text with the stored values, and the section says so.
+- Image editor = **none in v1** (crop/sketch = parked; Storyboarder's Shot Generator is a product-scale feature). Import-only posture.
+
+## 4. Harness tools (the track's rows 18 and 19; the registry holds 26 rows, agent-harness §10)
+
+Two tools, added **with the storyboard module** (same metadata discipline: `{name, risk, undoable, response_token_cap, description}`; callId dedupe; model-facing errors). The numbers in the first column are the track's own, from before the registry was counted in full; the registry's count is agent-harness §10's. On the MCP server, `shots.annotate` is listed on a writable server, and `shots.derive` is not, because it needs a model provider and the server holds none (mcp-server README).
+
+| # | Tool | Risk | Params | Semantics / Effects | Undo | Errors (model-facing) |
+|---|------|------|--------|---------------------|------|----------------------|
+| 18 | `shots.derive` | write-confirm | `doc: string` (script doc), `granularity?: 'key-shots' \| 'full-coverage'` (default 'key-shots'), `styleNote?: string` | Reads the script scene (body projection), proposes shots: per proposed shot — `shotSize/cameraAngle/cameraMovement/action (text), dialogue` (anchors captured fresh against the current body), `durationSec` estimate. Creates the `<Scene> — Shots` folder + shot nodes **on approval** (one undo group). Images are NOT generated (A9 boundary) — cards land empty, ready for import. Plan card: proposed shot list (each shot's number, title and spec row) + the target tree diff (the new folder line, then one line per shot). A proposal `planDerive` refuses is refused at the card's preflight, so the card cannot approve it (agent-harness §2). A prose scene or an empty one is refused before the derive's model call, in the same words, since those checks need no proposal: the refusal is a failed card in the turn and goes back to the planner (agent-harness §8). | one undo group for the whole batch | Non-screenplay doc → "derive works on screenplay scenes — this doc is prose"; doc empty → ask-back; >60 proposed shots → split suggestion. |
+| 19 | `shots.annotate` | write-auto | `shots: string[]` (shot ids, ≤50), `image?: {assetId}` \| `spec?: {shotSize?, cameraAngle?, cameraMovement?, lens?, transition?}`, `action?: string` | Batch metadata write over existing shots (image assignment + camera fields). Vocabulary-validated (enums closed). Idempotent. | per-call undo (inverse) | Unknown shot id → names the containing storyboard; unknown enum → lists valid values; >50 → split. |
+
+`prompt.draft` / `prompt.variant` (M4's candidate tools) are specced in [video-prompt-pack.md](video-prompt-pack.md) §6 — they operate on `shot` nodes and `vendorRefs`, not on this module.
+
+## 5. Coherence: deterministic coverage check (v0.2-of-track candidate)
+
+- **`script.shot-coverage`** (rides coherence.md §5.4's closed-registry rule — adding a check is a spec change + fixtures): (a) every cue/dialogue element covered by ≥1 shot's `dialogue[]` anchor → else info finding naming the element; (b) every shot has a `durationSec` → else info; (c) `dialogue[]` anchors that no longer resolve (drift) → info "re-anchor" (anchors re-resolve via the ladder only at *fix time*; the check just reports — edit-anchors §3 posture). Zero model calls; findings into the standard inbox; dismissal lifecycle standard (coherence.md §6).
+- **Cross-medium consistency** (script ↔ storyboard ↔ branches) activates here per coherence.md §11-A4 — this check is its first concrete instance.
+
+## 6. Export (two recipes at the exporter seam)
+
+- **`ShotListCsvRenderer`** (v0.1-of-track): columns = shotNumber, image filename, shotSize, cameraAngle, cameraMovement, lens, action, dialogue (rendered as `DOC:cue` refs), durationSec, transition (StudioBinder's column set is the convention; D4). UTF-8 CSV, one row per shot in binder order; XLSX variant rides the same renderer at the spreadsheet gate (open questions E-note below).
+- **`ContactSheetPdfRenderer`** (v0.1-of-track): per-shot card grid — image, number chip, spec row, action line — paginated A4/Letter (Storyboarder/Boords precedent); title header from template variables. Same lazy-load + acceptance-gate pattern as screenplay.md §5.3's PdfRenderer (shared pagination pass where layouts permit; separate emitters).
+- Animatic MP4: **parked** (frames × durations + audio = derived render; valuable but heavy — revisit with M4 usage). NLE EDL export: **parked**. Both recorded, not specced.
+
+## 7. Evals (headless, mock provider)
+
+- `shots.derive`: fixture script → deterministic proposed-shot assertions on mock scripts (count, field shapes, anchor capture points); plan-card tree diff shape; approval → folder + node creation asserted via project-format validation.
+- `shots.annotate`: batch validation failure (unknown id / bad enum) → pre-execution plan rejection; inverse-undo restores prior metadata.
+- Coverage check fixtures: covered/uncovered script lines, missing-duration shot, stale anchor (§4).
+- Export fixtures: CSV row order + escaping; contact-sheet layout smoke (headless PDF, page count sane).
+
+## 8. Assumptions & open questions
+
+| # | Item | Status |
+|---|---|---|
+| A1 | Storyboard folder as shot container (not scene-document children) | Explicit — three-tier invariant preserved; revisit only if users demand shots directly under scenes. |
+| A2 | Fixed v1 enums for shotSize/angle/movement/transition | Explicit — closed enums, extendable by spec change (Principle 5 posture); free-text `lens` covers the exotic cases. |
+| A3 | Images: PNG/JPEG/WebP v1, PSD/EXR later | Explicit; Storyboarder's PSD precedent recorded for the later gate. |
+| A4 | XLSX for the shot list | Deferred with the codex line-table export decision (dialogue-narrative.md §6) — one spreadsheet-stack decision covers both. |
+| A5 | Animatic MP4 + NLE EDL remain parked | Explicit; revisit only after the track's first landing proves shot usage. |

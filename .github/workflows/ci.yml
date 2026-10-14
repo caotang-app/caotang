@@ -1,0 +1,72 @@
+# The standing gate: lint, typecheck, unit tests, the production build, then the Playwright suite.
+#
+# What runs, and on which Node:
+#   - One job, on Node 24 only. There is deliberately no Node version matrix: Actions minutes are limited, and
+#     the engines range (22.12 or later in 22, 24, and 26 or later) is stated in the README, not tested here.
+#   - `pnpm verify` runs lint, typecheck and the vitest suites (packages/ and test/). The desktop's pure model specs live in
+#     e2e/unit as Playwright specs, so they run under `pnpm test:e2e`, not under `pnpm verify`.
+#   - `pnpm build` builds the desktop app, which writes THIRD-PARTY-NOTICES.md beside it. The MCP server bundle is then packed
+#     as an MCPB, which checks its manifest with the pinned MCPB CLI.
+#   - `pnpm test:e2e` runs the dev-server suite, and the production-preview project, which smoke-tests the build from the step
+#     above on its own port (e2e/prod-smoke.spec.ts).
+#
+# Details that are load-bearing rather than tidy:
+#   - permissions stay `contents: read`: the workflow needs no write token, so a pull request from a fork cannot use it to
+#     change the repository. First-time contributors' runs wait for a maintainer's approval (a repository setting).
+#   - pnpm comes from the packageManager field (corepack), so CI and every contributor run the same pnpm major. The lockfile
+#     format depends on it.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Enable corepack (pnpm from packageManager)
+        run: corepack enable
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint, typecheck, unit tests
+        run: pnpm verify
+
+      - name: Production build (desktop app, with its notices)
+        run: pnpm build
+
+      - name: Pack the MCP server bundle (manifest checked by the pinned MCPB CLI)
+        run: pnpm --filter @caotang/mcp-server run pack
+
+      - name: Install Chromium for Playwright
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: End-to-end (dev suite, and the production-preview smoke test)
+        run: pnpm test:e2e
+        env:
+          CI: 'true'
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

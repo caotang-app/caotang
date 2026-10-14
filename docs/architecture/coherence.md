@@ -1,0 +1,305 @@
+# Coherence — plot coherence & continuity checking (M5, post-v0.1)
+
+> Status: built.
+> Cross-refs: codex data model + mention cache = [codex.md](codex.md) §2/§4 · context budgets + estimator = [context-assembly.md](context-assembly.md) §3/§5 · plan cards + AskBack = [agent-harness.md](agent-harness.md) §2 · bus/undo/permissions = [command-bus.md](command-bus.md) · body projection (the coordinate system) = [project-format.md](project-format.md) §3 · paragraph-hash reporting key = [edit-anchors.md](edit-anchors.md) §4 · exporter selection rule = [exporter.md](exporter.md) §2.
+
+## 1. What "coherence" means here (and what it rejects)
+
+The app **checks** the story instead of only storing it. Every check produces a **finding** — a typed, evidence-cited report item — never a silent edit, never an inline mark (An earlier change territory), never an automatic mutation of the outline (Aeon's auto-resolution is rejected: their own fiction template defaults it OFF, and writing reports beats moving dates silently).
+
+**Two check classes, deliberately separated** (D5-confirmed split):
+
+1. **Deterministic** — computed from structure + codex with **zero model calls**. Cheap, testable, eval-stable, zero API cost. Covers what is *declarable*: timeline arithmetic, declared expectations, alias/identity ambiguity, presence.
+2. **LLM-judged** — plausibility, motivation, knowledge-state, object continuity. Runs through the harness as a **write-confirm tool** with plan card, cost estimate, and the ConStory 4-stage evidence-grounded pipeline. Output = findings in the inbox.
+
+Rejected alternatives (from D5): inline marks for findings in v0.1-of-track (report-first; an earlier change owns marks); Aeon-style auto-resolution of dates (silent outline mutation); background checking while typing (universal market rejection — Bunsho's "no meter on your writing"; all checks are on-demand); a Caotang-side fact store separate from codex (gated on D7 — see §4.3).
+
+## 2. Module contract
+
+- **Responsibility:** own check *definitions*, run *history*, the *findings inbox* (UI + data), and the LLM review pipeline. Execution rides existing machinery: deterministic checks read the store directly (reads are never commands — command-bus §9); LLM review is a harness tool using context-assembly + provider-gateway.
+- **Owns:** `coherence.json` (findings, runs, scene metadata, review state), check registry, findings inbox UI.
+- **Never:** mutates manuscript text, binder structure, or codex entries directly. A finding's fix path routes through the *existing* tools (`scene.draft` plan card, `codex.write`) — coherence proposes, the approved plan disposes.
+- **Depends on:** `codex` (entries, aliases, mention caches — codex.md §4), `context-assembly` (review-pass context + estimator), `provider-gateway` (LLM stage transport), `command-bus` (the few coherence mutations), `exporter` selection rule (scope defaults, §5.1).
+
+## 3. Data model (`coherence.json`, project-folder top-level file)
+
+```ts
+interface CoherenceFile {          // one per project; written atomically like caotang.json (temp → rename, project-format §4)
+  formatVersion: 1;
+  findings: Finding[];             // append/update; see §4 lifecycle
+  runs: CoherenceRun[];            // append-only history, capped (§6)
+  sceneMeta: Record<docId, SceneMeta>;   // per-document check inputs (§5)
+  worldRules: WorldRule[];         // non-entity canon facts (§4.3, D7 resolved 2026-09-20) — manual rules are writer canon
+  reviewState: Record<docId, { lastReviewedRevision: number; lastReviewedAt: string }>;
+}
+
+interface Finding {
+  id: string;                      // "f_" + 10 chars Crockford base32 (same generator family as node/codex ids)
+  runId: string;                   // run that produced/last-updated it
+  class: 'deterministic' | 'llm';
+  checkId: string;                 // §5 check id (deterministic) or 'llm:<category>' (llm)
+  type: string;                    // stable subtype key (§5 table / ConStory subtype)
+  severity: 'error' | 'warning' | 'info';
+  status: 'open' | 'dismissed' | 'fixed';
+  factGroup: string;               // normalized grouping key (§4.2)
+  evidence: Evidence[];            // 1–2 passages; llm findings carry exactly 2
+  reasoning?: string;              // evidence chain (llm class only; model-authored)
+  modelMeta?: { model: string; promptTokens: number; completionTokens: number };
+  createdAt: string; updatedAt: string;
+  dismissedReason?: string;        // required when status='dismissed' (§6.3)
+  supersededBy?: string;           // finding id that replaced this one
+}
+
+interface Evidence {               // body-projection coordinates (edit-anchors.md §2) — same system as doc.read/anchors
+  docId: string;
+  quote: string;                   // ≤ 300 chars, verbatim slice
+  from: number; to: number;        // char offsets into the body projection
+  paraHash?: string;               // cross-run reporting key only (C8a verdict) — never an apply-time anchor
+}
+```
+
+- **Artifact placement:** `coherence.json` sits beside `caotang.json`. project-format §1's "no other files — loaders ignore unknown files" rule is what makes this **additive with no formatVersion bump**: an older Caotang ignores the file, a newer Caotang reads it. Manifest stays untouched (findings are derived + curation state, not structure).
+- **Recovery posture** *(amended 2026-10-09: the file gained writer-authored parts, so it gained snapshots)*: before a changed save replaces `coherence.json`, the previous file rotates into `coherence.json.bak.1` down to `.bak.3` — project-format §4's depth for `caotang.json`. If the live file is unparseable, the corrupt file is preserved as `coherence.json.corrupt-<timestamp>` (project-format §5 pattern) and the newest snapshot that reads is restored; findings are always **recomputable** (deterministic re-run; LLM re-review is user-triggered). Only when no snapshot reads are the writer's parts lost — **dismissals, scene declarations (§5.2) and manual world rules (§4.3)** — and the load notice says exactly which. *Superseded:* the original "no redundancy files" posture, written when dismissals were the only irreplaceable state; scene declarations and world rules are hand-authored, so a snapshot is cheap insurance. The bundle carries only the live file.
+- **Reconciled on open:** the file is brought into line with the project it is opened with, before anything reads it. A scene declaration on a node that is gone is dropped, and so is a finding that quotes a node that is gone, since its quote is no longer in the project; a dropped finding has a load notice. A *body* is a document or a dialogue container (dialogue-narrative.md §2.1), so a finding on a dialogue container is kept, with its dismissal, and no notice is shown for it. A found world rule whose source is gone, or whose passage no longer matches the text, goes back to review; a manual rule stays canon.
+- **No secrets rule** (project-format §2): findings quote manuscript prose only; no provider keys/URLs ever.
+
+## 4. Findings: grouping, runs, fact boundary
+
+### 4.1 Run record
+
+```ts
+interface CoherenceRun {
+  id: string;                      // "r_" + 10 base32
+  at: string;                      // ISO-8601
+  kind: 'deterministic' | 'llm';
+  checkIds: string[];              // which checks ran
+  scope: { docIds: string[] };     // resolved scope (§6.2)
+  findingsUpserted: string[];      // finding ids created or updated by this run
+  tokens?: { promptTokens: number; completionTokens: number };   // llm runs only
+  model?: string;
+  status: 'complete' | 'partial' | 'discarded';
+}
+```
+
+## 4.2 Fact grouping (the dedupe key)
+
+Findings about the same fact read as **one problem with citations**, not N alarms (Bunsho's grouping mechanic, adopted verbatim). Key normalization:
+
+```
+factGroup = lower( resolve(entity) + '|' + attribute )     // entity = codex entry id when resolvable, else trimmed name
+```
+
+- Deterministic checks compute the key in code (e.g. `c_5H8QK2M9RT|timeline-after-decl`). LLM verdicts propose `{entity, attribute}` (Stage 2 schema) and assembly normalizes: entity resolved against codex (exact name/alias match → entry id; no match → lowercased name), attribute lowercased/trimmed.
+- All findings sharing a key render as **one group card** in the inbox with per-finding citations beneath (Bunsho: "one problem with six citations rather than six separate alarms").
+
+## 4.3 Fact store boundary
+
+**The assumption held:** both dedicated continuity vendors partition facts **under entity types Caotang's codex already has** (Bunsho's World tab = 4 entity groups + hand entries; PlotLens = characters/locations/timeline events/world rules) — **no free-floating fact table exists in either product**. The v0.1-of-track fact store = **codex entries** (origin provenance per codex.md §2) is confirmed as the right boundary; the coherence canon rule (manual outranks agent-inferred; fixes target manuscript, never canon) is confirmed verbatim — Bunsho's "the entry is marked as yours from then on" is the same manual-flip semantics.
+
+**The one validated additive: `worldRules[]`** — Bunsho's World tab proves writers need free-form facts *not tied to one entity* ("the bridge is out after ch. 4", "magic costs a memory"). New top-level `CoherenceFile.worldRules` array:
+
+```ts
+interface WorldRule {
+  id: string;                      // "w_" + 10 chars Crockford base32 (same generator family)
+  text: string;                    // the rule, one sentence, ≤ 300 chars
+  origin: 'manual' | 'found';      // manual = writer canon (Bunsho's "hand entries"); found = extracted (in review until anchored)
+  source?: Evidence;               // §3 Evidence shape (quote + body-projection offsets) — required when origin='found' is promoted to canon
+  verified?: boolean;              // PlotLens rule: unanchored extractions stay verified:false, excluded from canon
+  createdAt: string; updatedAt: string;
+}
+```
+
+Semantics: rules join `factGroup` as an additional source (an LLM finding may cite `{ruleId}` as its entity-side key; deterministic assembly normalizes rule ids into the same grouping key); `origin:'found'` rules with no clean source span **stay in review, never dressed up as cited proof** (PlotLens's honesty rule); correcting a found rule (manual edit or anchor attach) flips it to `manual` — nothing is silently overwritten (Bunsho's semantics, adopted verbatim). UI: a Rules list beside the findings inbox in the coherence panel (v0.2-of-track polish); `coherence.review` Stage 1's category-guided prompt may propose found rules in its output schema (additive field, dropped by older stage-4 code under the tolerance rule).
+
+**Still deferred (recorded, not built):** Bunsho's knowledge ledger ("what they know" per character over time) — a per-character `knowsAt[chapter → fact-id]` ledger feeding a deterministic `knowledge.leak` check is the one checkable class Caotang doesn't yet cover. It needs the fact store + chapter scoping to exist first; **v0.2-of-track candidate** (added to the backlog as C32).
+
+## 5. Check definitions
+
+### 5.1 Deterministic checks (zero model calls)
+
+All deterministic checks share inputs from three already-specced sources: the **codex mention caches** (codex.md §4, per-doc `MentionIndex`), the **binder tree** (order, parentage), and **`SceneMeta`** (§5.2 below). Scan scope defaults to docs under the Manuscript root with a body (empty docs skipped with a note — exporter §2 convention); Research requires explicit inclusion. **Archived/excluded docs are never scanned** (NovelCrafter lesson: archived-scene scanning was the scaling killer they removed).
+
+| id | type | severity | Inputs | Algorithm | False-positive controls |
+|---|---|---|---|---|---|
+| `codex.alias-collisions` | identity ambiguity | warning | codex entries | For every pair of entries: any term (name/alias) of A equals any term of B (case-insensitive) → finding naming both entries and the colliding surface string. Alias equal to *another entry's name* resolves to the name-owner (codex.md §2 rule) — still flagged as a collision risk. | None needed — pure declaration check; fix = exclusions/aliases/renames in the codex UI. |
+| `codex.never-mentioned` | detection hygiene | info | codex entries, mention caches | Entry with zero hits across all scanned docs → "never mentioned — check spelling/aliases or set policy=manual/never". | `always`/`manual`/`never` entries are exempt (presence in context isn't mention-driven). |
+| `timeline.order-drift` | narrative vs chronology | info | SceneMeta.dayOffset | Sort scenes by dayOffset; compare against binder order; each adjacent pair whose relative order differs → info finding citing both scene synopses. | Only scenes with declared offsets participate; scenes without metadata are counted and reported as "N scenes unscheduled" (never violations). |
+| `timeline.relation` | declared dependency violated | error | SceneMeta.after, dayOffset, durationDays | For each declared `after: [B]`: require `A.dayOffset ≥ B.dayOffset + B.durationDays` (Aeon Finish-to-Start shape, no exact timing). Violation = finding with both scenes as evidence. | Fires **only on declared relations** — the Aeon lesson: the checker validates what the writer asserted, nothing else. |
+| `timeline.window` | scene outside declared container span | warning | folder-level SceneMeta.dayOffset/durationDays | Folder (act/part) with declared span: child scenes' windows must fall inside `[folder.dayOffset, folder.dayOffset + folder.durationDays)`. | Only declared windows checked; no inheritance guessing. |
+| `timeline.overlap` | sibling scene windows intersect | info | dayOffset, durationDays | Sibling scenes (same parent) with overlapping windows → info ("may be intentional — parallel POVs; dismiss to record that"). | Default info, one-click dismiss; **not** an error because multi-POV simultaneity is normal. |
+| `pov.coverage` | declared POV not named | info | SceneMeta.pov, mention cache | Scene with declared POV whose entry has 0 hits in the scene text → info "POV never named in scene" (normal in deep/first-person POV). | Info severity; dismissal records "deep POV" convention. Unresolvable POV names (not a codex entry) → separate info finding prompting codex creation. |
+| `presence.expected` | declared presence violated | error | SceneMeta.expectedPresent, mention cache | Each expected entry must have ≥1 hit in the scene text; 0 hits → error naming entry + scene. | Only fires on writer-declared expectations — the deterministic analog of a saved-search collection (Scrivener's manual baseline), not a guess. |
+
+Deterministic findings quote the *scene* side only (evidence = the violating scene's synopsis or text slice); there is no second passage — the second side is the **declaration** (SceneMeta/codex), rendered as the finding's "expected" line.
+
+### 5.2 `SceneMeta` — check inputs (writer-declared, never inferred)
+
+```ts
+interface SceneMeta {
+  pov?: string;                    // codex entry id; free-text POV → unanchored info finding
+  dayOffset?: number;              // integer days from project epoch 0 (fantasy-calendar-safe: offsets, not dates)
+  durationDays?: number;           // default 0 (a scene occupies a moment unless declared)
+  after?: string[];                // declared dependencies: this scene happens after these docIds (order guarantee, no exact timing — Aeon dependency shape, simplified)
+  expectedPresent?: string[];      // codex entry ids that must be mentioned in this scene
+}
+```
+
+Edited in the Inspector (§8.2); mutations route through the `coherence.setSceneMeta` command (§7). **Real dates are deliberately absent** (day-offset integers only). **D8 RESOLVED 2026-09-20: the day-offset baseline stands — Aeon's full constraint model is rejected for v0.1-of-track.** Aeon's forum evidence shows power users reduce its dependency system to Finish-to-Start chaining anyway, which `after: [docIds]` already provides (the `timeline.relation` "Aeon Finish-to-Start shape, no exact timing" comment is confirmed as the right simplification); richer shapes (typed relationship roles, arbitrary item types, per-template customization) add authoring burden before any evidence of need. The remaining dependency-type tail (Aeon's full FS/SS/FF/SF set — SS for simultaneous-POV pairs, which `timeline.overlap` currently only dismisses) is backlog **C31** for the v0.2 upgrade. Findings stay shape-stable under any future upgrade (evidence is doc+offset based — standing assumption verified again). Fantasy calendars stay cosmetic: display-only epoch-label mapping ("day 12 → Year 3, Rains") is a v0.3 idea, zero check impact, no schema change.
+
+#### 5.2.1 `timelineMode` + the exemption table
+
+**Field shape (additive `SceneMeta` field):**
+
+```ts
+interface SceneMeta {
+  // … §5.2 fields unchanged …
+  timelineMode?: 'linear' | 'flashback' | 'flash-forward' | 'parallel' | 'frame'
+               | 'dream' | 'mythic' | 'backstory' | 'simultaneous' | 'circular';   // absent = 'linear' (default)
+}
+```
+
+**Field contract (project-format §2 discipline):** unknown value on load → treated as `linear` + one-time "unknown timeline mode" notice (enum closed; extension = spec change per §5.4). The field is writer-declared in the Inspector (mode dropdown beside the dayOffset fields); `coherence.setSceneMeta`'s `patch` gains `timelineMode?: string` (validated against the enum; unknown → error lists valid values). The field's **only** consumer is the exemption table below — no check input, no finding shape, and no `factGroup` key changes (findings model shape-stable, §11-D10).
+
+**Exemption table (per deterministic check; `–` = checked as normal):**
+
+| `timelineMode` | `timeline.order-drift` | `timeline.relation` | `timeline.window` | `timeline.overlap` | `pov.coverage` / `presence.expected` |
+|---|---|---|---|---|---|
+| `linear` (default/absent) | checked | checked | checked | checked | checked |
+| `flashback` / `flash-forward` | **exempt** | checked | checked | checked | checked |
+| `dream` / `mythic` / `backstory` | **exempt** | checked | **exempt** | checked | checked |
+| `parallel` / `frame` | **exempt** (per-strand date-order: scenes sharing the mode compare among themselves by dayOffset) | checked | checked | checked | checked |
+| `simultaneous` | checked | checked | checked | **exempt** (the declared-intent form of a `timeline.overlap` dismissal) | checked |
+| `circular` | **exempt** | checked | checked | checked | checked |
+
+- **Rationale per row:** flashback/flash-forward/dream/mythic/backstory scenes intentionally violate binder-vs-chronology order (StoryLine exempts them from date-order checks; Aeon's Backstory class is the same declaration) but their *declared relations and presence* still hold — a flashback still happens after what it references. Parallel/frame narratives keep **per-strand** date-order checking (StoryLine's per-strand mode): scenes sharing the mode are ordered among themselves, exempt only from the whole-manuscript comparison. `simultaneous` converts the most common `timeline.overlap` dismissal into a declaration (D8: Aeon's Backstory + StoryLine's mode sets both support treating technique-declarations as data). **`circular` joins the same row as `flashback`: StoryLine's `EXEMPT_FROM_DATE_ORDER` set includes it — the second vendor precedent the landing required — while relations/gaps/continuity stay checked.** StoryLine doubly-exempts `simultaneous` from date-order (it also skips adjacent-pair comparison); Caotang's row stays deliberately more conservative (equal dayOffsets tie-sort and don't drift — the difference costs at most one info finding; recorded, not adopted).
+- **`time-skip` is NOT in the v0.2 enum — deferred with a consumer plan (D10 resolved 2026-09-21, backlog C33):** StoryLine's evidence shows `timeskip` is *not* a date-order exemption at all — its validator keeps timeskip scenes in the main-timeline order group, and the mode's only consumer is `checkTimelineGaps` (7+ story-day jump between consecutive dated scenes → info; `timeskip`/`dream`/`mythic` on either side suppresses). Caotang's §5.1 has no gap-magnitude check, so adding `time-skip` now would create an enum value with no consumer. It joins the enum **only together with** a new `timeline.gap` deterministic check (backlog **C33** — StoryLine's exact mechanics: threshold 7 days, info severity, both-side suppression, negative-jump flagging unless flashback-family). Until then, a big time jump is expressed as dayOffset arithmetic, which the order/window checks already understand.
+- **Migration from dismissals is never automatic:** existing dismissed findings stay dismissed; the Inspector mode dropdown is the forward path. The dismiss dialog's technique reasons (§6.3) cross-link to the mode picker ("declare this as a scene mode instead") — one line of UI copy, no migration job.
+- **Open modes:** `circular` is **adopted** (same-row semantics as `flashback`; second vendor precedent = StoryLine's `EXEMPT_FROM_DATE_ORDER`, verified in source). `time-skip` is **deferred to C33** (needs the `timeline.gap` check to have a consumer; see the rationale row above). The enum remains extensible by spec change (§5.4).
+- **Eval fixtures:** each exempt mode × its exempt check → no finding (positive control); the same scene declared `linear` → finding fires (negative control); per-strand ordering for `parallel` scenes (ordered pair in-strand → no finding; out-of-strand-order → finding); `circular` scene out of binder-vs-chronology order → no order-drift finding, but a declared `after:` violation on the same scene → `timeline.relation` finding still fires (StoryLine fixture copy: its circular scenes sit only in `EXEMPT_FROM_DATE_ORDER`).
+
+### 5.3 LLM-judged checks — the ConStory 4-stage pipeline (as a harness tool)
+
+Implemented as `coherence.review` (§7 tool 2). Four stages, mapped to **N+1 model calls** (Stage 3 is folded into Stage 2's output schema; Stage 4 is deterministic code, no model call):
+
+| Stage | What runs | Model calls | Output contract |
+|---|---|---|---|
+| **1. Category-guided extraction** | Per scope document: one call with the 8-layer context (L2 codex **expanded to 2.5k**, chosen for this scene as codex.md §6 chooses it: `never` is never sent, `manual` only when attached to the scene or a folder above it, and `detected` only when its name or alias is in the scene text; L4 story-so-far **6k** + full focus-doc text capped 25k — the `continuity.scan` budget shape, context-assembly §3) and a fixed category-guided prompt over the ConStory 5 categories: Timeline/Plot · Characterization · World-building · Factual · Narrative Style. | 1 per doc | `{spans: [{docId, from, to, quote, category, note}]}` ≤ 20 spans/doc via `responseFormat` jsonSchemaHint (provider-gateway §5 probe-gated). |
+| **2. Pairwise verification** | Candidate spans of the same category, batched ≤ 10 pairs per call; each pair gets both spans + ±200-char body context per side. Pairwise-verify-after-mining is the false-positive mechanism (ConStory's stated design goal). | ⌈pairs/10⌉ per run | `{verdicts: [{pairId, verdict: 'contradictory'\|'consistent'\|'unclear', reasoning, evidence: Evidence[2], factGroup: {entity, attribute}}]}` |
+| **3. Evidence chains** | — folded into Stage 2: every contradictory verdict carries `reasoning` + both quoted passages with offsets. | 0 | — |
+| **4. JSON assembly** | **Deterministic code**, not a model call: contradictory verdicts → `Finding[]` (class `llm`, severity from category table below), factGroup-normalized (§4.2), run record appended. | 0 | `Finding[]` + `CoherenceRun` |
+
+Severity defaults by category: Factual/Detail + Timeline/Plot → `error`; Characterization/World-building → `warning`; Narrative Style → `info`. All severities are user-adjustable post-hoc via dismissal only (no per-run severity re-weighting in v0.1-of-track).
+
+**Hard rules carried from the harness:** findings are **never** inline edits (report-only); scope text is read via the body projection; the plan card shows **cost estimate before running** (docs × extract calls + pairs/10 × verify calls, `ceil(chars/4)` estimator — context-assembly §3/§5); **never runs while typing** — like every agent turn it is a paused, reviewed act; the editor is not touched at any stage.
+
+### 5.4 Check registry (closed for the first landing)
+
+Deterministic: **14 checks** (revised 2026-10-09; `packages/coherence/src/checks/index.ts` holds the closed registry, `DETERMINISTIC_CHECK_IDS` in `model.ts` the ids). The eight of §5.1, with their severities: `codex.alias-collisions` (warning), `codex.never-mentioned` (info), `timeline.order-drift` (info), `timeline.relation` (error), `timeline.window` (warning), `timeline.overlap` (info), `pov.coverage` (info), `presence.expected` (error). The six the screen and media track adds, which the registry runs as its own rows:
+
+- **Screenplay cues** (`script.cue-collision`, info; `script.cue-consistency`, warning) and **storyboard shot coverage** (`script.shot-coverage`, info). They sit inside the coherence module because both packages are leaves below it (screenplay.md §4; storyboard.md §5).
+- **Dialogue branch facts**: `branch.loose-end` (warning), `branch.dead-end` (info) and `dialogue.speaker-unknown` (info). The dialogue package depends on this module, so the app computes these over each container and passes the findings in; each id takes only its own findings. Branch checks run on full scans, and a narrower scan says in its run record that they were not run.
+
+LLM: the 5 ConStory categories (fixed enum; subtypes rendered from model output's `category` + `type` field). Adding a check = a spec change + eval fixtures, never a runtime plugin (Principle 5 posture carried into the track).
+
+## 6. Findings lifecycle
+
+### 6.1 Upsert semantics (dedupe across runs)
+
+Per run, per produced finding, match against existing findings by `checkId` (or `llm:<category>`) + `factGroup`:
+
+1. **Open match exists** → update it in place: replace `evidence`/`reasoning`, bump `updatedAt`, set `runId` (history preserved in the run record). No duplicate cards.
+2. **Dismissed match exists** → **stays dismissed**; the new run's evidence is appended to the dismissed finding's citations (visible under "re-detected in run r_…"), and the run report notes "1 previously dismissed finding still present". Never re-alarms on a judged finding (Bunsho's dismissal is a first-class verdict, not a mute button).
+3. **Fixed match exists** → stays fixed; if still detected, the run report lists it under "recurred after marked fixed" (the writer's signal the fix missed the real cause). Never re-opens automatically.
+4. **No match** → new finding, status `open`.
+
+### 6.2 Run scoping (Bunsho's three modes, mapped)
+
+- **This document** (`scope.mode: 'doc'`, docIds = [focus]) — the cheap "check this chapter".
+- **Changed since last pass** (`scope.mode: 'changed'`) — docs where `doc.revision ≠ reviewState[docId].lastReviewedRevision`; a project with no prior run state means everything. After a run completes, `reviewState` updates to current revisions for scope docs (side effect of run completion).
+- **Full manuscript** (`scope.mode: 'full'`) — with a size guard: > 20 docs → the plan card says so and requires explicit approval (same rule as `continuity.scan`, agent-harness §3).
+
+### 6.3 Dismissal (UI-only) and fixes (agent-proposed)
+
+- **Dismiss** is a **UI-only action** (extends the 0-to-1 rule: deletion-class judgments are human). The dismiss flow requires a reason from a fixed picker: `flashback` · `in-world-lie` · `unreliable-narrator` · `intentional` · `false-positive` (+ free-text note). **Tooltip help text (D9 calibrated 2026-09-20):** `in-world-lie` = *in-story deception between characters*; `unreliable-narrator` = *narration-level deception* — one line each in the dismiss dialog, the picker's only refinement. D9's verdict: the five-reason set is **kept as specced** (no additions, no structural change) — no vendor publishes a dismissal taxonomy (PlotLens's vocabulary is fact-vetting, not dismissal; Bunsho's five-plot-hole classes are check types, not dismissal reasons) and no dismissal analytics exist publicly, so the evidence base is craft literature + the mode lists, both of which the set covers. The picker's functional split is deliberate: `flashback`/`in-world-lie`/`unreliable-narrator` *declare a technique* (and map onto D10's `timelineMode` values), while `intentional`/`false-positive` mean "don't bug me again" — repeated technique-dismissals are the migration trigger to per-scene declarations (§11-A5). Dismissed findings remain visible under a "dismissed" filter with their reason (auditable, reversible — re-open is one click).
+- **Mark fixed** is available to both UI and agent (`coherence.setFindingStatus`, §7) — the agent marks `fixed` only after an approved plan actually changed the relevant text (postcondition: the finding's evidence ranges no longer match the body projection, or `codex.write` landed the entry-side fix).
+- **"Fix with agent"** on a finding card creates a pre-filled `scene.draft { mode: 'rewrite_selection' }` plan card with the anchor captured fresh from the finding's primary evidence range (fresh capture — the stored offsets may be stale; the anchor ladder is the safety net). The card goes through the normal confirm flow; coherence never applies text itself.
+  - **The primary evidence range is decided in binder order.** It is the quote whose binder node comes first in the binder, and within that node the quote earlier in the text. Every node is ranked, a dialogue container as well as a scene, so when the first quote is in a dialogue container the finding offers no Fix (the agent drafts dialogue as beats, not as a rewrite of a passage). A finding that quotes two passages therefore rewrites the same one on every run and on every machine, whatever order its quotes were recorded in, and the pair ids the review assigns do not change (the order is read in the desktop, `primaryQuoteOf`, and the review's own span order is untouched).
+  - **Only a passage in a scene the agent drafts is offered a fix.** A prose or screenplay document qualifies; a dialogue container does not (the agent appends its beats and does not rewrite a passage), and nor does any other node. A plan for a finding that fails the test is refused in words, by the same predicate the button is gated on.
+  - **The note under the card promises no card.** The turn's answer (a card, or the provider's refusal) shows in the agent panel, and the note under the finding says where it shows, since the note is written before that answer is known.
+
+## 7. Harness tools (rows 15–17 of the 26-row registry, agent-harness §10)
+
+The v0.1 registry is frozen (agent-harness §3); these three land with the module, and all three are in the registry as extension rows. Same metadata discipline (`{name, risk, undoable, response_token_cap, description}`), callId dedupe, model-facing errors:
+
+| # | Tool | Risk | Params | Semantics / Effects | Undo | Errors (model-facing) |
+|---|------|------|--------|---------------------|------|----------------------|
+| 15 | `coherence.scan` | read | `scope?: {mode: 'doc'\|'changed'\|'full', docIds?: string[]}` (default full-active), `checks?: DeterministicCheckId[]` (default all) | Runs the deterministic check set over scope; upserts findings; returns grouped summary (per-group: type, severity, count, scene refs). Findings/run record appended to `coherence.json` — an **appender side-effect like `sessions.jsonl`** (command-bus §9 precedent: derived-state appends are not commands). Manuscript is never touched. | run removable via UI "discard run" (§7.1) | Unknown check id → lists valid ids; scope > 20 docs → suggests splitting (still runs if the user confirms in a one-step card). |
+| 16 | `coherence.review` | write-confirm | `scope: {mode: 'doc'\|'changed'\|'full', docIds?: string[]}`, `categories?: LlmCategory[]` (default all 5), `maxFindings?: number` (default 50, cap 200) | The §5.3 pipeline. Plan card: one cost estimate for the plan, as §5.3 gives it (the prompt bound plus each call's reply cap, at the model's price), which docs will be read, and the prompt preview (context-assembly §5). The Findings tab shows the same figure for the same plan. The card does not split the estimate by stage: §5.3 asks for one estimate, and the stage counts stay on the card. On approval: stages run, findings upserted, run record written, turn report summarizes groups. Findings land in the inbox; **no text is ever modified**. | "discard run" (§7.1) removes the run + its untouched findings | No provider configured → error names settings; provider mid-run failure → run marked `partial`, completed-stage findings kept, retry = new run (dedupe makes re-runs idempotent per §6.1); empty result is a **result** ("no contradictions found in scope"). |
+| 17 | `coherence.setFindingStatus` | write-auto (restricted) | `findingId: string`, `status: 'fixed'`, `note?: string` | Marks a finding fixed. **Restricted:** only `status: 'fixed'` is agent-settable; `dismissed` is UI-only (§6.3) — an agent asking to dismiss gets the model-facing refusal "dismissal is a writer judgment; propose it in your report". Postcondition: for text-evidence findings, the quoted range must no longer match the body projection (else the call fails with "evidence still present — apply the fix first"). | inverse (restore prior status) | Unknown id → "use an id from a recent run report or the findings inbox"; evidence still present → names the postcondition failure. |
+
+**Not agent tools:** `coherence.setSceneMeta` is a bus command (UI-driven: Inspector POV/timeline fields), not exposed to the model in the first landing — the agent proposes SceneMeta changes in reports; exposure is reconsidered with usage evidence (same posture as `notes.replace` v0.2). Dismissal is UI-only (above).
+
+**The review from the Findings tab.** The §5.3 review runs from the desktop Findings tab as the writer's own action, as well as through row 16 for the agent. The tab shows the review's plan before anything is sent: the calls it will make, a token estimate for each, the first prompt, and a cost when the provider profile is priced. It runs only when the writer presses the button. It then writes findings and a run record exactly as the tool does, and it modifies no text. A review that is not started leaves the run history as it was. The agent's `coherence.review` keeps its plan card (row 16). The review is a provider call, so the MCP server does not offer it (mcp-server README). The codex block the review sends for a document is the set the include policies select for that document, the set the context assembly selects (codex.md §5 and §6; as built, 2026-10-14): an `always` entry is always sent, a `never` entry is never sent, a `manual` entry only when it is attached to the document or to a folder above it, a `detected` entry only when its name or alias is in the document's text, and an entry with an empty description is dropped.
+
+### 7.1 Bus commands (registry extension, lands with the module)
+
+| Command | Params | agentRisk | undo | Notes |
+|---|---|---|---|---|
+| `coherence.setSceneMeta` | `{docId, patch: {pov?, dayOffset?, durationDays?, after_add?, after_remove?, expectedPresent_add?, expectedPresent_remove?, timelineMode?}}` | write-auto | inverse | Validates pov/expected ids against codex (unknown id → error lists codex entries); dayOffset ≥ 0 integer; `timelineMode` validated against the §5.2.1 enum (unknown → error lists valid values). |
+| `coherence.setFindingStatus` | `{findingId, status: 'open'\|'dismissed'\|'fixed', reason?, note?}` | write-confirm (agent: only `'fixed'`, per tool 17) | inverse | `dismissed` from the agent side is hard-refused at the gate. |
+| `coherence.discardRun` | `{runId}` | write-confirm | compensable (puts back the run and its untouched findings; revised 2026-10-09: undo is by compensation, not an exact inverse) | Removes a run and findings it created **that the user never touched** (no status change, no dismissal); touched findings survive with their history. |
+
+`coherence.upsertFindings` exists only as an internal primitive (never a bus command; composed inside scan/review applies — grant inheritance, command-bus §4).
+
+## 8. UI surfaces
+
+- **Findings panel** — third left-rail peer beside Binder and Codex: tab badge = open-finding count (Aeon's badge pattern); group cards (factGrouped) with type chip, severity dot, status; expanding a card shows both passages **side-by-side** (click a quote → `revealRange` in the editor); per-card actions: *Fix with agent* (§6.3), *Dismiss* (reason picker), *Mark fixed*, *Re-open*. A quoted passage's button is named by the passage, and its document is its description. The reason picker takes focus when it opens; Escape or Cancel closes it and returns focus to the card's *Dismiss* control; a dismissal moves focus to the next open card, or to the panel heading when none is open. A scope over the document guard (§6.2) asks in the panel, with *Scan it anyway* beside the scan, for a scan and for *Run again* alike; approving runs the scope that asked.
+- **Run history** section: last N runs (kind, scope, date, findings upserted, tokens for llm runs), actions: re-run same scope, discard run.
+- **Inspector extension:** SceneMeta editor on document nodes — POV picker (codex characters), dayOffset/duration number fields, `after`/`expectedPresent` chip pickers. Declared-but-unresolvable values flagged inline.
+- **Settings:** deterministic-check toggles (default all on), default review scope, per-run `maxFindings`.
+- Out of scope first landing: cross-medium consistency (script ↔ storyboard ↔ cutscene — requires M1–M3 artifacts to exist; noted in media-track M5 "Also"), inline finding marks in prose, Director-Mode-style canon-constrained drafting (D7's Director-Mode pattern; backlog **C30** — the plan-card context assembly may suffice, a `coherence.preflight` step is the v0.2 option).
+
+## 9. Integration map (what talks to what)
+
+```
+codex (entries, aliases, MentionIndex caches) ──► deterministic checks (§5.1)
+binder tree (order, parentage) + SceneMeta ─────► deterministic checks
+coherence.json ◄──► coherence module (upserts, runs, reviewState)
+coherence.scan ──► findings inbox (UI) + turn report (activity log row)
+coherence.review ──► provider-gateway (N+1 calls) ──► Stage-4 deterministic assembly ──► findings
+context-assembly ──► review/scan context layers (expanded budgets, estimator for plan cards)
+finding card "Fix with agent" ──► scene.draft plan card (normal harness flow, anchor ladder)
+codex provenance (codex.md §2 origin/sources) ──► canon-outranking rule (§4.3)
+```
+
+Failure modes at each seam: codex caches stale → checks read `docRevision`-stamped caches and rebuild on mismatch (codex.md §4 invalidation); provider failure mid-review → partial run (§7); coherence.json corrupted → recompute posture (§3).
+
+## 10. Evals (headless, mock provider)
+
+- **Deterministic fixtures:** each §5.1 check gets a positive + negative fixture (violation present / absent) + a "declaration absent → not checked" fixture, asserting exact finding shapes (ids, factGroup keys, severities) and the no-scan-archived rule. **§5.2.1 fixtures** (v0.2-of-track): the exemption table's positive/negative controls per mode + the per-strand `parallel` ordering fixtures (specced in §5.2.1).
+- **Upsert fixtures:** re-run with unchanged facts → no new findings; dismissed-finding re-detection → stays dismissed with appended citation; fixed-then-recurred → report listing only.
+- **Review scenarios (mock scripts):** canned Stage-1/Stage-2 responses → assertions on assembled findings (evidence offsets verbatim, factGroup normalization), plan-card cost estimate, `partial` run on scripted mid-failure, `maxFindings` cap.
+- **Permission assertions:** `coherence.setFindingStatus` with `status: 'dismissed'` refused for the agent; `coherence.setSceneMeta` never agent-callable; `coherence.review` requires plan approval.
+- All scenarios extend the harness eval suite (agent-harness §9); assembled-context assertions reuse the prompt-preview payload.
+
+## 11. Decisions & assumptions
+
+| # | Decision | Authority / rationale |
+|---|---|---|
+| D1 | Two-class check architecture (deterministic + LLM-judged 4-stage) | **Evidence-backed (D5, 2026-09-12)**: Aeon's entire value is the deterministic class; ConStory shows factual+temporal classes dominate real errors — the cheap class is also where errors concentrate. Rejected: LLM-only checking (cost + nondeterminism for what arithmetic solves). |
+| D2 | Findings model: evidence = both passages quoted with body-projection offsets; grouping by fact; dismiss-with-reason first-class; findings inbox with badge | Delegated — synthesized from Bunsho finding cards + ConStory evidence chains + the Aeon panel pattern; the AskBack envelope discipline (one shape everywhere) extends to findings. |
+| D3 | LLM checks = harness tool (`coherence.review`) with the ConStory 4-stage shape; never inline edits | Delegated; consistent with "findings with cited evidence, never a silent edit" and an earlier change plan-preview UX; Stage 4 is code, not a model call. Rejected: inline marks (An earlier change territory), auto-resolution of timeline (Aeon's own fiction default is OFF). |
+| D4 | `coherence.json` top-level artifact file; additivity via the unknown-file-tolerance rule; no formatVersion bump | Delegated — same argument as the codex[] absorption, with the post-v0.1 wrinkle handled by project-format §1's ignore-unknown-files rule (old loaders tolerate it). Findings recomputable; dismissals accepted loss (documented at load). |
+| D5 | Dismissal UI-only; agent may mark `fixed` only | Delegated — extends the 0-to-1 rule to judgment calls (flashback/lie/unreliable are writer verdicts, not agent verdicts). |
+| D6 | SceneMeta = writer-declared, day-offset integers; checks fire only on declarations | Delegated — the false-positive lesson (Aeon declarative model + NovelCrafter exclusion lists): an undeclared story is un-checked, never guessed at. Richer constraint shapes = D8. |
+| D7 | Findings dedupe: upsert by checkId+factGroup; dismissed stays dismissed; fixed-recurrence reported | Delegated — re-runs must never re-alarm on judged findings; auditability preserved via citations-on-dismissed. |
+| D8 | Registry 14 → 17 tools (post-v0.1); `coherence.scan` findings-append = sessions.jsonl-class side effect | Delegated; the band discipline applies to v0.1's frozen registry; the module lands with its own justified +3. **Amended 2026-10-09:** the registry holds 26 rows, and this module's three are among its 12 extension rows (agent-harness §10). |
+| A1 | Codex mention caches + SceneMeta are sufficient inputs for the deterministic class | Explicit; D8 may add richer timeline constraint shapes; findings model is shape-stable under that upgrade. |
+| A2 | ConStory 5-category taxonomy transfers to fiction long-form | Evidence-class (Microsoft/SUTD 2026, prose benchmarks); subtypes remain model-proposed strings, validated against the category enum. |
+| A3 | LLM review cost stays acceptable at per-chapter/changed scoping | Estimate-gated at plan time (§5.3); full-manuscript runs are opt-in with the 20-doc guard. Real-cost feedback lands with usage; revisit if extract-call volume dominates. |
+| A4 | Cross-medium consistency (script ↔ storyboard ↔ branches) deferred until M1–M3 exist | Explicit; the findings model already carries it (`checkId` namespace is open). |
+| A5 | Timeline-mode exemptions are a v0.2 upgrade path (D10) | **RESOLVED 2026-09-21** — the exemption table landed in §5.2.1 with its evidence complete: StoryLine's Validator source (re-read 2026-09-21) captures the full set membership — `EXEMPT_FROM_DATE_ORDER` = flashback/flash-forward/dream/mythic/**circular**/simultaneous; `EXEMPT_FROM_CONTINUITY` (all continuity) = dream/mythic; `EXEMPT_FROM_GAP` = timeskip/dream/mythic; `timeskip` stays IN the main-timeline order group (it is a gap legitimizer, not a date-order exemption). **`circular` adopted into the §5.2.1 enum (same row as flashback — third exemption set captured, second vendor precedent obtained); `time-skip` deferred to C33** (its only consumer is a gap-magnitude check Caotang's §5.1 doesn't have — it joins the enum only together with `timeline.gap`). StoryLine's doubly-exempt `simultaneous` row recorded, not adopted (Caotang stays conservative). Until the v0.2 landing, writers express the same intent via dismiss-with-reason (`flashback`, §6.3). |
+| D9 | Fact store = codex entries; `worldRules[]` additive for non-entity facts | **Resolved 2026-09-20 (D7):** both continuity vendors partition facts under entity types the codex already has — no free-floating fact table exists in either; codex entries confirmed as the v0.1-of-track fact boundary; `WorldRule {id, text, origin: manual\|found, source?, verified?}` joins `coherence.json` additively (§4.3). Knowledge ledger (`knowledge.leak`) = v0.2-of-track candidate (backlog C32). |
+| D10 | SceneMeta stays day-offsets; Aeon constraint model rejected for v0.1-of-track | **Resolved 2026-09-20 (D8):** Aeon's effective dependency usage reduces to Finish-to-Start chaining (forum-evidenced), which `after:[]` provides; full dependency-type tail = backlog C31 (v0.2); dual-ordered views (binder = narrative, dayOffset-sort = chronology) confirmed Aeon-native; `timelineMode: 'backstory'` gains a second precedent (D8); fantasy calendars stay display-only epoch labels (v0.3). |
+| D11 | Dismissal-reason picker kept as specced; one tooltip line added | **Resolved 2026-09-20 (D9):** no vendor publishes a dismissal taxonomy or analytics; the five-reason set covers the craft-literature + mode-list classes; `in-world-lie`/`unreliable-narrator` tooltip distinction added (§6.3); technique-declarations vs don't-ask-again split maps onto the D10 migration path. Verdict honestly evidence-thin ("keep as specced", not "validated by data"). |
+| D12 | `timelineMode` enum finalized: `circular` in, `time-skip` deferred to C33 | **Resolved 2026-09-21 (D10):** StoryLine's Validator source gives the second precedent for `circular` (date-order-exempt only); `time-skip` has no consumer in the check set without a `timeline.gap` check (StoryLine's `checkTimelineGaps` is the class's only shipped implementation) — pairing decision recorded as backlog C33; enum in §5.2.1 updated accordingly. |

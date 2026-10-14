@@ -1,0 +1,16 @@
+{
+  "name": "@caotang/screenplay",
+  "version": "0.1.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "description": "Screenwriting engine — Fountain parse and serialise, the screenplay element model, pagination and the Fountain, FDX and PDF renderers (screenplay.md §2–§6)",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  }
+}

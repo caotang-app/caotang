@@ -1,0 +1,24 @@
+{
+  "name": "@caotang/dialogue",
+  "version": "0.1.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "description": "Dialogue and game narrative — Ink branching, the line-ID table, the Ink compile gate and the dialogue harness tools (dialogue-narrative.md, M2)",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@caotang/bus": "workspace:*",
+    "@caotang/codex": "workspace:*",
+    "@caotang/coherence": "workspace:*",
+    "@caotang/ids": "workspace:*",
+    "@caotang/store": "workspace:*",
+    "inkjs": "2.4.0"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  }
+}

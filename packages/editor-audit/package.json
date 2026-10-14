@@ -1,0 +1,39 @@
+{
+  "name": "@caotang/editor-audit",
+  "version": "0.1.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "description": "The Tiptap pin gate: exact pins, peer resolution, a real bundle audit and the §5 fixture corpus through remark-prosemirror 0.1.5. Audit only; this is not the M5 editor.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@handlewithcare/remark-prosemirror": "0.1.5",
+    "@tiptap/core": "3.31.4",
+    "@tiptap/extension-character-count": "3.31.4",
+    "@tiptap/extension-image": "3.31.4",
+    "@tiptap/extension-link": "3.31.4",
+    "@tiptap/extension-placeholder": "3.31.4",
+    "@tiptap/extensions": "3.31.4",
+    "@tiptap/pm": "3.31.4",
+    "@tiptap/starter-kit": "3.31.4",
+    "diff-match-patch": "1.0.5",
+    "fastest-levenshtein": "1.0.16",
+    "prosemirror-changeset": "2.4.4",
+    "remark-gfm": "4.0.1",
+    "remark-parse": "11.0.0",
+    "remark-stringify": "11.0.0",
+    "unified": "11.0.5"
+  },
+  "devDependencies": {
+    "@types/hast": "3.0.5",
+    "@types/mdast": "4.0.4"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "bundle-audit": "vite build --config vite.config.ts"
+  }
+}

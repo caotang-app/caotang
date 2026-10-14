@@ -1,0 +1,80 @@
+/**
+ * `@caotang/exporter` — the M9 compile pipeline ([exporter.md](../../../docs/architecture/exporter.md)):
+ * select → flatten → render → emit, with the Markdown, plain-text, DOCX and EPUB renderers, and the
+ * media-track formats of media-track M6 (`media.ts`): screenplay Fountain and FDX, the dialogue table and
+ * compiled Ink, the storyboard shot list, and the video prompt pack.
+ *
+ * The store never imports this package. The app builds one exporter over the
+ * project's artifact folder and hands its `commandPort()` to the store's registry:
+ *
+ * ```ts
+ * const exporter = createExporter({ readState: () => state, artifacts: fs });
+ * await exporter.ready();
+ * const registry = createProjectCommandRegistry({ clock, exporter: exporter.commandPort() });
+ * ```
+ */
+
+export {
+  BINARY_FORMATS,
+  EXPORT_FORMATS,
+  MEDIA_FORMATS,
+  isBinaryFormat,
+  isExportFormat,
+  isMediaFormat,
+  type CompileLogEntry,
+  type ExportCommandDigest,
+  type ExportCommandOutcome,
+  type ExportCommandPortShape,
+  type ExportCommandRequest,
+  type ExportCommandSelection,
+  type ExportFile,
+  type ExportFormat,
+  type ExportMetadataInput,
+  type ExportRecipe,
+  type ExportRecipeOptions,
+  type ExportResult,
+  type ExportSelection,
+  type Exporter,
+  type ExporterClock,
+  type FilterDocument,
+  type FlatBlock,
+  type MediaFormat,
+} from './types.js';
+
+export { createExporter, EXPORT_MIME, recipesOf, type ExportDispatch, type ExporterOptions, type ExporterService } from './exporter.js';
+// The metadata and the stored images an export reads, the same for every host that compiles (epub-metadata.md).
+export { assetRecordsOf, exportMetadataOf } from './export-metadata.js';
+export { flatten, documentLabel, type FlattenOptions, type FlattenResult } from './flatten.js';
+export { renderMedia, type MediaFile, type MediaOutput, type MediaRequest } from './media.js';
+// The coherence report's renderers (media-track M6, Review). The compile reaches them through `renderMedia`.
+export {
+  COHERENCE_JSON_MIME,
+  COHERENCE_MARKDOWN_MIME,
+  coherenceReportJson,
+  coherenceReportMarkdown,
+  type CoherenceReportInput,
+} from './coherence-report.js';
+export {
+  COMPILE_LOG_FILE,
+  COMPILE_LOG_PATH,
+  createEmitter,
+  type ByteArtifacts,
+  type EmitFailure,
+  type Emitter,
+  type PublishedFile,
+  type PublishFilesJob,
+} from './emit.js';
+export { DEFAULT_TEMPLATE, DEFAULT_TEMPLATE_ID, anchorOf, fileStem, resolveTemplate, suffixName, type ExportTemplate } from './template.js';
+export { DOCX_MIME, renderDocx } from './render-docx.js';
+export { EPUB_MIME, escapeXml, renderEpub, type EpubCover, type EpubInput } from './render-epub.js';
+export { renderMarkdown, renderText } from './render-text.js';
+export { parseProse, plainProse, safeHref, type ProseBlock, type Run } from './prose.js';
+export {
+  ExportNotReadyError,
+  ExportUnavailableError,
+  InvalidRecipeError,
+  MediaRefusedError,
+  NoPersistentIdentifierError,
+  UnknownExportFormatError,
+  UnknownRecipeError,
+} from './errors.js';

@@ -1,0 +1,55 @@
+/**
+ * The closed registry of deterministic checks — [coherence.md §5.4](../../../../docs/architecture/coherence.md).
+ * Adding a check is a spec change with fixtures, never a runtime plugin.
+ */
+
+import { DETERMINISTIC_CHECK_IDS, type DeterministicCheckId } from '../model.js';
+
+import type { CheckInput, CheckOutput, DraftFinding } from './common.js';
+import { checkAliasCollisions, checkNeverMentioned } from './codex.js';
+import { checkPovCoverage, checkPresenceExpected } from './presence.js';
+import { checkOrderDrift, checkOverlap, checkRelation, checkWindow } from './timeline.js';
+import { checkCueCollision, checkCueConsistency, checkShotCoverage } from './script.js';
+import { checkBranch } from './branch.js';
+
+export type { CheckInput, CheckOutput, DialogueFacts, DraftFinding } from './common.js';
+export { groupKey, pairKey, termsOf, resolveEntry, modeOf } from './common.js';
+
+export const DETERMINISTIC_CHECKS: Readonly<Record<DeterministicCheckId, (input: CheckInput) => CheckOutput>> = {
+  'codex.alias-collisions': checkAliasCollisions,
+  'codex.never-mentioned': checkNeverMentioned,
+  'timeline.order-drift': checkOrderDrift,
+  'timeline.relation': checkRelation,
+  'timeline.window': checkWindow,
+  'timeline.overlap': checkOverlap,
+  'pov.coverage': checkPovCoverage,
+  'presence.expected': checkPresenceExpected,
+  'script.cue-collision': checkCueCollision,
+  'script.cue-consistency': checkCueConsistency,
+  'script.shot-coverage': checkShotCoverage,
+  'branch.loose-end': checkBranch('branch.loose-end'),
+  'branch.dead-end': checkBranch('branch.dead-end'),
+  'dialogue.speaker-unknown': checkBranch('dialogue.speaker-unknown'),
+};
+
+/**
+ * Runs the named checks, in registry order, so the same selection always yields
+ * the same draft order. An unknown id is a caller bug and throws.
+ */
+export function runChecks(input: CheckInput, ids: readonly DeterministicCheckId[]): CheckOutput {
+  const wanted = new Set<string>(ids);
+  for (const id of wanted) {
+    if (!(DETERMINISTIC_CHECK_IDS as readonly string[]).includes(id)) {
+      throw new Error(`unknown deterministic check "${id}"`);
+    }
+  }
+  const drafts: DraftFinding[] = [];
+  const notes: string[] = [];
+  for (const id of DETERMINISTIC_CHECK_IDS) {
+    if (!wanted.has(id)) continue;
+    const output = DETERMINISTIC_CHECKS[id](input);
+    drafts.push(...output.drafts);
+    notes.push(...output.notes);
+  }
+  return { drafts, notes };
+}

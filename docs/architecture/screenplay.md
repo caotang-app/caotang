@@ -1,0 +1,125 @@
+# Screenplay — document kind + Fountain render pipeline (M1, post-v0.1)
+
+> Status: built, except where a section says otherwise.
+> Scope: Attaches to `project-store`/`binder` (a document kind), `editor` (decoration styling), `exporter` (three renderers), `coherence` (mention/check feed).
+> Cross-refs: kind vocabulary = [project-format.md](project-format.md) §2 media-additive note · exporter recipe shape = [exporter.md](exporter.md) §2/§3 · body projection & anchors = [project-format.md](project-format.md) §3 + [edit-anchors.md](edit-anchors.md) §2 · findings model = [coherence.md](coherence.md) §3/§5.1 · context layers = [context-assembly.md](context-assembly.md) §2.
+
+## 1. Verdict (D1, adopted)
+
+**Screenplay = a document kind + exporter recipes, never a separate module.** Fountain is to screenplays what Markdown is to novels: the ownable plain-text storage format. The "separate screenwriting module" alternative is rejected — Fountain files *are* the binder (sections = folders, scene headings = scene documents, `=` synopses = the synopsis field), and formatted output is a compile target like DOCX.
+
+**First-landing scope (v0.1-of-track):** Fountain as first-class doc kind (editor + structure import) · Fountain/FDX import · Fountain export · paginated PDF at the exporter gate. **Post-track:** FDX *production* half (revision marks, colored/locked pages, scene-number locking → backlog **D11**).
+
+## 2. Data model
+
+### 2.1 Document kind
+
+```ts
+tree[].kind: 'screenplay'        // documents only; absent = 'prose' (project-format §2 media note)
+// body file: docs/<id>.fountain — raw Fountain source for THIS scene (one scene heading per file)
+```
+
+- **Scene-per-node, not script-per-node.** A screenplay document node holds one scene (its heading + following elements). Rationale: mirrors the novel model exactly (one editor instance per document node — editor-engine §12 D9's per-scene split applies unchanged), makes corkboard/inspector/filters/coherence work per scene with zero adaptation, and each file is valid standalone Fountain (opens in Beat/Highland).
+- **A full-script `.fountain` import is a structure op, not a storage mode:** parse → binder tree (see §3); Caotang never stores a monolithic script file. Export reassembles the whole script from scene files in binder order.
+- **Fountain-native annotations stay in body text:** `[[inline notes]]` and `/* boneyard */` are preserved verbatim in the file and never rendered in formatted output (fountain.io semantics). Screenplay docs do **not** use Caotang's `%%`/`@` Markdown-annotation conventions (editor-engine §13 D2) — `[[…]]` is the kind's native equivalent, kept for interchange fidelity.
+- **Front matter redundancy (project-format §3)** applies unchanged: `id/title/status/label/keywords/synopsis` in YAML; the body below is Fountain.
+
+### 2.2 Structure mapping (the file ⇄ binder contract)
+
+| Fountain construct | Binder mapping | Formatted output |
+|---|---|---|
+| `# Act` / `## Sequence` (Sections) | folder nodes (created on import) | **never emitted** (structure lives in the tree; Caotang emits its own `#`-sections on export from folder titles — see §5.2) |
+| `INT./EXT. — LOCATION — TIME` line | document node, `kind: 'screenplay'` | scene heading (styled element) |
+| `= synopsis line` under a heading | node `synopsis` field (manifest + front matter) | **never emitted** |
+| `[[inline note]]` | stays in body text | never emitted |
+| `> transition TO:` / `CUT TO:` | body text (element type at parse) | styled element |
+| `DANIEL ^` dual cue | body text of the scene file | side-by-side columns at render |
+| `===` forced page break | body text | honored at pagination |
+| `Key: value` title-page block | **template variables** (`{title}/{author}/{date}` — exporter §2); NOT stored per file | title page at compile |
+
+Round-trip rule: **import maps file → tree once; export emits tree → file.** The binder synopsis field is the single synopsis truth (the `=` line is consumed on import; regenerated on export from the manifest). This is the project-format §3 doctrine (structure never duplicated into prose files) applied to Fountain: `=`-lines in body text are tolerated on load (treated as import residue, re-synced to the manifest synopsis with a one-time notice) but are not a second truth.
+
+### 2.3 Element model (parse layer)
+
+```ts
+type ScreenplayElement =
+  | { type: 'scene_heading'; text: string; forced: boolean }
+  | { type: 'action'; text: string }
+  | { type: 'character'; text: string; dual?: boolean }        // cue line; dual = caret pair second
+  | { type: 'parenthetical'; text: string }
+  | { type: 'dialogue'; text: string }                          // lines following a cue until blank line
+  | { type: 'transition'; text: string; forced: boolean }
+  | { type: 'centered'; text: string }
+  | { type: 'page_break' }                                      // '==='
+  | { type: 'section'; depth: 1|2|3; text: string }             // only inside imports (consumed)
+  | { type: 'synopsis'; text: string }                          // only inside imports (consumed)
+  | { type: 'note'; text: string }                              // [[…]] — preserved, never rendered
+  | { type: 'boneyard'; text: string }                          /* … */
+  | { type: 'title_page'; entries: Record<string, string> }     // only at file start of an import
+```
+
+Parse is **lenient with zero hard failures** (fountain.io philosophy, adopted as a contract): every unparseable line degrades to `action`, never an error. Forcing characters (`. heading`, `! action`, `@ cue`, `> transition`) are honored and stripped on output. Element inference order per fountain.io: heading prefix (INT/EXT/EST/INT./EXT or `.`) → transition (`TO:` suffix or `>`) → cue (uppercase line followed by non-blank text) → parenthetical (inside dialogue block) → else action.
+
+## 3. Editor integration
+
+**Decision: raw-Fountain text editing + live decoration styling — no element-typed ProseMirror schema in the first landing.** The screenplay body edits as plain text (Highland/Beat's proven model); a parse pass derives element spans per document and drives **decoration styling** (same decoration machinery as mention/finding rendering, editor-engine §14 conventions). Rejected for the first landing: extending the Caotang PM schema with `scene_heading`/`dialogue` node types + a Fountain↔PM serializer (a second remark-prosemirror-scale boundary; unjustified until inline element surgery is proven needed — revisit only with usage evidence; the parse layer is the seam that would host it).
+
+- **Body projection** = the raw Fountain text (project-format §3 coordinate system unchanged): `doc.read` ranges, edit anchors, and mention detection all address Fountain characters directly. No new coordinate system.
+- **Decorations** (styling only — never mutating text): scene headings (bold + underline), cues (bold, uppercase as typed), parentheticals (muted), transitions (right-aligned visual class), centered (centered), page-break marker. Live re-parse on **debounced idle** (800 ms autosave cadence, editor-engine §9) — never per keystroke; a 110-page script parses in the single-digit-ms class (line-based state machine; benchmark-gated under **C28** like any parser pick).
+- **Element palette / autocomplete (writer-facing):** Enter-after-cue → parenthetical/dialogue continuation; Enter on empty dialogue → back to action. Tab-completion of cue names from codex characters (deduped against previous cues in-file). These are editor affordances over the parse layer, not new commands.
+- **Scene navigator:** the parse's scene-heading list drives a navigator strip (Highland/Scrivener pattern) — view-only; the binder tree remains the structural truth.
+- **No paginated WYSIWYG page view in the editor** (D1 verdict, Scrivener compile-time-numbering lesson): the editor shows element styling; **formatted pagination lives at export/preview** (§5). A read-only **preview pane** (formatted, paginated, ≈Highland's Go-to-Preview) ships with the renderers.
+- **Ghost preview / `scene.draft` / anchors:** work unchanged — the agent reads and writes Fountain text through the standard tools; the scene draft's role text (`sceneRole`, context-assembly L0) carries a screenplay note, chosen by the doc's kind and the mode: a draft asks for Fountain with the scene heading kept, and a passage asks for its Fountain alone. No new context layers (L3/L4 synopses already come from the manifest tree).
+  - **The note by mode (as built).** A `draft` of a screenplay scene writes the whole scene, so its role asks for the Fountain with the scene heading (INT. or EXT.) kept. A `continue` or a `rewrite_selection` writes one passage of a scene that already has its heading, so its role asks for that passage's Fountain only, with no heading, no title and no note. A second heading inside a scene is a defect. Prose scenes keep the prose role in every mode.
+
+## 4. Mention & coherence integration (free cross-medium payoff, D1 implication 5)
+
+- **Character cues are a mention source:** the parse layer emits cue names as detection terms for the per-doc `MentionIndex` (codex.md §4) — additive detection surface keyed on `kind: 'screenplay'`; same cache, same invalidation on doc write.
+- **Deterministic coherence checks ride the existing namespace** (coherence.md §5.4 — adding a check is a spec change, never a runtime plugin): `script.cue-collision` (a cue name matching no codex entry → info finding prompting codex creation, the `pov.coverage` pattern), `script.cue-consistency` (same character cued with mixed case/spelling variants → warning naming both spellings — alias discipline). Both are pure arithmetic over the parse output + codex; zero model calls.
+- **Cross-medium consistency (script ↔ storyboard ↔ branches)** activates when M3/M2 artifacts exist (coherence.md §11-A4): the deterministic class compares screenplay scene coverage against `shot.covers` refs (storyboard.md §5).
+
+## 5. Export (three renderers at the exporter seam)
+
+All three sit behind the exporter's closed recipe shape (exporter.md §2); `format` enum widens additively: `'fountain' | 'fdx' | 'pdf'` join at the screenplay-track gate. Recipes are per-format as everywhere else; **title page** emits from template variables `{title}/{author}/{date}` as Fountain key-value block (Fountain/FDX/PDF) — never stored per file.
+
+### 5.1 `FountainRenderer` (identity — the stored file *is* Fountain)
+
+```ts
+interface FountainRenderer { emit(blocks: FlatBlock[], opts: { title: string; author?: string; templateId?: string }): Promise<Blob>; }
+```
+
+- Stage-2 flatten blocks map 1:1: `chapter` → `# <title>` section line; `scene` → the scene file's Fountain body verbatim (guaranteed valid — it was parsed from Fountain); `separator` → blank line (screenplays don't use `***` — the template's `separator` option is ignored for screenplay formats with a compile-log note).
+- **Round-trip acceptance gate:** export(import(X)) for a fixture corpus of whole-script Fountain files is byte-identical modulo the documented synthesis (sections from tree, `=`-lines from synopsis). Same bar class as the project-format §8 acceptance test.
+- Undo/error semantics = exporter §5 (`export.compile` confirm-gated, artifact in `exports/`, auto-versioned filenames).
+
+### 5.2 `FdxRenderer` (import-first, v0.2-of-track; emit at the D11 gate)
+
+- **Import (v0.1-of-track):** `.fdx` → typed paragraphs → element model → scene nodes + tree. `SceneProperties` (`Length` eighths, `Page`, `Title`, `CharacterArcBeats`) are preserved **informationally** into `shot`-less scene metadata only where a slot exists (length → computed word/minute estimate note in the compile log); unknown sub-elements ignored (loaders-tolerant rule). Community parsers exist for import (rsdoiel/fdx reads Final Draft/Trelby/Celtx/FadeIn output) — study-first, vendor-if-dormant posture (C19/C28 pattern).
+- **Emit (v0.2-of-track):** paragraphs → `<Paragraph Type="…">` XML; scene numbers/revision marks/locked pages are production conventions with **no Fountain representation** — scoped to backlog **D11** (which subset a credible FDX export emits vs normalizes). The `FdxRenderer` seam is reserved now; its field set is D11's answer.
+
+### 5.3 `PdfRenderer` (paginated — the hard artifact)
+
+- **Layout constants (industry standard, fixed for v1):** 12pt Courier Prime (embed font, OFL); US Letter 8.5×11″; margins: left 1.5″, right 1.0″, top 1.0″, bottom 1.0″; ~55 lines/page (leading single-spaced); action full width; dialogue indent 1.0″ from left margin, width 3.5″; cue indent 2.2″; parenthetical indent 1.6″, width ~2.0″; transitions flush right; page number top-right from page 2. *(Constants table sourced from the quoteunquoteapps/screenweaver guides; verify against afterwriting's output at the C28 gate before implementation.)*
+- **Page-break rules (the hard part, deterministic):** scene headings never orphaned at a page bottom; cues never separated from their first dialogue line; dialogue splits only at sentence ends with centered `(MORE)` at the page bottom + `CHARACTER (CONT'D)` cue at the next page top; parentheticals stay with their cue where possible; transitions never at page top. These are the fixture list for the render test suite (each rule = a positive + negative fixture).
+- **Engine:** a Caotang-owned pagination pass over the element stream (pure function: elements + constants → pages) + a PDF emitter (`pdf-lib`-class library, lazy-loaded at the exporter edge — the DOCX/EPUB lazy-import pattern; exact pick joins the C28 benchmark gate with the parser decision). afterwriting's MIT pipeline (aw-parser + PDF stage) is the studied reference implementation; vendor-if-dormant applies.
+- **Options (recipe/template):** scene numbers on export (left/right/both, off by default — Final Draft's number-scene command is a *compile-time* feature; Scrivener's years-long scene-number request confirms it never lives in the editor); title page on/off; `(CONT'D)` handling on/off.
+- **NOT in scope at any gate:** revision marks + colored/locked pages (D11), dual-column preview UI, print CSS. Parked explicitly.
+
+## 6. Harness integration (zero new tools)
+
+No registry growth for M1 (band discipline, an earlier change — 17 post-v0.1 rows stand). The screenplay workflow rides existing tools:
+
+- `scene.draft` (all three modes) — instruction + Fountain context; the model is told the doc kind (§3). Diff/ghost/undo behavior unchanged.
+- `doc.read` / `binder.read_tree` / `synopsis.fill` — unchanged semantics; synopsis writes land in the manifest (the `=`-line regeneration happens at export only).
+- `export.compile` — gains `'fountain' | 'pdf'` (+ `'fdx'` at D11) enum values, one row, unchanged risk/undo/error semantics.
+- Registry metadata per tool unchanged; the response-token caps apply to Fountain bodies via the existing 25k cap.
+
+## 7. Assumptions & open questions
+
+| # | Item | Status |
+|---|---|---|
+| A1 | Raw-text Fountain editing satisfies writers until element-typed editing is proven | Explicit (D1: Highland/Beat prove the pattern at market quality). Revisit trigger: users demand structure-level operations the text layer can't express. |
+| A2 | Scene-per-node granularity is right for TV/act-structure too | Explicit; acts/folds are folders — the three-tier-plus-tolerance model holds (sections beyond depth 3 tolerated by format, UI-guided). |
+| A3 | Courier Prime (OFL) is the embed font | Explicit; licensing clean for MIT stack. |
+| A4 | Parser + PDF-engine picks join the C28 gate | Backlog C28 (benchmark: coverage of sections/synopses/notes/dual-dialogue/forced elements; vendor-if-dormant posture). |
+| A5 | `=`-line residue on load re-syncs to manifest silently-with-notice | Explicit one-time-notice pattern (project-format §6 unknown-field notice). |

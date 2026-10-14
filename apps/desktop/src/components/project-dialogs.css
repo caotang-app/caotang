@@ -1,0 +1,152 @@
+/* The project panel and the vocabulary editor. They use the workspace's own tokens, so both themes read correctly. */
+
+.project-dialog {
+  width: min(32rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  padding: 0;
+  border: 1px solid var(--line-strong, currentColor);
+  border-radius: var(--radius, 6px);
+  background: var(--paper, Canvas);
+  color: var(--ink, CanvasText);
+  box-shadow: var(--shadow, 0 8px 24px rgb(0 0 0 / 0.25));
+}
+
+.project-dialog::backdrop {
+  background: rgb(0 0 0 / 0.35);
+}
+
+.project-dialog-body {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1.25rem 1.4rem 1.1rem;
+  overflow: auto;
+}
+
+.project-dialog-body h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.project-dialog-field {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.project-dialog-field input[type='text'] {
+  font: inherit;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--line-strong, currentColor);
+  border-radius: 4px;
+  background: var(--panel, Field);
+  color: inherit;
+}
+
+.project-dialog-help {
+  color: var(--muted, GrayText);
+  font-size: 0.85rem;
+}
+
+.project-dialog-error {
+  color: var(--danger, #b3261e);
+  font-size: 0.9rem;
+}
+
+.project-dialog-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.vocabulary-tabs {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.vocabulary-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.vocabulary-row {
+  display: grid;
+  grid-template-columns: 2.2rem minmax(0, 1fr) auto auto;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.vocabulary-row input[type='text'] {
+  font: inherit;
+  min-width: 0;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--line-strong, currentColor);
+  border-radius: 4px;
+  background: var(--panel, Field);
+  color: inherit;
+}
+
+.vocabulary-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 0.5rem;
+  align-items: end;
+}
+
+.vocabulary-colour {
+  display: grid;
+  gap: 0.3rem;
+}
+
+@media (max-width: 480px) {
+  .vocabulary-row {
+    grid-template-columns: 2.2rem minmax(0, 1fr);
+  }
+
+  .vocabulary-add {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The project name in the toolbar opens the project panel. It looks like the heading it replaces. */
+.project-name-button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-align: start;
+  border-radius: 4px;
+}
+
+.project-name-button:focus-visible {
+  outline: 2px solid var(--focus, currentColor);
+  outline-offset: 2px;
+}
+
+/* The export dialog's recipe, settings and new-recipe rows. */
+.export-field {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.export-field select,
+.export-field input[type='text'] {
+  font: inherit;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--line-strong, currentColor);
+  border-radius: 4px;
+  background: var(--panel, Field);
+  color: inherit;
+}
+
+.export-save-new {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+}
+
+.export-save-new .export-field {
+  min-width: 0;
+}

@@ -1,0 +1,37 @@
+/** Types for scripts/pack-mcpb.mjs, so the server's tests can import the pack steps. */
+
+export const BUNDLE_ENTRY: string;
+export const BUNDLE_MANIFEST: string;
+export const BUNDLE_NOTICES: string;
+export const BUNDLE_LICENSE: string;
+export const WRITE_SETTING: string;
+export const WRITE_VARIABLE: string;
+
+/** Every problem with a manifest for the bundle; an empty list means it is valid. */
+export function manifestProblems(manifest: unknown, bundle: { readonly version: string; readonly files: readonly string[] }): string[];
+
+export interface StageInput {
+  readonly outDir: string;
+  readonly serverBundle: string;
+  readonly manifestPath: string;
+  readonly version: string;
+  readonly notices: string;
+  readonly license: string;
+}
+
+/** Writes the staged bundle folder after checking the manifest. Throws, and writes nothing, for an invalid manifest. */
+export function stageBundle(input: StageInput): { readonly staging: string; readonly files: readonly string[] };
+
+/** The pinned MCPB CLI's entry point in this package's dependencies. */
+export function mcpbCliPath(packageDir?: string): string;
+
+/** Runs the MCPB CLI; a non-zero exit throws with its output. Returns the output. */
+export function runMcpb(args: readonly string[], options?: { readonly cli?: string; readonly cwd?: string }): string;
+
+export interface PackInput extends StageInput {
+  /** The CLI to run, for a test that supplies another. Defaults to the pinned one. */
+  readonly mcpb?: string;
+}
+
+/** Stages, validates and packs the bundle; returns its path and what the CLI's `info` reported. */
+export function packBundle(input: PackInput): { readonly bundle: string; readonly info: string };

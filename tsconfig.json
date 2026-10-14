@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    // DOM is here for the Playwright specs' `page` and `locator` types, which are
+    // typed against the browser's DOM even though the specs run in Node. Without it
+    // a spec that names a DOM type fails the root typecheck while the same spec
+    // passes Playwright, which is how this check was useless until now.
+    "lib": ["ES2023", "DOM"],
+    "types": ["node"],
+    "noEmit": true
+  },
+  "include": ["vitest.config.ts", "playwright.config.ts", "e2e/**/*.ts"]
+}

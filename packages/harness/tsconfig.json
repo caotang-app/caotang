@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // DOM is here because the harness type-checks `@caotang/store`'s sources, and
+    // `src/runtime/` there is typed against the IndexedDB interfaces that live in
+    // `lib.dom`. The same choice `packages/store/tsconfig.json` makes; no DOM API
+    // is called at runtime from this package.
+    "lib": ["ES2023", "DOM"],
+    "types": ["node"],
+    "noEmit": true
+  },
+  // The agent loop imports `@caotang/editor`'s anchor ladder, whose lazy `diff-match-patch` import is
+  // typed by the editor's own ambient declaration. That file is in the editor's program, not this one,
+  // so it is named here: without it the harness program fails on an untyped module it never imports.
+  "include": ["src/**/*.ts", "test/**/*.ts", "../editor/src/ambient.d.ts"]
+}

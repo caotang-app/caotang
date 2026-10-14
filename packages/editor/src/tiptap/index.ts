@@ -1,0 +1,22 @@
+/**
+ * `@caotang/editor/tiptap` — the live editor. The app mounts through this entry point.
+ *
+ * It is not re-exported from `@caotang/editor`, and that is the point of the split. The
+ * barrel must stay importable without an engine, a DOM or a store, and `EditorApi`
+ * (§4) is the headless half of M5 for exactly that reason. Everything here needs a
+ * DOM, `@tiptap/core` and `@caotang/store`, so it is a separate door.
+ */
+export { createTiptapEditorApi, StaleMountError, UnsavedEditsError } from './adapter.js';
+export type {
+  EditorSaveStatus,
+  LoadResult,
+  SetContentOptions,
+  TiptapEditorApi,
+  TiptapEditorInstance,
+  TiptapMountOptions,
+} from './adapter.js';
+export { createGhostPreview } from './ghost.js';
+export type { GhostCallbacks, GhostPreview } from './ghost.js';
+export { isAppLocalSource, caotangExtensions } from './extensions.js';
+export type { CaotangExtensionOptions, CaotangRole } from './extensions.js';
+export { isSafeLinkTarget, plainPasteHtml } from './paste.js';

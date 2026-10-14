@@ -1,0 +1,24 @@
+{
+  "name": "@caotang/coherence",
+  "version": "0.1.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "description": "Plot coherence and continuity — deterministic checks, the findings lifecycle, coherence.json and the LLM review pipeline (coherence.md, M5)",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@caotang/bus": "workspace:*",
+    "@caotang/codex": "workspace:*",
+    "@caotang/ids": "workspace:*",
+    "@caotang/screenplay": "workspace:*",
+    "@caotang/storyboard": "workspace:*",
+    "@caotang/store": "workspace:*"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  }
+}

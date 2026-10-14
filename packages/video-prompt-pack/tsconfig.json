@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // DOM is here for `lib.dom`'s types only. This package imports types from
+    // `@caotang/store` and `@caotang/codex`, and the store's sources reference IndexedDB
+    // interfaces, so the type-check program pulls them in. The same reason
+    // `packages/codex` and `packages/coherence` carry this lib; nothing here runs in a browser.
+    "lib": ["ES2023", "DOM"],
+    "types": ["node"],
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"]
+}

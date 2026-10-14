@@ -1,0 +1,218 @@
+/**
+ * The coherence rules the bus shares with the store (coherence.md §5.2, §5.2.1, §6.3, §7.1), and the
+ * two descriptors that validate them. Pure: each assertion is over the rule or the descriptor's validate.
+ */
+
+import { describe, expect, it } from 'vitest';
+
+import {
+  COHERENCE_NOTE_LIMIT,
+  COHERENCE_STATUSES,
+  DISMISSAL_REASON_IDS,
+  SCENE_PATCH_KEYS,
+  TIMELINE_MODES,
+  applySceneMetaPatch,
+  findingTransition,
+  inverseScenePatch,
+  isEmptySceneMeta,
+  COMMAND_REGISTRY,
+  type ValidationSnapshot,
+} from '../src/index.js';
+
+const SCENE = 'n_SCENE00001';
+const ENTRY = 'c_ENTRY00001';
+const FINDING = 'f_AAAAAAAAAA';
+
+const context = {
+  entries: [{ id: ENTRY, name: 'Elena' }],
+  documentIds: new Set([SCENE, 'n_OTHER00001']),
+};
+
+/** A snapshot with one scene, one codex entry and one open finding, and a coherence file open. */
+function snapshot(overrides: Partial<ValidationSnapshot> = {}): ValidationSnapshot {
+  return {
+    manifest: {
+      tree: [
+        { id: 'manuscript', parentId: 'root', type: 'folder', title: 'Manuscript', status: null, label: null, keywords: [], synopsis: '', notes: '' },
+        { id: SCENE, parentId: 'manuscript', type: 'document', title: 'The Storm', status: null, label: null, keywords: [], synopsis: '', notes: '' },
+        { id: 'n_OTHER00001', parentId: 'manuscript', type: 'document', title: 'The Letter', status: null, label: null, keywords: [], synopsis: '', notes: '' },
+      ],
+      vocabulary: { statuses: [], labels: [] },
+      codex: [{ id: ENTRY, name: 'Elena' }],
+    },
+    documents: new Map([
+      [SCENE, { body: 'The gale arrived at dawn.', revision: 1 }],
+      ['n_OTHER00001', { body: 'A letter.', revision: 1 }],
+    ]),
+    coherence: { findings: [{ id: FINDING, status: 'open' }], sceneMeta: {} },
+    ...overrides,
+  };
+}
+
+describe('the scene-metadata patch rule (coherence.md §5.2, §5.2.1)', () => {
+  it('sets each declared field, and a clear with null removes it', () => {
+    const set = applySceneMetaPatch(SCENE, undefined, { pov: ENTRY, dayOffset: 4, durationDays: 2, timelineMode: 'flashback' }, context);
+    expect(set).toEqual({ ok: true, meta: { pov: ENTRY, dayOffset: 4, durationDays: 2, timelineMode: 'flashback' } });
+    const cleared = applySceneMetaPatch(SCENE, set.ok ? set.meta : undefined, { pov: null, dayOffset: null }, context);
+    expect(cleared.ok && cleared.meta).toEqual({ durationDays: 2, timelineMode: 'flashback' });
+  });
+
+  it('refuses a day offset that is not a whole number of days, zero or more', () => {
+    for (const bad of [-1, 1.5, '3' as unknown as number]) {
+      const result = applySceneMetaPatch(SCENE, undefined, { dayOffset: bad }, context);
+      expect(result.ok, String(bad)).toBe(false);
+    }
+  });
+
+  it('keeps linear as absence, and refuses a timeline mode outside the §5.2.1 enum', () => {
+    const linear = applySceneMetaPatch(SCENE, { timelineMode: 'flashback' }, { timelineMode: 'linear' }, context);
+    expect(linear.ok && linear.meta).toEqual({});
+    // `time-skip` is deferred to backlog C33 (coherence.md §5.2.1, D10), so the enum must refuse it.
+    const deferred = applySceneMetaPatch(SCENE, undefined, { timelineMode: 'time-skip' }, context);
+    expect(deferred.ok).toBe(false);
+    if (!deferred.ok) expect(deferred.error).toContain('valid modes are');
+  });
+
+  it('refuses a scene that follows itself, and a dependency or codex id the project does not hold', () => {
+    expect(applySceneMetaPatch(SCENE, undefined, { after_add: [SCENE] }, context).ok).toBe(false);
+    expect(applySceneMetaPatch(SCENE, undefined, { after_add: ['n_NOPE000000'] }, context).ok).toBe(false);
+    const expected = applySceneMetaPatch(SCENE, undefined, { expectedPresent_add: ['c_NOPE000000'] }, context);
+    expect(expected.ok).toBe(false);
+    if (!expected.ok) expect(expected.error).toContain('valid codex entries are Elena');
+  });
+
+  it('refuses a key outside the closed set, and names the keys that are valid', () => {
+    const result = applySceneMetaPatch(SCENE, undefined, { mood: 'grim' } as never, context);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toContain(SCENE_PATCH_KEYS.join(', '));
+  });
+
+  it('drops an emptied record, so a file never holds an empty declaration', () => {
+    const cleared = applySceneMetaPatch(SCENE, { dayOffset: 2 }, { dayOffset: null }, context);
+    expect(cleared.ok && isEmptySceneMeta(cleared.meta)).toBe(true);
+  });
+});
+
+describe('inverseScenePatch (undo, command-bus §5)', () => {
+  it('restores a scalar to its prior value, or to a clear when there was none', () => {
+    const before = { dayOffset: 2 };
+    const forward = { dayOffset: 5, pov: ENTRY };
+    const after = applySceneMetaPatch(SCENE, before, forward, context);
+    expect(after.ok).toBe(true);
+    if (!after.ok) return;
+    const inverse = inverseScenePatch(before, forward, after.meta);
+    expect(inverse).toEqual({ dayOffset: 2, pov: null });
+    const restored = applySceneMetaPatch(SCENE, after.meta, inverse, context);
+    expect(restored.ok && restored.meta).toEqual(before);
+  });
+
+  it('restores a list by membership: what was removed comes back, and what was added goes', () => {
+    // A dependency is removed, so the undo must add it back.
+    const removed = { after: ['n_OTHER00001'] };
+    const dropping = { after_remove: ['n_OTHER00001'] };
+    const afterRemove = applySceneMetaPatch(SCENE, removed, dropping, context);
+    expect(afterRemove.ok).toBe(true);
+    if (!afterRemove.ok) return;
+    expect(isEmptySceneMeta(afterRemove.meta)).toBe(true);
+    expect(inverseScenePatch(removed, dropping, afterRemove.meta)).toEqual({ after_add: ['n_OTHER00001'], after_remove: [] });
+
+    // A dependency is added, so the undo must remove it again.
+    const adding = { after_add: ['n_OTHER00001'] };
+    const afterAdd = applySceneMetaPatch(SCENE, undefined, adding, context);
+    expect(afterAdd.ok).toBe(true);
+    if (!afterAdd.ok) return;
+    expect(inverseScenePatch(undefined, adding, afterAdd.meta)).toEqual({ after_add: [], after_remove: ['n_OTHER00001'] });
+  });
+});
+
+describe('finding transitions (coherence.md §6.3, the lifecycle)', () => {
+  it('lets a dismissal, a fix and a re-open through from the states the lifecycle allows', () => {
+    expect(findingTransition('open', 'dismissed')).toEqual({ ok: true });
+    expect(findingTransition('open', 'fixed')).toEqual({ ok: true });
+    expect(findingTransition('dismissed', 'open')).toEqual({ ok: true });
+    expect(findingTransition('fixed', 'open')).toEqual({ ok: true });
+  });
+
+  it('refuses a move to the status a finding already holds, and a fix or dismissal of a finding not open', () => {
+    expect(findingTransition('open', 'open').ok).toBe(false);
+    expect(findingTransition('dismissed', 'fixed').ok).toBe(false);
+    expect(findingTransition('fixed', 'dismissed').ok).toBe(false);
+  });
+
+  it('keeps the vocabulary the validator reads', () => {
+    expect(COHERENCE_STATUSES).toEqual(['open', 'dismissed', 'fixed']);
+    expect(DISMISSAL_REASON_IDS).toEqual(['flashback', 'in-world-lie', 'unreliable-narrator', 'intentional', 'false-positive']);
+    expect(TIMELINE_MODES).toHaveLength(10);
+    expect(COHERENCE_NOTE_LIMIT).toBe(500);
+  });
+});
+
+describe('coherence.setSceneMeta descriptor (coherence.md §7.1)', () => {
+  const validate = COMMAND_REGISTRY['coherence.setSceneMeta'].descriptor.validate;
+
+  it('accepts a patch the rule accepts, and returns the params it will apply', () => {
+    const result = validate({ docId: SCENE, patch: { pov: ENTRY, dayOffset: 1 } }, snapshot());
+    expect(result).toEqual({ ok: true, value: { docId: SCENE, patch: { pov: ENTRY, dayOffset: 1 } } });
+  });
+
+  it('accepts a folder as well as a document, since a folder carries a window span (coherence.md §5.2, §5.1)', () => {
+    // `manuscript` is a folder in the snapshot, and `timeline.window` reads its dayOffset and durationDays.
+    const folder = validate({ docId: 'manuscript', patch: { dayOffset: 0, durationDays: 30 } }, snapshot());
+    expect(folder.ok).toBe(true);
+  });
+
+  it('refuses a node the tree does not hold, and a project with no coherence file open', () => {
+    const missing = validate({ docId: 'n_MISSING001', patch: { dayOffset: 1 } }, snapshot());
+    expect(missing.ok).toBe(false);
+    if (!missing.ok) expect(missing.error.code).toBe('not-found');
+    const noFile = validate({ docId: SCENE, patch: { dayOffset: 1 } }, snapshot({ coherence: undefined }));
+    expect(noFile.ok).toBe(false);
+    if (!noFile.ok) expect(noFile.error.message).toContain('no coherence file is open');
+  });
+
+  it('refuses a list key that is not a list of ids, before the shared rule iterates it', () => {
+    const result = validate({ docId: SCENE, patch: { after_add: 'n_OTHER00001' } }, snapshot());
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.message).toContain('after_add must be a list of ids');
+  });
+
+  it('refuses a parameter outside the declared set', () => {
+    const result = validate({ docId: SCENE, patch: {}, status: 'draft' }, snapshot());
+    expect(result.ok).toBe(false);
+  });
+});
+
+describe('coherence.setFindingStatus descriptor (coherence.md §6.3, §7.1)', () => {
+  const validate = COMMAND_REGISTRY['coherence.setFindingStatus'].descriptor.validate;
+
+  it('accepts a dismissal with a picker reason, and a fix of an open finding', () => {
+    expect(validate({ findingId: FINDING, status: 'dismissed', reason: 'intentional' }, snapshot()).ok).toBe(true);
+    expect(validate({ findingId: FINDING, status: 'fixed', note: 'Reworded.' }, snapshot()).ok).toBe(true);
+  });
+
+  it('refuses a dismissal without a reason from the picker, and a reason on any other status', () => {
+    const noReason = validate({ findingId: FINDING, status: 'dismissed' }, snapshot());
+    expect(noReason.ok).toBe(false);
+    if (!noReason.ok) expect(noReason.error.message).toContain('a dismissal needs a reason from the picker');
+    const freeText = validate({ findingId: FINDING, status: 'dismissed', reason: 'felt wrong' }, snapshot());
+    expect(freeText.ok).toBe(false);
+    const stray = validate({ findingId: FINDING, status: 'fixed', reason: 'intentional' }, snapshot());
+    expect(stray.ok).toBe(false);
+  });
+
+  it('refuses an id the file does not hold, a status outside the enum, and an over-long note', () => {
+    const unknown = validate({ findingId: 'f_BBBBBBBBBB', status: 'fixed' }, snapshot());
+    expect(unknown.ok).toBe(false);
+    if (!unknown.ok) expect(unknown.error.code).toBe('not-found');
+    expect(validate({ findingId: FINDING, status: 'archived' }, snapshot()).ok).toBe(false);
+    const long = validate({ findingId: FINDING, status: 'fixed', note: 'x'.repeat(COHERENCE_NOTE_LIMIT + 1) }, snapshot());
+    expect(long.ok).toBe(false);
+    if (!long.ok) expect(long.error.code).toBe('limit-exceeded');
+  });
+
+  it('refuses a move the lifecycle does not allow, such as fixing a finding already fixed', () => {
+    const already = validate({ findingId: FINDING, status: 'fixed' }, snapshot({ coherence: { findings: [{ id: FINDING, status: 'fixed' }], sceneMeta: {} } }));
+    expect(already.ok).toBe(false);
+    if (!already.ok) expect(already.error.message).toContain('already fixed');
+  });
+});

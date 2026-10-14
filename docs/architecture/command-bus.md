@@ -1,0 +1,196 @@
+# Command bus & undo — the spine every module talks through (v1)
+
+> Status: built. §9 lists every one of the registry's 42 command names (`packages/bus/src/command.ts` `COMMAND_NAMES`).
+> Cross-refs: tool registry = [agent-harness.md](agent-harness.md) §3 · write-ahead snapshots = [project-format.md](project-format.md) §4 · edit anchors = [edit-anchors.md](edit-anchors.md) · usage ledger = [provider-gateway.md](provider-gateway.md) §6.
+
+## 1. Purpose
+
+One in-process bus. UI gestures and agent tools both emit commands onto it; **no module mutates project state except by executing a command**. This is what makes "agent drives the app" safe (same surface as the human), auditable (activity log), and reversible (undo groups).
+
+Non-goals: no network in the bus (the gateway owns transport); no cross-worker bus in v0.1; **no event-sourcing** — undo is compensation-based (§5), rejected alternative: full event log (weight without v0.1 benefit).
+
+## 2. Command envelope & descriptors
+
+```ts
+interface Command {
+  id: string;                 // "cmd_" + 10 chars Crockford base32 (same generator family as node ids)
+  name: CommandName;          // from the registry (§9; 42 names on 2026-10-14)
+  params: object;             // flat, enum-constrained, schema-validated
+  issuedBy: 'user' | 'agent';
+  turnId?: string;            // agent turn this command belongs to (agent-issued only)
+  callId?: string;            // tool-call id; idempotency key within the turn (§6)
+  createdAt: number;          // epoch ms; log/display only — never affects behavior
+}
+
+interface CommandDescriptor {
+  mutates: 'project' | 'view' | 'none';   // view = ephemeral UI state (selection, scroll, active doc) — never persisted
+  agentRisk: 'read' | 'write-auto' | 'write-confirm' | 'never';   // gate for issuedBy='agent' (§4)
+  undo: 'inverse' | 'compensable' | 'none';   // §5
+  validate(params, snapshot): Result<NormalizedParams, CommandError>;   // pure, total — runs BEFORE any effect
+  postconditions?: Postcondition[];           // checked after apply; harness §7 reuses these
+  guardsRevision?: true;                      // §6 — opt this command into the revision backstop (below)
+}
+```
+
+- `guardsRevision` is §6's opt-in, and it is declared on **exactly the rows whose Params carry `expectedRevision?`** — `doc.write`, `editor.insert`, `editor.replaceRange`. A flag rather than a params-shaped rule, because a rule keyed on the params makes a *new* document-writing command silently unguarded. It is checked **after** the §4 gate and **before** `apply`, against the same snapshot `validate` was given: the last point at which a refusal still has §3's zero partial effects, and the reason the common path reads once.
+
+- `validate` is pure and total: a command that passes validation cannot fail **mid-apply** for validation reasons. Batch commands (`binder.restructure`, `codex.write`) validate the whole batch first and list failures per-op (agent-harness §3).
+- `mutates: 'view'` commands skip undo registration and appear in the activity log as non-undoable view events.
+
+## 3. Execution pipeline (fixed order)
+
+```
+validate → permission gate (§4) → apply → postconditions → undo-group registration (§5)
+        → activity-log append (§8) → subscriber notification
+```
+
+- Synchronous in-process (v0.1); the only async boundaries live **inside** a single command's apply (provider call, export emit) and are awaited by it.
+- **`executeAsync`.** A command whose apply awaits — `mcp.invoke` reaches an external server — is dispatched through `executeAsync`, which runs the same admission, gate, register, log and notify steps around the awaited apply. `execute` still refuses an apply that returns a promise, and it refuses a command declared `asyncApply` before anything runs; either refusal names `executeAsync`, so no synchronous caller changes. `executeAsync` runs both kinds of command.
+- **`ApplyRefusal`.** An apply that refuses on purpose throws `ApplyRefusal` carrying the `CommandError` the caller should get. On either entry point the bus returns that error, with the command id and, if the apply had already captured an effect, the undo group added to its details, so the refusal is not reported as an internal defect. Any other throw from an apply is an internal error, and it names the undo group an effect left behind. The exporter's refusals are `ApplyRefusal`s, so a refused compile writes no undo group and no activity row.
+- Failure at any step aborts with **zero partial effects** (validate-first discipline).
+- Subscribers (binder tree, corkboard, inspector, editor, agent panel, codex panel) receive post-commit notifications with command id + affected node ids, and **re-render from the store, never from command params** — single source of truth.
+
+## 4. Permission gate
+
+- `issuedBy: 'user'` — a UI gesture is its own confirmation; only destructive commands (`project.deleteNode`) add an explicit confirm dialog (UI responsibility).
+- `issuedBy: 'agent'` — gated by `agentRisk`:
+  - `read` → auto.
+  - `write-auto` → auto, undo-registered.
+  - `write-confirm` → allowed only inside an **approved plan** or a **one-step confirm card** (agent-harness §2); mid-plan new confirm-class calls pause with a delta card.
+  - `never` → refused with a model-facing error naming the corrective path (e.g. deletion → "propose it in your report; deletion is UI-only").
+- **Grant inheritance (compound tools):** compound tools execute their sub-mutations *inside their own apply step*, not as separate bus dispatches — internal primitives (`editor.replaceRange` inside `scene.draft`) inherit the compound tool's granted permission and are never individually gated. Direct agent emission of a `never`-class command is refused even inside approved plans.
+- **Hard-deny, non-approvable by any flow** (mirrors Claude Code's "actions no mode auto-approves" list): network egress beyond the configured provider endpoint; deleting nodes or codex entries; mutating provider profiles; leaving project scope.
+
+## 5. Undo & the checkpoint framing
+
+- **One agent turn = one undo group; one user gesture = one undo group.** Compound tools sub-group internally (per-doc compensations inside `synopsis.fill`) but expose a single entry.
+- Undo executes compensations **in reverse order** within the group:
+  - `inverse` — the descriptor generates the exact inverse command (meta sets, renames, moves, attach/detach).
+  - `compensable` — the command captured a restore artifact at apply time: doc **body snapshot** before any text mutation (A1 finding made automatic; retention budgets → **§5.1**, C12 resolved 2026-09-15), codex entry prior-state copy, emitted export filename (undo = delete from `exports/`). An undo of a body write puts the snapshot's body back **as a write**: the document's `revision` moves up by one, as it does for any mutation, and is never set back to the number the snapshot recorded (project-format §4). §6's `expectedRevision` therefore cannot match a number the document had before newer text.
+- **Checkpoint framing:** each agent turn renders in the activity log as a checkpoint row — **"restore to before this turn"**. One click = undo the group. Redo = v0.2 nice-to-have (store group inverses; not required for v0.1's promise).
+- **Two-lane undo:** Lane 1 = editor-native `prosemirror-history` for user keystrokes (untouched); Lane 2 = every bus text mutation applied as one transaction batch tagged `tr.setMeta('addToHistory', false)` + the per-turn/autosave snapshot. Agent edits and snapshot restores are **never replayed by the user's Ctrl+Z**; "restore to before this turn" is snapshot-based, so checkpoint rows stay immune to in-editor undo position drift. The restore confirmation states scope explicitly (edits made after the turn are included in the restore). Full contract + fixtures: [editor-engine.md](editor-engine.md) §7. Regression-tested sharp edges: excluded-transaction-then-undo bookkeeping, appended-transactions-during-undo, metadata lost on redo replay.
+
+### 5.1 Snapshot retention budgets (C12 resolved 2026-09-15)
+
+Unbounded checkpoint storage is the failure this prevents: full snapshots only when a body changed, a count cap and an age cap, and each document's first snapshot kept as the baseline. The adopted ladder:
+
+1. **Full body snapshots, not deltas.** Bodies are 1–10k words; delta machinery is complexity without a measured need at this scale. (Revisit only if real corpora show otherwise — the M8 eval suite would surface it.)
+2. **Cap: 100 checkpoints per project** (Claude Code's number, validated at far higher churn than a writing session produces). Oldest evicted first. Config-exposed (`retention.checkpointCap`, default 100).
+3. **Retention: 30 days** (same clock as `cleanupPeriodDays`; a checkpoint past either limit is evicted). Config-exposed (`retention.checkpointDays`, default 30).
+4. **Snapshot-on-write dedupe:** a body unchanged since the last snapshot is not re-stored — the checkpoint references the existing snapshot (Obsidian's changed-files-only rule).
+5. **First-snapshot-per-doc preserved:** while any later snapshot of a doc exists, its first snapshot is never evicted (the diff baseline — Claude Code's exact rule; makes per-doc history reconstruction cheap).
+6. **Orphan cleanup on eviction:** deleting a checkpoint removes any snapshot no remaining checkpoint references (this is the rule that prevents unbounded growth).
+7. **Storage:** the IndexedDB runtime store, never the artifact (project-format §1 — snapshots are derived, rebuildable, never trusted).
+8. **Surfaced budgets:** Settings › Data shows checkpoint count + estimated size + a one-click "trim to cap now" (the user-visible guarantee that the cap is real).
+
+Determinism: eviction is a pure function of (checkpoint list, cap, days, today-injected) — headless-testable; the M8 eval gains an eviction fixture (100+ checkpoints → cap respected, first-snapshots preserved, zero orphaned snapshots).
+
+## 6. Idempotency & concurrency
+
+- **callId dedupe:** replays of the same `callId` within a turn return the cached result without re-execution. Cache is per turn, cleared at turn end.
+- **Optimistic concurrency:** document-writing commands carry optional `expectedRevision` (per-doc `revision` counter, project-format §4). Mismatch → `CommandError('revision-conflict', 'doc was modified since plan (rev N → M)')`; the edit-anchor ladder (edit-anchors.md §3) is the first line of defense, revisions are the backstop.
+- **A save to a project folder is a second concurrency check, and it refuses rather than writes.** The folder is another writer's too: a save into it is held back when the folder changed since this session last loaded or saved it. The verdicts are `locked` (a lock file: the Caotang MCP server may hold the folder), `changed` (`caotang.json` was changed or removed), `unknown` (a folder holding another project, which this session never held a copy of), `earlier` (a folder holding this project's own earlier save, with no copy of it held in this session or kept across a reload in the app database), and `files` (a document or codex file was changed, removed or added, named by its title in the question). Nothing is written until the writer answers: `lockConfirmed` and `overwriteConfirmed` are the answers, and a `files` refusal found part way through the write is `partial`, with the files before it written. The session log is written before any project file, so a log the folder cannot take refuses the save with nothing written. The digests the check compares are the writer's own copy (lifecycle `saveFolder`, folder-digests.ts). A folder holding the book a separate copy was made from refuses the copy's save outright, whatever the writer answers; a folder holding this project's own id is checked against the copy kept for it across a reload, so it is saved straight away when unchanged and never called another project (project-format §8). The `files`, `unknown` and `earlier` questions also offer "Save as a new folder…", which saves into an empty folder the writer picks (project-format §8). Accepting a recovery of a folder makes the same check (§5 of project-format).
+
+## 7. Error shape
+
+```ts
+interface CommandError {
+  code: 'invalid-params' | 'not-found' | 'cycle' | 'revision-conflict' | 'permission-denied'
+      | 'hard-denied' | 'limit-exceeded' | 'io-error' | 'postcondition' | 'internal';
+  message: string; // model/user-facing: names the corrective surface, never a bare code
+  correctiveHint?: string;  // e.g. "use binder.read_tree to list valid ids"
+  details?: object;         // per-op failures for batch commands
+}
+```
+
+
+- Postcondition failure is **never** silently auto-undone: the harness verify ladder (agent-harness §7) decides retry vs structured report; the undo group stays intact and user-reversible either way.
+
+## 8. Activity log
+
+One entry per executed command:
+
+```ts
+interface ActivityEntry {
+  at: number; command: string; issuedBy: 'user' | 'agent';
+  turnId?: string; callId?: string; undoGroupId?: string;
+  source?: 'native' | 'mcp';                      // reserved 2026-09-14 for the v0.2 MCP client (extensibility.md §2/§6); default 'native' — externals tag 'mcp'
+  affected: { nodeId: string; title: string }[];   // human titles, not bare ids
+  tokensSpent?: number;      // agent turns only (gateway ledger feeds it)
+  summary: string;           // digest: "moved 3 scenes into Chapter 4"
+}
+```
+
+Rendered in the agent panel; exportable as Markdown (agent-harness §5).
+
+## 9. v0.1 command registry (closed set)
+
+The heading keeps the name the v0.1 table had. On 2026-10-09 the table lists every one of the registry's names, the v0.1 rows and those each module added (their owning specs are named in the notes). On 2026-10-14 it lists all 42, the four last rows included. Reads are **not commands** — modules read the store directly; only mutations route through the bus. Provider/settings mutation is app-level state, never a project command (agentRisk `never`, hard-deny §4). `sessions.jsonl` appends are session-tracker side-effects of doc writes, not commands.
+
+| Command | Params (essentials) | agentRisk | undo | Notes |
+|---|---|---|---|---|
+| `binder.create` | `{parentId, type: 'folder'\|'document'\|'shot'\|'dialogue', title, kind?: 'storyboard'\|'screenplay'\|'branching'}` | write-auto | inverse | Standalone agent use goes through `binder.restructure` (confirm at plan level, auto inside). `kind` pairs with its type: a folder takes `storyboard`, a document `screenplay`, a dialogue `branching` (the default when it is left out), and a shot none. A shot sits in a storyboard folder, and a storyboard folder takes only shots (storyboard.md §2.1). **The project root is refused as a parent**: a node placed there would never appear in the binder (ui-modules §2.1), and so is any parent that cannot hold children. **A new document or dialogue directly under the manuscript is refused**, with the binder's own sentence, "A document goes inside a chapter, not directly under the manuscript." (`CHAPTERLESS_DOCUMENT_REFUSAL`; a dialogue's sentence names a dialogue). A folder, a storyboard included, still goes there, and research still takes documents directly. Only the create is refused: a chapterless document an older project holds still loads, and `binder.move` still moves it, to or from the manuscript, because the inverse of its move into a chapter is a move back. The binder's drag and keyboard moves refuse a document dropped directly under the manuscript (ui-modules §2.3), so a writer cannot make a new one that way. `binder.restructure` and `doc.import` refuse such a create through this check; `screenplay.import` and `dialogue.importInk` into the manuscript put their loose scenes and their containers into a chapter the import makes ("Imported scenes", "Imported dialogue"). |
+| `binder.move` | `{nodeId, newParentId, index}` | write-auto | inverse | Cycle check, the fixed roots that cannot be moved, and the manuscript-root invariant, all in validate. The project root is refused as the new parent, as it is for `binder.create`. The storyboard placement rule of `binder.create` applies to the new parent: a shot moves only into a storyboard folder, and a storyboard folder takes only shots. |
+| `binder.rename` | `{nodeId, title}` | write-auto | inverse | **The manuscript and research roots are refused**: the binder shows them under those names (ui-modules §2.3), so a rename from an agent's restructure cannot give a section a name the writer never sees. |
+| `binder.setMeta` | `{nodeId, patch: {status?, label?, keywords_add?, keywords_remove?}}` | write-auto | inverse | Vocabulary-validated. |
+| `binder.setSynopsis` | `{nodeId, synopsis}` | write-auto | inverse | ≤ 2000 chars (project-format §2). |
+| `notes.set` | `{nodeId, notes}` | write-confirm | compensable | Backs the v0.2 `notes.replace` tool. |
+| `notes.append` | `{nodeId, text, divider?}` | write-auto | compensable | ≤ 2k chars (agent-harness §3). |
+| `doc.write` | `{docId, body, expectedRevision?}` | write-confirm | compensable | Full-body primitive. User path = autosave pipeline (one undo group per debounce window); agent path = inside `scene.draft` draft/continue modes. |
+| `editor.insert` | `{docId, offset, text, expectedRevision?}` | never (direct) | compensable | Editor primitive; inheritable as internal composition (§4). |
+| `editor.replaceRange` | `{docId, range, text, expectedRevision?}` | never (direct) | compensable | Same; `scene.draft` `rewrite_selection` composes it after anchor resolution (edit-anchors.md §4). |
+| `codex.upsert` | `{entries: CodexUpsert[]}` | write-confirm | compensable | Backs `codex.write`; batch-validated (codex.md §7). |
+| `codex.attach` | `{entryId, attachTo[], detachFrom[]}` | write-auto | inverse | Also composed inside `codex.write` batches. |
+| `export.compile` | `{format, recipeName?, templateId?}` | write-confirm | compensable (delete artifact) | **The whole manuscript, or a recipe's nodes.** With no `recipeName`, the whole manuscript. With one, the recipe's own nodes: the whole manuscript for a manuscript recipe, and the part it names otherwise (the apply reads the nodes from the recipe, exporter.md §5). A prompt pack names its vendor template here or in the recipe, and is refused at validate without one. exporter.md §5. |
+| `export.compileSelection` | `{includeRootIds, format, templateId?, recipeName?}` | write-confirm | compensable (delete artifact) | **A part** — the named nodes only, no scope inference. A named recipe supplies the part's options, not its selection. A prompt pack names its vendor template here or in the recipe, and is refused at validate without one. exporter.md §5. |
+| `project.deleteNode` | `{nodeId}` | **never** | compensable | UI-only; user confirm dialog. |
+| `view.setSelection` / `view.setActiveDoc` / `view.setScroll` | various | read | none | Never persisted. |
+| `view.setExpanded` | `{nodeId, expanded}` | read | none | Binder folder expansion (ui-modules §2.2). Never persisted. A folder since deleted is a stale flag the binder ignores, not a refusal. |
+| `view.setCorkboardScope` | `{nodeId}` | read | none | The corkboard's scope (ui-modules §3): a container, or `null` for the manuscript default. Never persisted. |
+| `coherence.setSceneMeta` | `{docId, patch: ScenePatch}` | write-auto | inverse | Writer-declared scene metadata (coherence.md §5.2, §7.1). The patch is the closed set `SCENE_PATCH_KEYS` (`pov`, `dayOffset`, `durationDays`, `after_add`, `after_remove`, `expectedPresent_add`, `expectedPresent_remove`, `timelineMode`), and an unknown field is refused. |
+| `coherence.setFindingStatus` | `{findingId, status, reason?, note?}` | write-confirm | inverse | One finding's status (coherence.md §6.3, §7.1). `dismissed` needs a `reason` from the writer's picker. **An agent may set only `fixed`**: `open` and `dismissed` are refused for it, as a hard denial (permission.ts). |
+| `coherence.discardRun` | `{runId}` | write-confirm | compensable | Removes one run from the run history, with the findings it created that nobody has touched (coherence.md §8). Touched findings stay. Undo puts the run and those findings back. |
+| `mcp.invoke` | `{serverKey, toolName, args, expectedPins?}` | write-confirm | none | An external tool call (extensibility.md §6). `mutates: none`, and its activity row is `source: 'mcp'`. Its apply awaits the server, so it runs through `executeAsync` only (§3). Per call it is `read` when the external is trusted for reads and its tool is read-only (`agentRiskOf`; extensibility §7). |
+| `storyboard.create` | `{id, parentId, title, scene}` | write-auto | inverse | The `<Scene Title> — Shots` folder (storyboard.md §3.1). `scene` is the scene facts the plan was made against, and the apply refuses when the scene has moved or changed since. Its apply comes from the store, injected through `ProjectCommandOptions.shots`, because its guards belong to the storyboard module. |
+| `shot.create` | `{id, parentId, title, stored}` | write-auto | inverse | One shot card with its stored metadata (storyboard.md §2.2, §3.1). Its guards belong to the storyboard module and run in its apply, as `storyboard.create`'s do. |
+| `shot.setMeta` | `{nodeId, stored, expect}` | write-auto | inverse | A whole stored shot value written over the one it replaces. `expect` is the value the plan read (`null` when there was none), and the apply refuses when it no longer holds, so the undo is the same command with the two values swapped. |
+| `project.rename` | `{title}` | write-confirm | inverse | The project's title (epub-metadata.md). The root node carries the same title, and the apply keeps them equal. |
+| `project.setMetadata` | `{patch: {author?, language?, isbn?, coverAssetId?}}` | write-confirm | inverse | The EPUB and byline fields (epub-metadata.md). A key left out is left alone, and `null` clears `author`, `isbn` or `coverAssetId`; `language` cannot be cleared, because epub-metadata.md makes it a required, non-empty field. An ISBN is stored as `urn:isbn:` in ISBN-13 form. The cover is named by an asset id, which `project.importAsset` mints. |
+| `project.importAsset` | `{stagingId, target}` | write-confirm | inverse | Writes a staged image into `assets/` and sets it as the target (`'cover'`): PNG, JPEG or WebP up to 16 MB, judged by its leading bytes. The bytes are not params. The host stages them and names the staging id. |
+| `vocabulary.upsert` | `{kind, id?, name, color}` | write-confirm | inverse | Creates a status or label term, or updates one by `id` (project-format §2). A created term's id is minted from its name. |
+| `vocabulary.remove` | `{kind, id}` | write-confirm | compensable | Removes a term. The nodes that held it are detached, and one undo restores the term and those nodes. |
+| `recipe.save` | `{name, includeRootIds, format, templateId?, options?}` | write-confirm | inverse | A saved export recipe (exporter.md §2), kept in the manifest's `recipes[]`. Saving an existing name replaces it. A project that stores no recipes holds the default `Manuscript` one; the save stores it first, so it stays beside the new recipe. |
+| `recipe.delete` | `{name}` | write-confirm | inverse | Removes a saved recipe by name. A project that stores no recipes holds the default one, which this removes too: the list is stored first, so the project is left with an empty list, which the exporter reads as no recipes. |
+| `binder.saveFilter` | `{filter: {id?, name, root?, criteria}}` | write-auto | inverse | A saved binder filter (binder-filters §5), created when its id is new and updated when it exists. Kept in the manifest's `filters[]`. |
+| `binder.deleteFilter` | `{filterId}` | write-auto | inverse | Removes a saved filter: its metadata, not any content (binder-filters §5). |
+| `project.saveGoal` | `{goal: {id?, nodeId, metric?, kind?, resetDay?, comparator, target, deadline?, archived?}}` | write-auto | inverse | A project goal (goals-progress §2.2, §4), created when its id is new and updated when it exists. `metric` is `words` (the default) or `chars`. `kind` is `project` (the default), `weekly` or `monthly`: a weekly or monthly goal is a writing-pace goal that attaches to the manuscript, is `at-least`, counts words and takes no deadline (goals-progress §9.3). `resetDay` is a weekly goal's weekday (0 Sunday to 6 Saturday) or a monthly goal's day (1 to 28, or `last`); absent or `null` is the default, and a project goal takes none. Kept in the manifest's `goals[]`. |
+| `project.deleteGoal` | `{goalId}` | write-auto | inverse | Removes a goal: its metadata, not any content (goals-progress §4). |
+| `shot.importImage` | `{nodeId, stagingId}` | write-confirm | inverse | One shot's image: a file the writer staged, written to `assets/` and set as the shot's `image` in one undo group. The writer chose the file, so the gate asks. An agent cannot stage bytes, so its call is refused as not-found before anything is written (storyboard.md §3.1). |
+| `screenplay.import` | `{format: 'fountain'\|'fdx', text, parentId?}` | write-confirm | compensable | Maps a whole Fountain or FDX file onto the binder: sections become folders and scenes become screenplay documents, in one undo group. The store parses the text. `parentId` defaults to the manuscript, and a parent that is the project root, cannot hold children, or is a storyboard is refused (screenplay.md §2.2). Into the manuscript, the scenes the file puts before any section go into one chapter the import makes, "Imported scenes", and a notice says so. |
+| `dialogue.importInk` | `{containers: {title, body}[], parentId?}` | write-confirm | compensable | Creates one dialogue container per container of an Ink plan, in one undo group. The caller plans the file with `planInkImport` (`@caotang/dialogue`), so the command takes the planned containers. At most 200 containers and 1,000,000 characters of Ink per call (dialogue-narrative.md §4). `parentId` defaults to the manuscript, and there the containers go into one chapter the import makes, "Imported dialogue". |
+| `dialogue.setMeta` | `{nodeId, patch: {speaker?, engineTarget?, autoLineIds?, locBaseline?}}` | write-auto | compensable | A dialogue container's settings: its default speaker (a codex entry, or `null` to clear it), its engine target, the line-id opt-in and its locale. The patch carries only those four keys, and at least one (dialogue-narrative.md §2.1). |
+
+The `agentRisk` and `undo` columns are the descriptors' own (`packages/bus/src/descriptors*.ts`), and the owning spec for each is named in its notes.
+
+**The Params column is a closed set, not a minimum.** A key a command does not list is **refused** with `invalid-params`, never accepted-and-dropped. The word in the header above is "essentials"; a reader that picked the fields it knew and ignored the rest is the behaviour §2's "schema-validated" annotation rules out. Two consequences the reader of this table should know:
+
+- **The refusal is what makes D5 enforceable.** `codex.upsert`'s ops are held to their own field set the same way, and `origin` is the load-bearing one: provenance is harness-owned from `context.issuedBy`, so an op naming its own is refused rather than quietly written with the harness's value.
+- **The refusal names the key and the accepted set** (§7's corrective surface), and a batch is validated as a whole with failures listed per-op (§2), so one bad key costs one round trip rather than one per key.
+- **Scope: the rule above governs the top-level keys of `params`, plus the nested shapes *this table spells out*, and one nested object is outside it.** `binder.setMeta`'s `patch: {status?, label?, …}` is written out here, and `codex.upsert`'s `entries: CodexUpsert[]` names a type whose field contract [codex.md](codex.md) §2 states — so both are held to a closed set (`PATCH_KEYS`, `CODEX_OP_KEYS`), each refused per-op. **`editor.replaceRange`'s `range` is the exception: this table says `range` and nothing more**, so there is no interior set for the code to hold it to, and `{from: 0, to: 3, length: 99}` validates today with `length` silently dropped.
+
+`view.*`'s `various` is the only row this table does not spell out; those three shapes are declared in `packages/bus/src/params.ts` (`DECLARED_PARAMS`) and held to the same rule, and a test asserts the exemption is exactly those three rows.
+
+**`mcp.invoke` (specced 2026-09-14, [extensibility.md](extensibility.md) §6; landed with the MCP client; revised 2026-10-09).** External tool calls ride this row. Its `agentRisk` is the external tool's effectiveRisk, read-auto or write-confirm and never write-auto, so the table's `write-confirm` is the default and the per-call `read` is the exception described in its notes. `undo: 'none'` and `mutates: 'none'`: externals are not project state, and the bus still gates, audits and dedupes the agent action.
+
+## 10. Evals (headless)
+
+Scripted command sequences → final-state assertions (project-format schema) → **undo-replay assertion**: undo-all ⇒ byte-equal snapshot of pre-script state → permission-matrix assertions (each `never` command refused for agent, allowed/destructive-confirmed for user) → error-shape assertions (codes + corrective hints) → callId-replay dedupe assertions.
+
+## 11. Assumptions
+
+| # | Assumption | Status |
+|---|---|---|
+| A1 | Compensation-based undo suffices for v0.1 (no event-sourcing) | Explicit; every v0.1 command fits `inverse` or `compensable` (§9). Event log rejected for weight. |
+| A2 | Synchronous in-process bus | Explicit; async only inside command apply. `execute` stays synchronous, and an apply that awaits is dispatched through `executeAsync` (§3) as the one exception. |
+| A3 | Undo depth = whole session history in memory | Retention budgets apply to undo groups as to snapshots (§5.1). |
+| A4 | Editor-transaction undo vs bus groups coexistence rules | Two-lane undo (see §5); editor-native history for keystrokes, `addToHistory: false` + snapshot restore for bus groups. |

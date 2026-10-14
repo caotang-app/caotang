@@ -1,0 +1,167 @@
+import type { FlatBlock } from '../src/index.js';
+import { describe, expect, it } from 'vitest';
+import {
+  createPdfRenderer,
+  importFountainScript,
+  paginate,
+  parseFountain,
+  pdfString,
+  renderFountain,
+  renderPdf,
+  writePdf,
+} from '../src/index.js';
+import { SCRIPT_ONE_ACT, SCRIPT_WITH_TITLE_PAGE, text } from './fixtures/corpus.js';
+
+function blocksOf(source: string): FlatBlock[] {
+  return importFountainScript(source).nodes.map((node, i): FlatBlock => {
+    if (node.kind === 'section') return { kind: 'chapter', title: node.title, level: node.depth, number: i + 1 };
+    return { kind: 'scene', docId: `d${i}`, body: node.body, title: node.title, number: i + 1 };
+  });
+}
+
+const decode = (bytes: Uint8Array): string => new TextDecoder().decode(bytes);
+
+/** A long dialogue after a page of action: the speech must split after a sentence end (screenplay.md §5.3). */
+const SPLITTING_SCRIPT = (() => {
+  const filler = Array.from({ length: 25 }, (_, i) => `Filler ${i}.`).join('\n\n');
+  const sentences = Array.from({ length: 6 }, () => `${'w'.repeat(34)}.`).join(' ');
+  return `${filler}\n\nANNA\n${sentences}\n`;
+})();
+
+describe('renderPdf — the file structure', () => {
+  it('writes a PDF whose cross-reference table points at every object', () => {
+    const { bytes, pageCount } = renderPdf(blocksOf(SCRIPT_ONE_ACT), { title: 'The Lighthouse Keeper', author: 'N. Attini' });
+    const pdf = decode(bytes);
+    expect(pdf.startsWith('%PDF-1.4\n')).toBe(true);
+    expect(pdf.endsWith('%%EOF\n')).toBe(true);
+    expect(pdf).toContain(`/Count ${pageCount} `);
+
+    const xref = Number(/startxref\n(\d+)\n/.exec(pdf)?.[1]);
+    expect(pdf.slice(xref, xref + 5)).toBe('xref\n');
+    const lines = pdf.slice(xref).split('\n');
+    const objects = Number(/^0 (\d+)$/m.exec(pdf.slice(xref, xref + 40))?.[1]) - 1;
+    expect(objects).toBe(4 + 2 * pageCount);
+    for (let object = 1; object <= objects; object++) {
+      const offset = Number(lines[2 + object]?.slice(0, 10));
+      expect(pdf.slice(offset).startsWith(`${object} 0 obj\n`), `object ${object}`).toBe(true);
+    }
+  });
+
+  it('writes the scene heading, the cue and the dialogue into the page content as text operators', () => {
+    const { bytes } = renderPdf(blocksOf(SCRIPT_ONE_ACT), { title: 'The Lighthouse Keeper' });
+    const pdf = decode(bytes);
+    expect(pdf).toContain('(INT. HOUSE - DAY) Tj');
+    expect(pdf).toContain('(ELENA) Tj');
+    expect(pdf).toContain("(I'm home.) Tj");
+    expect(pdf).toContain('/BaseFont /Courier');
+  });
+
+  it('writes an empty document as a valid PDF with no pages', () => {
+    const pdf = decode(writePdf([], { title: 'Empty' }));
+    expect(pdf).toContain('/Count 0 ');
+    expect(pdf.endsWith('%%EOF\n')).toBe(true);
+  });
+});
+
+describe('renderPdf — pagination, title page and options', () => {
+  it('splits long dialogue with (MORE) on the page and the continued cue on the next', () => {
+    const { bytes, pageCount } = renderPdf(blocksOf(SPLITTING_SCRIPT), { title: 'Split' });
+    const pdf = decode(bytes);
+    expect(pageCount).toBe(2);
+    // Parentheses inside a literal string are escaped, so the operators read \(MORE\) and \(CONT'D\).
+    expect(pdf).toContain('(\\(MORE\\)) Tj');
+    expect(pdf).toContain("(ANNA \\(CONT'D\\)) Tj");
+    expect(pdf).toContain('(2.) Tj');
+  });
+
+  it('writes no (MORE) and no continued cue when the continued option is off', () => {
+    const pdf = decode(renderPdf(blocksOf(SPLITTING_SCRIPT), { title: 'Split', continued: false }).bytes);
+    expect(pdf).not.toContain('\\(MORE\\)');
+    expect(pdf).not.toContain("\\(CONT'D\\)");
+  });
+
+  it('lays out the title page from the front matter, and leaves it out when the option is off', () => {
+    const withTitle: FlatBlock[] = [{ kind: 'frontmatter', fmKind: 'titlepage' }, ...blocksOf(SCRIPT_WITH_TITLE_PAGE)];
+    const opts = { title: 'The Lighthouse Keeper', author: 'N. Attini' };
+    expect(decode(renderPdf(withTitle, opts).bytes)).toContain('(The Lighthouse Keeper) Tj');
+    expect(decode(renderPdf(withTitle, { ...opts, titlePage: false }).bytes)).not.toContain('(The Lighthouse Keeper) Tj');
+  });
+
+  it('prints neither notes, boneyards, sections nor synopses (screenplay.md §2.1, §2.2)', () => {
+    const source = text('# ACT ONE', '', 'INT. A - DAY', '= SYNOPSIS-WORDS.', '', '[[NOTE-WORDS]]', '', '/* BONEYARD-WORDS */', '', 'Action.');
+    const pdf = decode(renderPdf(blocksOf(source), { title: 'T' }).bytes);
+    expect(pdf).toContain('(Action.) Tj');
+    expect(pdf).toContain('(INT. A - DAY) Tj');
+    for (const hidden of ['ACT ONE', 'SYNOPSIS-WORDS', 'NOTE-WORDS', 'BONEYARD-WORDS']) {
+      expect(pdf).not.toContain(hidden);
+    }
+  });
+
+  it('prints scene numbers in the left margin when asked', () => {
+    const pdf = decode(renderPdf(blocksOf(SCRIPT_ONE_ACT), { title: 'T', sceneNumbers: 'left' }).bytes);
+    expect(pdf).toContain('(1) Tj');
+    expect(pdf).toContain('(2) Tj');
+    expect(pdf).toContain('(3) Tj');
+  });
+
+  it('reports the page count the paginator reports, and passes the Fountain notes through', () => {
+    const blocks: FlatBlock[] = [{ kind: 'backmatter', bmKind: 'custom' }, ...blocksOf(SCRIPT_ONE_ACT)];
+    const result = renderPdf(blocks, { title: 'T' });
+    expect(result.pageCount).toBe(paginate(parseFountain(renderFountain(blocks, { title: 'T' }).text).elements).length);
+    expect(result.notes).toEqual(['Back matter skipped: a screenplay has no back matter.']);
+  });
+});
+
+describe('pdfString — WinAnsi and the literal-string escapes', () => {
+  it('escapes parentheses and backslashes', () => {
+    expect(pdfString('a(b)\\c')).toBe('a\\(b\\)\\\\c');
+  });
+
+  it('writes Latin-1 and the common punctuation as WinAnsi octal, and anything else as a question mark', () => {
+    expect(pdfString('é')).toBe('\\351');
+    expect(pdfString('—')).toBe('\\227');
+    expect(pdfString('“x”')).toBe('\\223x\\224');
+    expect(pdfString('😀')).toBe('?');
+  });
+});
+
+describe('renderPdf — annotations and the text they leave (screenplay.md §2.1, §2.3)', () => {
+  it('prints a note or boneyard out of its line, and the text around it', () => {
+    const source = text('She [[check this]] waits.', '', '/* cut */ Action here.', '', 'Trailing text /* gone */');
+    const pdf = decode(renderPdf(blocksOf(source), { title: 'T' }).bytes);
+    expect(pdf).toContain('(She waits.) Tj');
+    expect(pdf).toContain('(Action here.) Tj');
+    expect(pdf).toContain('(Trailing text) Tj');
+    for (const hidden of ['check this', 'cut', 'gone']) expect(pdf).not.toContain(hidden);
+  });
+
+  it('prints the text after the closer of a multi-line boneyard, and nothing of the boneyard', () => {
+    const pdf = decode(renderPdf(blocksOf(text('/* a', ' b */ JOHN says hi.', '', 'Next.')), { title: 'T' }).bytes);
+    expect(pdf).toContain('(JOHN says hi.) Tj');
+    expect(pdf).toContain('(Next.) Tj');
+    expect(pdf).not.toContain('b */');
+  });
+
+  it('prints a dialogue line after a note between the cue and the speech, and not the note', () => {
+    const pdf = decode(renderPdf(blocksOf(text('ANNA', '[[production note]]', 'Hi there.')), { title: 'T' }).bytes);
+    expect(pdf).toContain('(ANNA) Tj');
+    expect(pdf).toContain('(Hi there.) Tj');
+    expect(pdf).not.toContain('production note');
+  });
+
+  it('prints a cue block with a tail, and the parenthetical after its first dialogue', () => {
+    const pdf = decode(renderPdf(blocksOf(text('ANNA', 'One line.', '(beat)', 'Second speech.')), { title: 'T' }).bytes);
+    expect(pdf).toContain('(One line.) Tj');
+    expect(pdf).toContain('(\\(beat\\)) Tj');
+    expect(pdf).toContain('(Second speech.) Tj');
+  });
+});
+
+describe('createPdfRenderer', () => {
+  it('emits a Blob with the PDF media type and the same bytes as renderPdf', async () => {
+    const blocks = blocksOf(SCRIPT_ONE_ACT);
+    const blob = await createPdfRenderer().emit(blocks, { title: 'T' });
+    expect(blob.type).toBe('application/pdf');
+    expect(blob.size).toBe(renderPdf(blocks, { title: 'T' }).bytes.length);
+  });
+});

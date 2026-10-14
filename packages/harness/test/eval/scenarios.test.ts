@@ -1,0 +1,492 @@
+/**
+ * The v0.1 scenario suite — agent-harness.md §9's categories, each scenario a complete turn against
+ * deterministic mock scripts. Every scenario states its response shape, its cards and its trace in
+ * the matcher the case calls for (strict for a single op, unordered where a plan's steps commute),
+ * the project it leaves, and the tokens it may spend.
+ */
+
+import { describe, expect, it } from 'vitest';
+
+import { setBody, type ProjectState } from '@caotang/store';
+
+import { evaluate, type Scenario } from '../../src/agent/eval.js';
+import { CHAPTER_ONE, FRIEND, LANDING, LANDING_BODY, STORM, makeState } from '../fixtures.js';
+import { mockGateway } from '../agent/gateway.js';
+import { answer, prose, steps, transcript } from '../agent/scripts.js';
+import type { MockScript } from '@caotang/gateway/mock';
+
+const storm = (state: ReturnType<typeof makeState>) => state.documents.get(STORM)?.body ?? '';
+const scriptsFor = (...scripts: MockScript[]) => () => mockGateway(scripts);
+/** The Landing's project for the anchor scenario, so its decision can edit the document the card is about. */
+let landingState: ProjectState | undefined;
+
+const scenarios: Scenario[] = [
+  {
+    name: 'single op: a label change applies at once, behind no card',
+    category: 'single-op',
+    intent: 'Move The Friend into Act 2.',
+    project: makeState,
+    gateway: scriptsFor(
+      transcript('Move The Friend into Act 2.', [
+        steps({ tool: 'meta.set', params: { targets: [FRIEND], label: 'act-2' }, expect: 'The Friend is labelled act-2' }),
+      ]),
+    ),
+    expect: {
+      status: 'applied',
+      cards: { matcher: 'strict', items: [{ kind: 'auto', tools: ['meta.set'], decision: 'auto' }] },
+      trace: { matcher: 'strict', calls: [{ tool: 'meta.set', outcome: 'ok', params: { label: 'act-2' } }] },
+      // 6000 before m8-integration. The planner's tool list grew by the two wired rows it now carries, tool.search and
+      // shots.annotate (about 550 tokens a planner call, measured at 6399 here), so the ceiling moved by that growth to
+      // 6500. The media track's wired read, dialogue.table, adds its description and schema to every planner call
+      // (measured at 6602 here, about 200 tokens), so the ceiling moves by that growth too. The three drafting tools are wired
+      // now (shots.derive, prompt.draft, prompt.variant), and the planner lists every wired tool, so each planner call carries
+      // their descriptions and schemas (about 810 tokens: 6602 before, 7411 here), and the ceiling moves to 7500.
+      // dialogue.draft, wired to the agent ports (agent-coherence), joins the planner's list the same way: about 350 tokens
+      // on its one planner call (measured 7763 here, 7411 before), so the ceiling moves to 7800.
+      // codex.write's schema gained `visualRefs` (video-prompt-pack §3): the planner lists that schema too, so the one planner
+      // call grows by about 70 tokens (measured 7830 here, 7763 before), and the ceiling moves to 7900. m10 grows export.compile's
+      // description and adds recipeName (a saved recipe, with the selection optional when one names the nodes) and the prompt
+      // pack's template text: the planner lists that tool on every call (measured 7884 with it and without visualRefs).
+      // With both merged the planner call carries both schemas (measured 7952 here), so the ceiling moves to 8000.
+      maxTokens: 8000,
+      state: (state) => (state.manifest.tree.find((node) => node.id === FRIEND)?.label === 'act-2' ? [] : ['The Friend is not labelled act-2']),
+    },
+  },
+  {
+    name: 'single op: a read answers the question and changes nothing',
+    category: 'single-op',
+    intent: 'What is in Chapter 1?',
+    project: makeState,
+    gateway: scriptsFor(
+      transcript('What is in Chapter 1?', [
+        steps({ tool: 'binder.read_tree', params: { root: CHAPTER_ONE }, expect: 'Chapter 1 is read' }),
+        answer('Chapter 1 holds two scenes.'),
+      ]),
+    ),
+    expect: {
+      status: 'replied',
+      summaryIncludes: ['Chapter 1 holds two scenes'],
+      cards: { matcher: 'strict', items: [] },
+      trace: { matcher: 'strict', calls: [{ tool: 'binder.read_tree', outcome: 'ok', params: { root: CHAPTER_ONE } }] },
+      maxModelCalls: 2,
+    },
+  },
+  {
+    name: 'single op: a bad label is refused, the model corrects it, and the corrected call runs',
+    category: 'single-op',
+    intent: 'Label The Friend as final.',
+    project: makeState,
+    gateway: scriptsFor(
+      transcript('Label The Friend as final.', [
+        steps({ tool: 'meta.set', params: { targets: [FRIEND], label: 'final' }, expect: 'The Friend is labelled final' }),
+        steps({ tool: 'meta.set', params: { targets: [FRIEND], label: 'act-2' }, expect: 'The Friend is labelled act-2' }),
+      ]),
+    ),
+    expect: {
+      status: 'applied',
+      cards: { matcher: 'strict', items: [{ kind: 'auto', tools: ['meta.set'], decision: 'auto' }] },
+      trace: { matcher: 'strict', calls: [{ tool: 'meta.set', outcome: 'ok', params: { label: 'act-2' } }] },
+    },
+  },
+  {
+    name: 'multi-step: a read, then a plan that batches a tag and a synopsis, applies once',
+    category: 'multi-step',
+    intent: 'Tag The Storm and give it a synopsis.',
+    project: makeState,
+    gateway: scriptsFor(
+      transcript('Tag The Storm and give it a synopsis.', [
+        steps({ tool: 'notes.read', params: { doc: STORM }, expect: 'the notes are read' }),
+        steps(
+          { tool: 'meta.set', params: { targets: [STORM], keywords_add: ['storm'] }, expect: 'The Storm is tagged storm' },
+          { tool: 'synopsis.fill', params: { docs: [STORM], source: 'text', max_words: 20 }, expect: 'The Storm has a synopsis' },
+        ),
+      ]),
+      prose('Document "The Storm":', 'A storm takes the lamp, and the keeper must choose.'),
+    ),
+    expect: {
+      status: 'applied',
+      cards: { matcher: 'strict', items: [{ kind: 'plan', tools: ['meta.set', 'synopsis.fill'], decision: 'approved' }] },
+      trace: {
+        matcher: 'strict',
+        calls: [
+          { tool: 'notes.read', outcome: 'ok' },
+          { tool: 'meta.set', outcome: 'ok' },
+          { tool: 'synopsis.fill', outcome: 'ok' },
+        ],
+      },
+      // Three model calls (a read's planner, a plan's planner, a synopsis), each carrying the tool schemas. The ceiling
+      // was 12000 before m8-integration; the planner's two new wired rows add to each planner call (measured 13115). The
+      // media track's wired read, dialogue.table, adds to each of the three calls (measured 13523 here), so the ceiling
+      // moves by that growth as well. The three drafting tools, now wired, add to each of the two planner calls (about 810 tokens
+      // a planner call: 13523 before, 15141 here), so the ceiling moves to 15250. Round 5's merge then lengthened three wired
+      // descriptions (export.compile's format enum, project.overview's goal shape, the coherence rows): measured 15271, so 15500.
+      // dialogue.draft, wired (agent-coherence), adds about 290 tokens to each of its two planner calls (measured 15843
+      // here, 15271 before), so the ceiling moves to 16000. m10's export.compile description and recipeName parameter add to each of
+      // the two planner calls (measured 16087 here), so the ceiling moves to 16100. With codex.write's `visualRefs` from the
+      // other m8 merged beside it, both planner calls carry both schemas (measured 16223 here), so the ceiling moves to 16300.
+      maxTokens: 16300,
+      maxModelCalls: 3,
+      state: (state) => {
+        const node = state.manifest.tree.find((candidate) => candidate.id === STORM);
+        const failures: string[] = [];
+        if (!node?.keywords.includes('storm')) failures.push('The Storm is not tagged storm');
+        if (node?.synopsis !== 'A storm takes the lamp, and the keeper must choose.') failures.push(`The Storm synopsis is ${JSON.stringify(node?.synopsis)}`);
+        return failures;
+      },
+    },
+  },
+  {
+    name: 'plan edit: a dropped step is removed, the card is shown again, and only the rest runs',
+    category: 'plan-edit',
+    intent: 'Tag The Storm and move The Landing to Act 2.',
+    project: makeState,
+    gateway: scriptsFor(
+      transcript('Tag The Storm and move The Landing to Act 2.', [
+        steps(
+          { tool: 'meta.set', params: { targets: [STORM], keywords_add: ['storm'] }, expect: 'The Storm is tagged' },
+          { tool: 'meta.set', params: { targets: [LANDING], label: 'act-2' }, expect: 'The Landing is labelled act-2' },
+        ),
+      ]),
+    ),
+    decisions: [{ action: 'edit', edits: [{ op: 'drop', index: 1 }] }, { action: 'approve' }],
+    expect: {
+      status: 'applied',
+      cards: { matcher: 'strict', items: [{ kind: 'plan', tools: ['meta.set'], decision: 'approved' }] },
+      trace: { matcher: 'strict', calls: [{ tool: 'meta.set', outcome: 'ok', params: { targets: [STORM] } }] },
+      state: (state) => {
+        const landing = state.manifest.tree.find((node) => node.id === LANDING);
+        return landing?.label === 'act-1' ? [] : ['The Landing was labelled although its step was dropped'];
+      },
+    },
+  },
+  {
+    name: 'plan edit: a reordered plan runs in the order the user set',
+    category: 'plan-edit',
+    intent: 'Label The Friend, then tag The Storm.',
+    project: makeState,
+    gateway: scriptsFor(
+      transcript('Label The Friend, then tag The Storm.', [
+        steps(
+          { tool: 'meta.set', params: { targets: [FRIEND], label: 'act-2' }, expect: 'The Friend is labelled' },
+          { tool: 'meta.set', params: { targets: [STORM], keywords_add: ['storm'] }, expect: 'The Storm is tagged' },
+        ),
+      ]),
+    ),
+    decisions: [{ action: 'edit', edits: [{ op: 'reorder', from: 0, to: 1 }] }, { action: 'approve' }],
+    expect: {
+      status: 'applied',
+      cards: { matcher: 'strict', items: [{ kind: 'plan', tools: ['meta.set', 'meta.set'], decision: 'approved' }] },
+      trace: {
+        matcher: 'strict',
+        calls: [
+          { tool: 'meta.set', outcome: 'ok', params: { targets: [STORM] } },
+          { tool: 'meta.set', outcome: 'ok', params: { targets: [FRIEND] } },
+        ],
+      },
+    },
+  },
+  {
+    name: 'verify recovery: a draft refused before its card is adjusted by the model and approved again',
+    category: 'verify-recovery',
+    intent: 'Draft the storm again.',
+    project: makeState,
+    gateway: scriptsFor(
+      transcript('Draft the storm again.', [
+        // The storm already has a body, so mode draft is refused before its draft is asked for and before any card is shown:
+        // the planner is told why and asked again.
+        steps({ tool: 'scene.draft', params: { doc: 'The Storm', instruction: 'The lamp fails and the keeper rows out to the wreck.', mode: 'draft' }, expect: 'The Storm is drafted' }),
+        steps({ tool: 'scene.draft', params: { doc: 'The Storm', instruction: 'The lamp fails and the keeper rows out to the wreck.', mode: 'continue' }, expect: 'The Storm continues' }),
+      ]),
+      prose('Brief: The lamp fails', 'The keeper rows out to the wreck.'),
+    ),
+    expect: {
+      status: 'applied',
+      cards: {
+        matcher: 'strict',
+        items: [{ kind: 'confirm', tools: ['scene.draft'], decision: 'approved' }],
+      },
+      trace: {
+        matcher: 'strict',
+        calls: [{ tool: 'scene.draft', outcome: 'ok', params: { mode: 'continue' } }],
+      },
+      state: (state) => (storm(state).endsWith('The keeper rows out to the wreck.') ? [] : [`The Storm ends with ${JSON.stringify(storm(state).slice(-40))}`]),
+    },
+  },
+  {
+    name: 'verify recovery: a draft the planner keeps sending is refused before any card, stops at the call bound, and writes nothing',
+    category: 'verify-recovery',
+    intent: 'Draft the storm the same way again.',
+    project: makeState,
+    gateway: scriptsFor(
+      transcript('Draft the storm the same way again.', [
+        steps({ tool: 'scene.draft', params: { doc: 'The Storm', instruction: 'The lamp fails.', mode: 'draft' }, expect: 'The Storm is drafted' }),
+      ]),
+      prose('Brief: The lamp fails.', 'The keeper rows out.'),
+    ),
+    expect: {
+      status: 'failed',
+      askBack: 'needs_input',
+      // Each refused draft goes back to the planner before any card is shown, so no card waits and no call runs. The planner's
+      // calls are bounded (agent-harness §7), so the turn stops there, with the structured ask-back.
+      cards: { matcher: 'strict', items: [] },
+      trace: { matcher: 'strict', calls: [] },
+      state: (state) => (storm(state) === 'Rain.\n\n***\n\nThe lamp failed.' ? [] : ['The Storm changed although every attempt was refused']),
+    },
+  },
+  {
+    // The captured text "as" appears twice in the body, and the document was edited after the selection was captured.
+    name: 'anchor: a selection that moved since it was captured is reported with its candidates, not guessed',
+    category: 'anchor',
+    intent: 'Tighten the first line of The Landing.',
+    project: () => (landingState = makeState()),
+    gateway: scriptsFor(
+      transcript('Tighten the first line of The Landing.', [
+        steps({
+          tool: 'scene.draft',
+          params: {
+            doc: 'The Landing',
+            instruction: 'Tighten it.',
+            mode: 'rewrite_selection',
+            selection: { from: 0, to: 2, exact: 'as', prefix: '', suffix: '', capturedRevision: 0 },
+          },
+          expect: 'the first line is tightened',
+        }),
+      ]),
+      prose('Brief: Tighten it.', 'Tighter.'),
+    ),
+    // The user edits the document while the card is open, so the apply-time revision is one past the captured one.
+    decisions: [
+      () => {
+        setBody(landingState as ProjectState, LANDING, `${LANDING_BODY} Moved.`);
+        return { action: 'approve' };
+      },
+    ],
+    expect: {
+      status: 'failed',
+      askBack: 'anchor_unresolvable',
+      candidates: 2,
+      revisionDrift: 1,
+      cards: { matcher: 'strict', items: [{ kind: 'confirm', tools: ['scene.draft'], decision: 'approved' }] },
+      trace: { matcher: 'strict', calls: [{ tool: 'scene.draft', outcome: 'refused' }] },
+      state: (state) => (state.documents.get(LANDING)?.body === `${LANDING_BODY} Moved.` ? [] : ['The Landing changed although its anchor did not resolve']),
+    },
+  },
+  {
+    name: 'undo: a multi-step turn is restored, and the project is byte-equal to what it was before the turn',
+    category: 'undo',
+    intent: 'Label The Friend and give The Storm a synopsis.',
+    project: makeState,
+    gateway: scriptsFor(
+      transcript('Label The Friend and give The Storm a synopsis.', [
+        steps(
+          { tool: 'meta.set', params: { targets: [FRIEND], label: 'act-2' }, expect: 'The Friend is labelled act-2' },
+          { tool: 'synopsis.fill', params: { docs: [STORM], source: 'text', max_words: 20 }, expect: 'The Storm has a synopsis' },
+        ),
+      ]),
+      prose('Document "The Storm":', 'A storm takes the lamp.'),
+    ),
+    expect: {
+      status: 'applied',
+      restores: true,
+      trace: {
+        matcher: 'strict',
+        calls: [
+          { tool: 'meta.set', outcome: 'ok' },
+          { tool: 'synopsis.fill', outcome: 'ok' },
+        ],
+      },
+      state: (state) => ((state.manifest.tree.find((node) => node.id === FRIEND)?.label ?? null) === null ? [] : ['The Friend kept its label after the restore']),
+    },
+  },
+  {
+    name: 'permission: a plan card cancelled at the card, as a batch, writes nothing',
+    category: 'permission',
+    intent: 'Label The Friend and The Landing.',
+    project: makeState,
+    gateway: scriptsFor(
+      transcript('Label The Friend and The Landing.', [
+        steps(
+          { tool: 'meta.set', params: { targets: [FRIEND], label: 'act-2' }, expect: 'The Friend is labelled act-2' },
+          { tool: 'meta.set', params: { targets: [LANDING], label: 'act-2' }, expect: 'The Landing is labelled act-2' },
+        ),
+      ]),
+    ),
+    decisions: [{ action: 'cancel' }],
+    expect: {
+      status: 'cancelled',
+      cards: { matcher: 'strict', items: [{ kind: 'plan', tools: ['meta.set', 'meta.set'], decision: 'cancelled' }] },
+      trace: { matcher: 'strict', calls: [] },
+      state: (state) => {
+        const failures: string[] = [];
+        if ((state.manifest.tree.find((node) => node.id === FRIEND)?.label ?? null) !== null) failures.push('The Friend was labelled after the batch was cancelled');
+        if (state.manifest.tree.find((node) => node.id === LANDING)?.label !== 'act-1') failures.push('The Landing was labelled after the batch was cancelled');
+        return failures;
+      },
+    },
+  },
+  {
+    name: 'plan edit: a step that has applied cannot be reordered after a ladder retry, and no step runs twice',
+    category: 'plan-edit',
+    intent: 'Note the wreck, then draft the friend twice.',
+    project: makeState,
+    gateway: scriptsFor(
+      transcript('Note the wreck, then draft the friend twice.', [
+        steps(
+          { tool: 'notes.append', params: { doc: FRIEND, text: 'Note one.' }, expect: 'a note is appended' },
+          { tool: 'scene.draft', params: { doc: FRIEND, instruction: 'The lamp fails.', mode: 'draft' }, expect: 'The Friend is drafted' },
+          // The Friend is empty when the plan is checked, so this step passes. The step before fills it, and the apply refuses this one.
+          { tool: 'scene.draft', params: { doc: FRIEND, instruction: 'The lamp fails.', mode: 'draft' }, expect: 'The Friend is drafted again' },
+        ),
+        // The adjusted step the model sends after the refusal.
+        steps({ tool: 'scene.draft', params: { doc: FRIEND, instruction: 'The lamp fails.', mode: 'continue' }, expect: 'The Friend continues' }),
+      ]),
+      prose('Brief: The lamp fails.', 'The keeper rows out.'),
+    ),
+    // Card 2 asks to move the appended note after the draft. The note has run, so the edit is refused and card 3 is the same card.
+    decisions: [{ action: 'approve' }, { action: 'edit', edits: [{ op: 'reorder', from: 0, to: 1 }] }, { action: 'approve' }],
+    expect: {
+      status: 'applied',
+      cards: {
+        matcher: 'strict',
+        items: [
+          { kind: 'plan', tools: ['notes.append', 'scene.draft', 'scene.draft'], decision: 'approved' },
+          { kind: 'plan', tools: ['scene.draft'], decision: 'approved' },
+        ],
+      },
+      trace: {
+        matcher: 'strict',
+        calls: [
+          { tool: 'notes.append', outcome: 'ok', params: { text: 'Note one.' } },
+          { tool: 'scene.draft', outcome: 'ok' },
+          { tool: 'scene.draft', outcome: 'refused' },
+          { tool: 'scene.draft', outcome: 'ok', params: { mode: 'continue' } },
+        ],
+      },
+      state: (state) => {
+        const failures: string[] = [];
+        const notes = state.manifest.tree.find((node) => node.id === FRIEND)?.notes ?? '';
+        if (notes.split('Note one.').length - 1 !== 1) failures.push(`the note was appended ${notes.split('Note one.').length - 1} times, not once`);
+        const body = state.documents.get(FRIEND)?.body ?? '';
+        if (!body.endsWith('The keeper rows out.')) failures.push(`The Friend ends with ${JSON.stringify(body.slice(-40))}`);
+        return failures;
+      },
+    },
+  },
+  {
+    name: 'plan edit: a pending step can be dropped after a ladder retry, and it is never run',
+    category: 'plan-edit',
+    intent: 'Note the wreck, draft the friend twice, then label the landing.',
+    project: makeState,
+    gateway: scriptsFor(
+      transcript('Note the wreck, draft the friend twice, then label the landing.', [
+        steps(
+          { tool: 'notes.append', params: { doc: FRIEND, text: 'Note one.' }, expect: 'a note is appended' },
+          { tool: 'scene.draft', params: { doc: FRIEND, instruction: 'The lamp fails.', mode: 'draft' }, expect: 'The Friend is drafted' },
+          { tool: 'scene.draft', params: { doc: FRIEND, instruction: 'The lamp fails.', mode: 'draft' }, expect: 'The Friend is drafted again' },
+          { tool: 'meta.set', params: { targets: [LANDING], label: 'act-2' }, expect: 'The Landing is labelled act-2' },
+        ),
+        steps({ tool: 'scene.draft', params: { doc: FRIEND, instruction: 'The lamp fails.', mode: 'continue' }, expect: 'The Friend continues' }),
+      ]),
+      prose('Brief: The lamp fails.', 'The keeper rows out.'),
+    ),
+    // Card 2 drops the labelling, which has not run. Card 3 shows the two steps that are left, and they run once.
+    decisions: [{ action: 'approve' }, { action: 'edit', edits: [{ op: 'drop', index: 3 }] }, { action: 'approve' }],
+    expect: {
+      status: 'applied',
+      trace: {
+        matcher: 'strict',
+        calls: [
+          { tool: 'notes.append', outcome: 'ok' },
+          { tool: 'scene.draft', outcome: 'ok' },
+          { tool: 'scene.draft', outcome: 'refused' },
+          { tool: 'meta.set', outcome: 'not-run' },
+          { tool: 'scene.draft', outcome: 'ok', params: { mode: 'continue' } },
+        ],
+      },
+      state: (state) => {
+        const failures: string[] = [];
+        if ((state.manifest.tree.find((node) => node.id === LANDING)?.label ?? null) === 'act-2') failures.push('The Landing was labelled although its step was dropped');
+        const body = state.documents.get(FRIEND)?.body ?? '';
+        if (!body.endsWith('The keeper rows out.')) failures.push(`The Friend ends with ${JSON.stringify(body.slice(-40))}`);
+        return failures;
+      },
+    },
+  },
+  {
+    name: 'plan edit: a step that has not run can be moved after a ladder retry, and it runs once in its new place',
+    category: 'plan-edit',
+    intent: 'Note the wreck, draft the friend twice, then label the landing.',
+    project: makeState,
+    gateway: scriptsFor(
+      transcript('Note the wreck, draft the friend twice, then label the landing.', [
+        steps(
+          { tool: 'notes.append', params: { doc: FRIEND, text: 'Note one.' }, expect: 'a note is appended' },
+          { tool: 'scene.draft', params: { doc: FRIEND, instruction: 'The lamp fails.', mode: 'draft' }, expect: 'The Friend is drafted' },
+          { tool: 'scene.draft', params: { doc: FRIEND, instruction: 'The lamp fails.', mode: 'draft' }, expect: 'The Friend is drafted again' },
+          { tool: 'meta.set', params: { targets: [LANDING], label: 'act-2' }, expect: 'The Landing is labelled act-2' },
+        ),
+        steps({ tool: 'scene.draft', params: { doc: FRIEND, instruction: 'The lamp fails.', mode: 'continue' }, expect: 'The Friend continues' }),
+      ]),
+      prose('Brief: The lamp fails.', 'The keeper rows out.'),
+    ),
+    // Card 2 moves the labelling in front of the pending continue, which is allowed: neither of the two has run.
+    decisions: [{ action: 'approve' }, { action: 'edit', edits: [{ op: 'reorder', from: 2, to: 3 }] }, { action: 'approve' }],
+    expect: {
+      status: 'applied',
+      trace: {
+        matcher: 'strict',
+        calls: [
+          { tool: 'notes.append', outcome: 'ok' },
+          { tool: 'scene.draft', outcome: 'ok' },
+          { tool: 'scene.draft', outcome: 'refused' },
+          { tool: 'meta.set', outcome: 'not-run' },
+          { tool: 'meta.set', outcome: 'ok', params: { targets: [LANDING] } },
+          { tool: 'scene.draft', outcome: 'ok', params: { mode: 'continue' } },
+        ],
+      },
+      state: (state) => {
+        const failures: string[] = [];
+        if (state.manifest.tree.find((node) => node.id === LANDING)?.label !== 'act-2') failures.push('The Landing is not labelled act-2');
+        const body = state.documents.get(FRIEND)?.body ?? '';
+        if (!body.endsWith('The keeper rows out.')) failures.push(`The Friend ends with ${JSON.stringify(body.slice(-40))}`);
+        return failures;
+      },
+    },
+  },
+  {
+    name: 'permission: a write-confirm draft the user cancels writes nothing',
+    category: 'permission',
+    intent: 'Draft a new opening for The Friend.',
+    project: makeState,
+    gateway: scriptsFor(
+      transcript('Draft a new opening for The Friend.', [
+        steps({ tool: 'scene.draft', params: { doc: 'The Friend', instruction: 'A new opening.', mode: 'draft' }, expect: 'The Friend is drafted' }),
+      ]),
+      prose('Brief: A new opening.', 'The keeper wakes early.'),
+    ),
+    decisions: [{ action: 'cancel' }],
+    expect: {
+      status: 'cancelled',
+      cards: { matcher: 'strict', items: [{ kind: 'confirm', tools: ['scene.draft'], decision: 'cancelled' }] },
+      trace: { matcher: 'strict', calls: [] },
+      state: (state) => (state.documents.get(FRIEND)?.body === '' ? [] : ['The Friend was written after the user cancelled']),
+    },
+  },
+];
+
+describe('the v0.1 scenario suite (agent-harness §9)', () => {
+  for (const scenario of scenarios) {
+    it(scenario.name, async () => {
+      const result = await evaluate(scenario);
+      expect(result.failures).toEqual([]);
+    });
+  }
+
+  it('covers every §9 category it names, with at least ten scenarios across them', () => {
+    const categories = new Set(scenarios.map((scenario) => scenario.category));
+    expect(scenarios.length).toBeGreaterThanOrEqual(10);
+    for (const category of ['single-op', 'multi-step', 'plan-edit', 'verify-recovery', 'permission', 'anchor', 'undo']) {
+      expect(categories.has(category as Scenario['category'])).toBe(true);
+    }
+  });
+});

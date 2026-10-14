@@ -1,0 +1,28 @@
+/* The rename form on the projects list (m4 polish). It takes the row's place while one project is being renamed, and uses the
+   workspace's own tokens, so both themes read correctly. */
+
+.project-row.is-renaming {
+  align-items: flex-end;
+}
+
+.project-rename {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+}
+
+.project-rename label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 14rem;
+}
+
+.project-rename input {
+  min-width: 0;
+  width: 100%;
+}

@@ -1,0 +1,196 @@
+/**
+ * The activity log — [command-bus.md §8](docs/architecture/command-bus.md).
+ *
+ * ## What an earlier change left out, and why an earlier change is the row that owns it
+ *
+ * §8 declares ten fields. An earlier change shipped the six the pipeline could honestly fill at
+ * append time and **omitted the other four from the type rather than defaulting
+ * them**, because a log row that claimed a digest it had not computed is worse
+ * than a row without one. An earlier change is that row, and it is a row rather than a task
+ * because the missing four cannot be filled by the pipeline alone:
+ *
+ * | §8 field | an earlier change | where it comes from |
+ * |---|---|---|
+ * | `at`, `command`, `issuedBy` | ✅ an earlier change | §2's own envelope fields; `at` is `createdAt`, which §2 says is *"log/display only — never affects behavior"* |
+ * | `turnId?`, `callId?` | ✅ an earlier change | echoed from the envelope |
+ * | `undoGroupId?` | ✅ an earlier change | present exactly when §5 registered something into a group |
+ * | `affected: {nodeId, title}[]` | ✅ an earlier change | the **apply** — the only thing at the point of knowledge, and §8's *"human titles, not bare ids"* needs both a post-rename title and a pre-delete one |
+ * | `summary` | ✅ an earlier change | the apply, and the bus **refuses** a dispatch that reported none rather than inventing one |
+ * | `source?` | ✅ an earlier change | stamped `'native'`; §8 reserves `'mcp'` for the v0.2 client, which cannot reach `execute()` yet |
+ * | `tokensSpent?` | declared, never written | the gateway ledger's, and no agent turn has run — M3 owns the writer |
+ *
+ * ## Why an apply reports, and not the pipeline
+ *
+ * Three of §8's own sentences put this in the apply, and none of them can be had
+ * from params or from a read:
+ *
+ * - §8 wants **human titles, not bare ids**. A `binder.rename` row that shows the
+ *   title the node had *before* the command is a row describing a different
+ *   command; a `project.deleteNode` row cannot resolve a title at all afterwards,
+ *   because the node is gone. Only the apply stands on both sides of its own
+ *   effect.
+ * - §8's example digest is *"moved 3 scenes into Chapter 4"* — a sentence about
+ *   what changed, which no generic function of the command name can produce
+ *   without fabricating.
+ * - §3's subscribers re-render **from the store**, so they need ids and not
+ *   titles. One declaration therefore feeds two consumers with different needs,
+ *   and `ExecutionOutcome` carries the same list the row does rather than a
+ *   second assembly of it.
+ *
+ * ## The refusal, and why it is not a default
+ *
+ * `summary` and `affected` are **required** fields of §8's interface. The bus
+ * cannot fill either, so an apply that reported nothing leaves the pipeline with
+ * two honest options — write a row whose digest is empty, or refuse — and this
+ * file takes the second. That is the same shape as §5's registration refusal
+ * a post-apply `internal` that carries the undo group in `details` and
+ * says what is missing, rather than a required field silently defaulting to a
+ * lie. The tripwire costs a committed-but-undone-in-principle command nothing:
+ * the effect is registered and named, and every shipped apply reports.
+ *
+ * ## One entry per *executed* command
+ *
+ * A command refused at the name, at `validate` or at §4's gate was never
+ * executed, so it leaves **no row**. That is the log's whole value as an audit
+ * (*§1: "auditable (activity log)"*): a row means the bus did something.
+ */
+
+import type { CommandName } from './command.js';
+
+/**
+ * §8's `affected` element: the node id, and the **human title**, which is the
+ * field the spec insists on (*"human titles, not bare ids"*). A store-side apply
+ * resolves the title with the same rule `commands.ts` documents as *"§8's
+ * `affected` rule"*.
+ */
+/**
+ * Where a dispatch came from (command-bus §8). `'native'` is the in-process UI and
+ * agent; `'mcp'` is reserved for the v0.2 external client. The caller names it when
+ * it calls `execute()`, and the row stamps it.
+ */
+export type ActivitySource = 'native' | 'mcp';
+
+export interface ActivityAffected {
+  readonly nodeId: string;
+  readonly title: string;
+}
+
+/**
+ * What one dispatch hands the pipeline so §8's row can be written: the nodes whose
+ * rendered content changed, and the digest that says what happened.
+ *
+ * **`affected` is empty when nothing's content changed, which is not the same as
+ * "unknown".** A `codex.upsert` that creates an unattached entry changes no node;
+ * a `view.setScroll` changes the view state the subscriber already holds. Both
+ * report `[]`, and the digest is what carries the fact.
+ */
+export interface ActivityReport {
+  readonly affected: readonly ActivityAffected[];
+  /** §8's digest: *"moved 3 scenes into Chapter 4"*. Never empty, never a restatement of the command name. */
+  readonly summary: string;
+}
+
+export interface ActivityEntry {
+  /** §2's `createdAt` — epoch ms, log/display only */
+  readonly at: number;
+  /** the command name, from §9's closed set */
+  readonly command: string;
+  readonly issuedBy: 'user' | 'agent';
+  readonly turnId?: string;
+  readonly callId?: string;
+  /** §5's group, when one was registered into — absent for a `view.*` event */
+  readonly undoGroupId?: string;
+  /**
+   * §8 reserves `'mcp'` for the v0.2 external client and says *"default
+   * `native`"*. **Stamped rather than omitted**, so the distinction is in the
+   * data and a reader never has to apply a default to tell a native row from a
+   * future external one. Every command that reaches `execute()` in v0.1 came
+   * through the in-process native UI/agent, so the pipeline writes exactly this.
+   */
+  readonly source: ActivitySource;
+  /** §8: the nodes this command changed, with their titles. Empty is a real answer; see `ActivityReport`. */
+  readonly affected: readonly ActivityAffected[];
+  /** §8's digest. Required, and the pipeline refuses a dispatch that reported none. */
+  readonly summary: string;
+  /**
+   * §8's agent-turn token cost, fed by the gateway ledger. **Declared and never
+   * written in M2**: the gateway is M3 and no turn has run, so a row that carried
+   * a `0` would claim a measurement nobody took. The pipeline omits the key
+   * entirely rather than writing `undefined`, because there is no envelope field
+   * to echo — `turnId` and `callId` have one and `tokensSpent` does not.
+   */
+  readonly tokensSpent?: number;
+}
+
+export interface ActivityLog {
+  append(entry: ActivityEntry): void;
+  /** Append order, oldest first. A copy: a subscriber cannot rewrite the log. */
+  entries(): readonly ActivityEntry[];
+  readonly length: number;
+  /** The entries of one group, in append order — §5's checkpoint row is this slice. */
+  entriesForGroup(groupId: string): readonly ActivityEntry[];
+}
+
+export function createActivityLog(): ActivityLog {
+  const entries: ActivityEntry[] = [];
+
+  return {
+    append(entry) {
+      entries.push(entry);
+    },
+    entries: () => [...entries],
+    get length() {
+      return entries.length;
+    },
+    entriesForGroup: (groupId) => entries.filter((entry) => entry.undoGroupId === groupId),
+  };
+}
+
+/**
+ * §3's step-6 surface, handed to an apply for the duration of one dispatch.
+ *
+ * **The reason this exists rather than a comment asking nicely** is §8's own
+ * shape: the row is written after the apply, so the bus can only ask. `undo` is
+ * the precedent — §5 makes registration a pipeline step, and a pipeline that
+ * trusts an apply to remember produces a command that reports success and cannot
+ * be undone. Here the failure is a row with an empty digest.
+ */
+export interface ActivityScope {
+  /** Hand over §8's `affected` and `summary` for this dispatch. Once. */
+  report(report: ActivityReport): void;
+  /** What the apply handed over — `undefined` if it handed over nothing, which the pipeline refuses. */
+  readonly reported: () => ActivityReport | undefined;
+}
+
+/**
+ * One report per dispatch, and the second one **throws** rather than overwriting.
+ *
+ * `undo.ts`'s scope holds a single payload too, and a second `compensate()`
+ * overwrites the first — which is exactly how the batch registered a group
+ * restoring one entry out of five. The failure mode is the same here, so it is
+ * closed the only way that is not silent: §8 writes **one entry per executed
+ * command**, so a second report is an apply that disagrees with the spec about
+ * its own dispatch, and it says so at the point of the mistake.
+ *
+ * The throw lands in `dispatch()`'s existing apply-threw path, which registers
+ * whatever the apply captured and names the group — so a report written *before*
+ * an undo capture would lose the compensation. Every shipped apply therefore
+ * reports **last**, after its capture.
+ */
+export function createActivityScope(name: CommandName): ActivityScope {
+  let report: ActivityReport | undefined;
+
+  return {
+    report(next: ActivityReport) {
+      if (report !== undefined) {
+        throw new Error(
+          `the apply for "${name}" reported to the activity log twice, and §8 writes one entry per executed command. The first report is kept; the second is refused.`,
+        );
+      }
+      // Copied, so an apply that keeps the array and mutates it afterwards cannot
+      // rewrite a row that was already appended.
+      report = { affected: [...next.affected], summary: next.summary };
+    },
+    reported: () => report,
+  };
+}

@@ -1,0 +1,1245 @@
+/**
+ * Project-level operations: create, open, list, remove, export, import, and the folder open and save. None of these is a bus command — a project's existence is not an edit
+ * to it — so each one builds or reads a `ProjectState` and hands it to a session.
+ *
+ * ## Identity on import
+ *
+ * A project's id is generated once (project-format §2). An import whose id is already
+ * in this browser would make two projects answer to one id, so the copy is given a
+ * fresh id and the caller is told. The original is never touched.
+ *
+ * ## One tab per project
+ *
+ * Every session takes its project's lease (project-lease.ts) before it is made, and gives it back when it closes. A project another tab has open is refused, not opened twice.
+ *
+ * ## A manifest that will not load
+ *
+ * A folder or bundle whose `caotang.json` cannot be read is not refused. The §5 recovery ladder is offered as a `PendingRecovery`, and nothing is written for it until the writer
+ * accepts (`completeRecovery`). Recovery reads and reports first: writing is a separate, consented step. A folder recovery is also checked when it is accepted: the folder must
+ * still hold the `caotang.json` the offer read, and a lock another program may hold needs the writer's yes, as a folder save does. Otherwise nothing is written.
+ *
+ * ## Saving to a folder another writer may share
+ *
+ * The desktop and the Caotang MCP server can both write one folder. `saveFolder` writes only when the folder still holds the `caotang.json` this session last loaded or saved **from that
+ * folder** (a copy taken from another folder is no baseline for it), and every document and codex file this session held (DS-1): a file another program changed, removed or added is
+ * refused, named by its title, and written only when the writer says to replace it. The digests of those files are taken when the folder is opened and after each save (folder-digests.ts).
+ * It never removes a document file the session did not delete (integrity-model.ts, write.ts `pruneDocumentIds`), and it never writes a project id the folder does not already hold.
+ * A folder whose project this browser already keeps opens as that project when the stored copy is the same book (the same manifest, document text and codex entries), and the folder is then saved back to. A folder whose project another tab holds is refused, as the projects list refuses it. A folder whose project this browser keeps in a different version is not copied without a word: the writer is asked whether to use the folder's version, keep this browser's version and save it to the folder, or open the folder as a second copy with its own id, which cannot be saved into the folder (`answerFolderDiffers`, DS-2). A project remembers the folder it was saved to or opened from as its own (folder-memory.ts), so the projects list can reopen it.
+ * A session that a stale write has stopped saves nothing to a folder either.
+ */
+
+import { COHERENCE_FILE, serializeCoherenceFile, type CoherenceFile } from '@caotang/coherence';
+import {
+  appendSession,
+  commitRecovery,
+  BACKFILLABLE_FIELDS,
+  createEmptyManifest,
+  createProjectState,
+  deleteProject,
+  digestsAfterWrite,
+  driftOf,
+  exportProjectZip,
+  FolderDriftError,
+  importProjectZip,
+  isBodyType,
+  listProjectIds,
+  ManifestUnreadableError,
+  MANIFEST_FILE,
+  MemoryArtifactFs,
+  PRODUCTION_FORMAT,
+  ProjectRefusedError,
+  ProjectValidationError,
+  SESSIONS_FILE,
+  SessionsShrinkError,
+  hasDrift,
+  parseSessionsLog,
+  projectFileChanges,
+  projectFileDigests,
+  projectFileTitles,
+  readProject,
+  readProjectState,
+  readSessions,
+  recoverProject,
+  serializeManifest,
+  writeProject,
+  writeSessionsFile,
+  type ArtifactFs,
+  type FolderDrift,
+  type ProjectFileChange,
+  type LoadNotice,
+  type LoadResult,
+  type WriteReport,
+  readCoherenceFiles,
+  writeCoherenceFiles,
+  writeProjectState,
+  type ProjectState,
+  type RecoveryOffer,
+  type RetentionConfig,
+  type RuntimeStore,
+  type SessionRecord,
+} from '@caotang/store';
+import { newId } from '@caotang/ids';
+import type { McpClient } from '@caotang/mcp-client';
+
+import { attachCoherence } from './coherence-io.js';
+import { folderArtifactFs, type DirectoryHandleLike } from './fs-access.js';
+import {
+  copiedFromOf,
+  forgetFolder,
+  rememberCopiedFrom,
+  rememberFolder,
+  rememberFolderCopy,
+  rememberedFolder,
+  rememberedFolderCopy,
+  type RememberedFolderCopy,
+} from './folder-memory.js';
+import {
+  folderOpenRoute,
+  folderProjectRoute,
+  folderSaveVerdict,
+  keepBrowserDigests,
+  MCP_LOCK_FILE,
+  openNoticeLines,
+  sampleToReuse,
+  sentenceOf,
+  type FolderDiffersAnswer,
+  type FolderSaveVerdict,
+} from './integrity-model.js';
+import { sampleProjectState } from './demo.js';
+import { copyState, shadowOf, type Shadow } from './persistence-plan.js';
+import { acquireProjectLease, ProjectOpenElsewhereError, type ProjectLease } from './project-lease.js';
+import { ProjectSession, type FolderBaseline, type SessionCoherence } from './session.js';
+import { ProjectAssets, coverFileHeld, folderPictures, forgetBrowserAssets } from './project-assets.js';
+
+/**
+ * What the settings say a session starts with: the autosave debounce and the checkpoint limits (ui-modules §5.1). The app
+ * sets it at start-up and after a change; a session reads it when it is made, so a change applies to the projects opened
+ * after it. The defaults are the spec's, so a session made before any setting exists behaves as it did.
+ */
+export interface SessionDefaults {
+  readonly debounceMs?: number;
+  readonly retention?: RetentionConfig;
+  /** The app's MCP client, so the agent's `tool.search` and `mcp.invoke` reach the servers the writer connected (extensibility §5). */
+  readonly mcp?: { readonly client: McpClient };
+  /** What the agent's coherence tools read from the app: the checks the writer has on, and the review's model (coherence.md §7). */
+  readonly coherence?: SessionCoherence;
+}
+
+let defaults: SessionDefaults = {};
+
+/** Replaces the session defaults. Called by the app, never by a test that builds a session directly. */
+export function setSessionDefaults(next: SessionDefaults): void {
+  defaults = next;
+}
+
+/** The project's lease, or the refusal: another tab has the project open. */
+async function leaseFor(projectId: string): Promise<ProjectLease> {
+  const lease = await acquireProjectLease(projectId);
+  if (lease === null) throw new ProjectOpenElsewhereError(projectId);
+  // The lease is recorded as this page's until it is given back, so the projects list does not take a project this page is still closing
+  // for one another tab holds (`openElsewhere`, DS-5).
+  let given: () => void = () => undefined;
+  const back = new Promise<void>((resolve) => {
+    given = resolve;
+  });
+  heldHere.set(projectId, back);
+  return {
+    release() {
+      lease.release();
+      if (heldHere.get(projectId) === back) heldHere.delete(projectId);
+      given();
+    },
+  };
+}
+
+/**
+ * The project leases a session on this page holds, by project id: each resolves when its session gives the lease back. The shell leaves a
+ * project at once and closes its session after (App `goHome`), so the projects list can be shown while that close still holds the lease.
+ */
+const heldHere = new Map<string, Promise<void>>();
+
+/** How long a removal waits for this page's own session on the project to close (`removeProject`). */
+const OWN_CLOSE_WAIT_MS = 10_000;
+
+/**
+ * The binary assets of each project this page has opened, made or imported, by project id (project-assets.ts). A session
+ * takes its project's store from here, so a project closed and opened again in the same tab keeps its cover. The store
+ * lives as long as the page: a reload clears it, which is why the project panel says what keeps a cover.
+ */
+const assetsByProject = new Map<string, ProjectAssets>();
+
+function assetsFor(projectId: string): ProjectAssets {
+  let assets = assetsByProject.get(projectId);
+  if (assets === undefined) {
+    assets = new ProjectAssets();
+    // Bound where the store is made, so a project read from the projects list, with no session, reads its pictures from the browser's copy.
+    void assets.persistFor(projectId);
+    assetsByProject.set(projectId, assets);
+  }
+  return assets;
+}
+
+/**
+ * Constructs a session with the current defaults, and loads its coherence file before it is returned, so the findings tab
+ * and the scene declarations read the file from their first render. Every session the lifecycle opens goes through here, and
+ * it holds the project's lease from the moment it is made until it closes. A session that fails to start gives the lease back.
+ */
+async function sessionFor(
+  store: RuntimeStore,
+  state: ProjectState,
+  shadow: Shadow | null,
+  lease: ProjectLease,
+  folder: DirectoryHandleLike | null = null,
+): Promise<ProjectSession> {
+  let session: ProjectSession;
+  try {
+    session = new ProjectSession({
+      store,
+      projectId: state.manifest.project.id,
+      state,
+      shadow,
+      assets: assetsFor(state.manifest.project.id),
+      // The agent's image check reads the project's images at each call (storyboard.md §4).
+      presentAssets: () => assetsFor(state.manifest.project.id).presentIds(),
+      ...(defaults.mcp === undefined ? {} : { mcp: defaults.mcp }),
+      ...(defaults.coherence === undefined ? {} : { coherence: defaults.coherence }),
+      ...(defaults.debounceMs === undefined ? {} : { debounceMs: defaults.debounceMs }),
+      ...(defaults.retention === undefined ? {} : { retention: defaults.retention }),
+      onClosed: () => lease.release(),
+    });
+    await attachCoherence(session, store, folder);
+  } catch (error) {
+    lease.release();
+    throw error;
+  }
+  // The writer has a copy of what was just opened or made, so the export check measures changes from here.
+  session.markExported();
+  return session;
+}
+
+/** The coherence file as the bundle carries it: the session's copy, serialised as the module saves it, or none when there is none. */
+function coherenceTextOf(session: ProjectSession): string | undefined {
+  const file = session.coherenceFile();
+  return file === undefined ? undefined : serializeCoherenceFile(file as CoherenceFile);
+}
+
+export interface ProjectSummary {
+  readonly id: string;
+  readonly name: string;
+  readonly documents: number;
+  readonly words: number;
+}
+
+export interface Opened {
+  readonly session: ProjectSession;
+  /** Things the load noticed, each a sentence for a person: the identity made at open, a migration, a value the load changed, an orphan. */
+  readonly notices: readonly string[];
+  /**
+   * The fields the file carries that Caotang keeps in memory but does not use, by name (project-format §6). The next save drops them, so the
+   * open says so, and says nothing else is dropped.
+   */
+  readonly droppedFields: readonly string[];
+  /** Set when an import or folder open took a fresh id because the original was already here. */
+  readonly copiedFrom: string | null;
+  /**
+   * Set when the writer chose to keep this browser's version of a folder's project (`answerFolderDiffers`): the workspace saves the project to
+   * this folder as it opens, through the folder save and its questions.
+   */
+  readonly saveToFolder?: DirectoryHandleLike;
+}
+
+/**
+ * A folder or bundle that Caotang can recover but not open as it is. It is read and described, and nothing is written until the
+ * writer accepts it (`completeRecovery`). A rebuild loses structure, so its offer says so and needs an explicit yes.
+ */
+export interface PendingRecovery {
+  /** The folder's name, or the bundle's file name, as the dialog names it. */
+  readonly name: string;
+  /** What the ladder found, and which copy it would open (project-format §5). */
+  readonly offer: RecoveryOffer;
+  /** The folder, or the unpacked bundle, the recovery reads and, once accepted, writes. */
+  readonly fs: ArtifactFs;
+  /** The bundle's session log, carried into the working copy. */
+  readonly sessions: readonly SessionRecord[];
+  /** The folder, when the project is one: its exports are kept there, and its copy is what the recovery replaces. */
+  readonly folder: DirectoryHandleLike | null;
+  /**
+   * The digest of each document and codex file the folder held when the offer was read (folder-digests.ts). Accepting the offer checks the
+   * folder against these before it writes, so a file another program changed since is named, not replaced (DS-1). Empty for a bundle.
+   */
+  readonly digests: ReadonlyMap<string, string>;
+}
+
+/** What opening a folder or a bundle gives back: the project, open, or a recovery the writer must accept first. */
+export type OpenOutcome =
+  | { readonly kind: 'opened'; readonly opened: Opened }
+  | { readonly kind: 'recover'; readonly recovery: PendingRecovery }
+  /** A folder whose project this browser keeps in a different version: the writer chooses which to keep (`answerFolderDiffers`). */
+  | { readonly kind: 'differs'; readonly differs: FolderDiffers };
+
+/** What the projects screen suggests after a project was left with changes since the writer last had a copy (project-format §8). */
+export interface LeaveSuggestion {
+  readonly projectId: string;
+  readonly name: string;
+}
+
+/** The suggestion waiting for the projects screen to show it once. */
+let leaveSuggestion: LeaveSuggestion | null = null;
+
+/** Keeps a suggestion for the projects screen, which the shell leaves for when it leaves a project with unexported changes. */
+export function noteLeaveSuggestion(suggestion: LeaveSuggestion): void {
+  leaveSuggestion = suggestion;
+}
+
+/** The waiting suggestion, if there is one, without taking it. A render reads it this way, so it can run twice under StrictMode. */
+export function peekLeaveSuggestion(): LeaveSuggestion | null {
+  return leaveSuggestion;
+}
+
+/** Takes the waiting suggestion, if there is one: the projects screen shows it once. */
+export function takeLeaveSuggestion(): LeaveSuggestion | null {
+  const next = leaveSuggestion;
+  leaveSuggestion = null;
+  return next;
+}
+
+export async function listProjects(store: RuntimeStore): Promise<ProjectSummary[]> {
+  const ids = await listProjectIds(store);
+  const summaries: ProjectSummary[] = [];
+  for (const id of ids) {
+    const state = await readProjectState(store, id);
+    summaries.push({
+      id,
+      name: state.manifest.project.name,
+      documents: state.manifest.tree.filter((node) => node.type === 'document').length,
+      words: Object.values(state.manifest.derived.wordCounts).reduce((sum, count) => sum + count, 0),
+    });
+  }
+  return summaries.sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+}
+
+/** A new project: the three fixed roots and nothing else (ui-modules §2.4 — the empty state carries the next step). */
+export async function createProject(store: RuntimeStore, name: string): Promise<ProjectSession> {
+  const title = name.trim() === '' ? 'Untitled project' : name.trim();
+  const state = createProjectState(createEmptyManifest(title));
+  const session = await sessionFor(store, state, null, await leaseFor(state.manifest.project.id));
+  await session.settle();
+  return session;
+}
+
+/**
+ * The sample manuscript the first-run card opens (demo.ts). It is a new project each time, so a demo run always starts from
+ * the sample's own text, and its id is returned so the settings can say which projects are samples.
+ */
+export async function createSampleProject(store: RuntimeStore): Promise<ProjectSession> {
+  const state = sampleProjectState();
+  const session = await sessionFor(store, state, null, await leaseFor(state.manifest.project.id));
+  await session.settle();
+  return session;
+}
+
+/**
+ * The sample a demo run works on: the writer's existing sample when it is still in this browser, so each demo click does not
+ * make another copy, or a new one when there is none. `created` says which, so the caller records a new sample id only then.
+ */
+export async function openOrCreateSample(
+  store: RuntimeStore,
+  knownSampleIds: readonly string[],
+): Promise<{ readonly session: ProjectSession; readonly created: boolean }> {
+  const reuse = sampleToReuse(knownSampleIds, await listProjectIds(store));
+  if (reuse !== null) return { session: await openProject(store, reuse), created: false };
+  return { session: await createSampleProject(store), created: true };
+}
+
+/** An existing project from the runtime store. Its shadow is the state it was just read from. */
+export async function openProject(store: RuntimeStore, projectId: string): Promise<ProjectSession> {
+  // The lease comes first: the state is read only once no other tab can write it, so the shadow is never behind a write.
+  const lease = await leaseFor(projectId);
+  let state: ProjectState;
+  try {
+    state = await readProjectState(store, projectId);
+  } catch (error) {
+    lease.release();
+    throw error;
+  }
+  return sessionFor(store, state, shadowOf(state), lease);
+}
+
+/**
+ * Removes a project from this browser. The removal takes the project's lease, as an open does, so a project another tab has open is
+ * not deleted under that tab: the removal is refused with the reason (DS-5). The lease is given back once the project is gone.
+ */
+export async function removeProject(store: RuntimeStore, projectId: string): Promise<void> {
+  // A session on this page that still holds the project is closing (`heldHere`): the removal waits for it, rather than calling it another tab.
+  // The wait is bounded, so a close that never ends refuses the removal instead of leaving it waiting.
+  const closing = heldHere.get(projectId);
+  if (closing !== undefined) {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([closing, new Promise((resolve) => (timer = setTimeout(resolve, OWN_CLOSE_WAIT_MS)))]);
+    clearTimeout(timer);
+  }
+  const lease = await acquireProjectLease(projectId);
+  if (lease === null) throw new ProjectOpenElsewhereError(projectId);
+  try {
+    await deleteProject(store, projectId);
+    // The project's images go with it, from this page and from the browser's asset store: a project made again later is a new
+    // one, and must not inherit a removed cover or a shot's picture.
+    assetsByProject.delete(projectId);
+    await forgetBrowserAssets(projectId);
+    // The folder the project remembered goes too: the list no longer has a project to reopen it for (folder-memory.ts).
+    await forgetFolder(projectId);
+  } finally {
+    lease.release();
+  }
+}
+
+/**
+ * Whether another tab holds the project open, so that it cannot be removed from here. The list asks before it offers Remove, so it
+ * can say why instead of offering a removal that would be refused (DS-5). The lease is taken for a moment and given back. A lease this page
+ * holds is not another tab's: the list is shown only once the workspace has left its project, so a session that holds one is closing.
+ */
+export async function openElsewhere(projectId: string): Promise<boolean> {
+  if (heldHere.has(projectId)) return false;
+  const lease = await acquireProjectLease(projectId);
+  if (lease === null) return true;
+  lease.release();
+  return false;
+}
+
+export interface ExportedBundle {
+  readonly bytes: Uint8Array;
+  readonly filename: string;
+  /** Things the writer should know about this copy, phrased for a person (a cover the page does not hold). */
+  readonly notices: readonly string[];
+}
+
+/**
+ * The project as a zip bundle (project-format §7). Saves everything first, so the bundle
+ * is the state the user sees and not the state a few hundred milliseconds ago. Making one is also the
+ * writer's copy, so the export check measures changes from it.
+ */
+export async function exportBundle(store: RuntimeStore, session: ProjectSession): Promise<ExportedBundle> {
+  await session.settle();
+  const sessions = await readSessions(store, session.projectId);
+  const bundle = await bundleOf(session.state, sessions, session.assets, coherenceTextOf(session));
+  session.markExported();
+  return bundle;
+}
+
+/**
+ * The bundle of a project that is not open. The stored state is read, not an open
+ * session's, so this works from the project list without opening the project.
+ */
+export async function exportStoredBundle(store: RuntimeStore, projectId: string): Promise<ExportedBundle> {
+  const state = await readProjectState(store, projectId);
+  const sessions = await readSessions(store, projectId);
+  const coherence = (await readCoherenceFiles(store, projectId))[COHERENCE_FILE];
+  const assets = assetsFor(projectId);
+  // The browser's copy is listed before the bundle reads the pictures, so a reloaded page's pictures are in the bundle.
+  await assets.ready();
+  return bundleOf(state, sessions, assets, coherence);
+}
+
+/**
+ * The bundle of a state, its session log and its images (zip.ts carries `assets/` byte-for-byte). A cover that neither the browser's
+ * copy nor an attached folder holds is bundled without its image, and the copy says so: one missing picture is not a reason to refuse
+ * a whole backup.
+ */
+async function bundleOf(
+  state: ProjectState,
+  sessions: readonly SessionRecord[],
+  assets: ProjectAssets,
+  coherence: string | undefined,
+): Promise<ExportedBundle> {
+  const notices: string[] = [];
+  const cover = state.manifest.project.coverAssetId;
+  if (cover && !(await coverFileHeld(assets, cover))) {
+    notices.push(
+      'the cover image is not available in this browser, so the bundle has no cover. A project kept in a folder has its cover there: open that folder, or choose the cover again in the project panel',
+    );
+  }
+  // The findings file rides beside caotang.json (coherence.md §3), and the images in assets/.
+  const exported = await exportProjectZip(state, {
+    sessions,
+    assets: await assets.snapshot(),
+    ...(coherence === undefined ? {} : { coherence }),
+  });
+  return { bytes: exported.bytes, filename: exported.filename, notices };
+}
+
+/**
+ * Put a loaded state into the runtime store as a working copy and open it. The state
+ * is written in full on the first pass (its shadow is `null`), and the session log the
+ * bundle carried is appended line by line, so history survives the import.
+ */
+async function adopt(
+  store: RuntimeStore,
+  state: ProjectState,
+  sessions: readonly SessionRecord[],
+  notices: readonly string[],
+  droppedFields: readonly string[],
+  folder: DirectoryHandleLike | null = null,
+  assets: Readonly<Record<string, Uint8Array>> = {},
+  coherence?: string,
+): Promise<Opened> {
+  const originalId = state.manifest.project.id;
+  const taken = new Set(await listProjectIds(store));
+  let copiedFrom: string | null = null;
+  if (taken.has(originalId)) {
+    state.manifest.project.id = newId('p', { taken });
+    copiedFrom = originalId;
+  }
+  // A bundle that carried a findings file gives the working copy its set before the session reads it, so the file the bundle
+  // holds is the one the project opens with (coherence.md §3, §7).
+  if (coherence !== undefined) {
+    // The project row must exist before its set can be attached to it, so the state is written first; the session's own first
+    // write then replaces the same row, and keeps the set (ProjectRow.coherenceFiles).
+    await writeProjectState(store, state, { now: new Date() });
+    await writeCoherenceFiles(store, state.manifest.project.id, { [COHERENCE_FILE]: coherence });
+  }
+  const session = await sessionFor(store, state, null, await leaseFor(state.manifest.project.id), folder);
+  // A copy made with a fresh id remembers the project it was copied from, so it is never saved into that project's folder (`saveFolder`).
+  if (copiedFrom !== null) session.setCopiedFrom(copiedFrom);
+  // The session is not handed back until every step below has run. A step that fails leaves no caller holding it, so the session is
+  // closed here, which gives the project's lease back; the step's own error is the one the caller sees.
+  try {
+    for (const record of sessions) {
+      await appendSession(store, { projectId: session.projectId, record });
+    }
+    // A bundle's images go into the project's asset store before any folder is attached, so the attach writes them out too.
+    await session.assets.loadAll(assets);
+    // A project opened from a folder exports into that folder (exporter.md §2, stage 4). A folder whose compile
+    // log cannot be read stays unattached, and the project still opens: the reason is a notice, not a refusal.
+    const noticesOut = [...notices];
+    if (folder !== null) {
+      try {
+        await session.attachFolder(folder);
+      } catch (error) {
+        noticesOut.push(exportsKeptHere(error));
+      }
+    }
+    await session.settle();
+    if (copiedFrom !== null) await rememberCopiedFrom(session.projectId, copiedFrom);
+    return { session, notices: noticesOut, droppedFields: [...droppedFields], copiedFrom };
+  } catch (error) {
+    await session.close().catch(() => undefined);
+    throw error;
+  }
+}
+
+/** The folder's `caotang.json` text, or `null` when the folder has none. */
+async function readManifestText(fs: ArtifactFs): Promise<string | null> {
+  return (await fs.exists(MANIFEST_FILE)) ? fs.read(MANIFEST_FILE) : null;
+}
+
+/**
+ * The ids of the body nodes a state's tree names, in tree order: a document or a dialogue container, each of which has a body file
+ * in `docs/` (project-format §3). A folder copy holds these, so a container deleted from the tree is a deletion the save removes (DS-3).
+ */
+function documentIdsOf(state: ProjectState): string[] {
+  return state.manifest.tree.filter((node) => isBodyType(node.type)).map((node) => node.id);
+}
+
+/**
+ * Records the folder copy a session holds: the folder's manifest text, the document ids the copy names, and the digests of the folder's
+ * document and codex files with the titles they had (`ProjectSession.setFolderBaseline`, `FolderBaseline`). Every place that takes a
+ * folder copy goes through here, so the copy is one record on the session and `saveFolder` checks the folder against it (DS-1).
+ */
+function holdFolderCopy(
+  session: ProjectSession,
+  folder: DirectoryHandleLike,
+  manifestText: string,
+  digests: ReadonlyMap<string, string>,
+): void {
+  session.setFolderBaseline(folder, manifestText, documentIdsOf(session.state), digests, projectFileTitles(session.state));
+}
+
+/**
+ * Keeps the folder copy the session now holds in the app database, beside the remembered folder (folder-memory.ts `rememberFolderCopy`), so
+ * a save after a reload is checked against what the folder held when Caotang last opened it as this project's own or saved to it, rather
+ * than asked about as a folder of unknown state. Called only where the copy is the folder's real state (an open as the project's own, a
+ * save), never for a copy taken from this browser's version (`answerFolderDiffers` `keep-browser`).
+ */
+async function rememberHeldCopy(session: ProjectSession): Promise<void> {
+  const copy = session.folderBaseline();
+  if (copy === null) return;
+  await rememberFolderCopy(session.projectId, {
+    folderName: copy.folder.name,
+    manifestText: copy.manifestText,
+    documentIds: [...copy.documentIds],
+    digests: [...copy.digests],
+    titles: [...copy.titles],
+  });
+}
+
+/**
+ * The folder copy kept for this project across a reload (`rememberHeldCopy`), as a baseline for `root`, or `null` when none is kept or it is
+ * for another folder: the folder the project remembers must be `root` (`isSameEntry`), or, where no handle is remembered (a folder in the
+ * origin's private file system), the kept copy must be of a folder with `root`'s name.
+ */
+async function rememberedCopyFor(projectId: string, root: DirectoryHandleLike): Promise<FolderBaseline | null> {
+  const kept = await rememberedFolderCopy(projectId);
+  if (kept === null) return null;
+  const remembered = await rememberedFolder(projectId);
+  if (remembered !== null ? !(await isSameFolder(remembered, root)) : kept.folderName !== root.name) return null;
+  return {
+    folder: root,
+    manifestText: kept.manifestText,
+    documentIds: [...kept.documentIds],
+    digests: new Map(kept.digests),
+    titles: new Map(kept.titles),
+  };
+}
+
+/** The body nodes a folder copy named that the state no longer holds: the only files a save into that folder may remove (DS-3). */
+function deletedSince(copy: FolderBaseline, state: ProjectState): string[] {
+  const present = new Set(documentIdsOf(state));
+  return copy.documentIds.filter((id) => !present.has(id));
+}
+
+/**
+ * The fields a load noticed that a save drops (`LoadNotice.droppedField`), by name, in the order the file names them. The open says these
+ * and nothing else is dropped, so no other notice is counted as one.
+ */
+function droppedFieldsOf(notices: readonly LoadNotice[]): string[] {
+  return notices.flatMap((notice) => (notice.droppedField === undefined ? [] : [notice.droppedField]));
+}
+
+/** The open's sentence for a folder its exports cannot be written to: they are kept in this browser, and the reason follows as a sentence. */
+function exportsKeptHere(error: unknown): string {
+  const reason = error instanceof Error ? error.message : String(error);
+  return `Exports are kept in this browser, not in the folder. ${sentenceOf(reason)}`;
+}
+
+/**
+ * The notices a load raised that are not dropped fields, as the lines the writer reads: each one's own sentence (`LoadNotice.say`), and a
+ * count of those that have none, whose messages name paths, ids or spec sections (`openNoticeLines`).
+ */
+function noticesOf(notices: readonly LoadNotice[]): string[] {
+  return openNoticeLines(notices.filter((notice) => notice.droppedField === undefined));
+}
+
+/**
+ * The session log a folder holds (project-format §4), or none when the folder has no `sessions.jsonl`. A line the parser cannot read is
+ * counted by it and left out here, as a bundle's log is read (zip.ts), so one damaged line does not refuse the open.
+ */
+async function folderSessionsOf(fs: ArtifactFs): Promise<SessionRecord[]> {
+  if (!(await fs.exists(SESSIONS_FILE))) return [];
+  return parseSessionsLog(await fs.read(SESSIONS_FILE)).records;
+}
+
+/**
+ * A session line as one string: two lines have the same key exactly when `sameSessionLine` says they are the same session (the same
+ * start, end, word count and documents, in order).
+ */
+function sessionLineKey(line: SessionRecord): string {
+  return JSON.stringify([line.startedAt, line.endedAt, line.wordsWritten, line.docIds]);
+}
+
+/**
+ * The lines of `lines` that `held` does not hold, in the order of `lines`. Two lines are the same session when `sameSessionLine` says so, and
+ * each held line answers for one line only, so a session that appears twice in `lines` is missing only when `held` holds it fewer times.
+ * The held lines are counted by key, so the check is linear in the two logs: it runs at every folder open and save, and a log grows with
+ * the writer's history.
+ */
+function linesNotHeld(lines: readonly SessionRecord[], held: readonly SessionRecord[]): SessionRecord[] {
+  const unanswered = new Map<string, number>();
+  for (const line of held) {
+    const key = sessionLineKey(line);
+    unanswered.set(key, (unanswered.get(key) ?? 0) + 1);
+  }
+  const missing: SessionRecord[] = [];
+  for (const line of lines) {
+    const key = sessionLineKey(line);
+    const left = unanswered.get(key) ?? 0;
+    if (left === 0) missing.push(line);
+    else unanswered.set(key, left - 1);
+  }
+  return missing;
+}
+
+/**
+ * Brings a stored project's session log up to a folder's: every line of the folder's log that the store does not hold is appended to the
+ * store, so the save that follows can write the folder's history back. Nothing the store holds is changed or reordered. A log that differs
+ * from the folder's is merged, not refused (project-format §4).
+ */
+async function carryFolderSessions(store: RuntimeStore, projectId: string, folderLog: readonly SessionRecord[]): Promise<void> {
+  const held = await readSessions(store, projectId);
+  for (const record of linesNotHeld(folderLog, held)) {
+    await appendSession(store, { projectId, record });
+  }
+}
+
+/** A write report with nothing in it yet, for a write whose changes the caller records (`digestsAfterWrite`). */
+function emptyReport(): WriteReport {
+  return { written: [], rotated: [], dropped: [], pruned: [] };
+}
+
+/**
+ * Whether two states hold the same book: the manifest as the writer serializes it, and the text of every document. The time a save stamps
+ * on the manifest (`project.modifiedAt`) is left out: a folder save stamps it on the copy it writes and not on the project this browser
+ * keeps, so after any save the two differ there and nowhere else.
+ */
+function sameBook(stored: ProjectState, folder: ProjectState): boolean {
+  if (manifestTextOf(stored, folder.manifest.project.modifiedAt) !== manifestTextOf(folder, folder.manifest.project.modifiedAt)) return false;
+  if (stored.documents.size !== folder.documents.size) return false;
+  for (const [id, record] of stored.documents) {
+    if (folder.documents.get(id)?.body !== record.body) return false;
+  }
+  return true;
+}
+
+/**
+ * A state's manifest as the writer serializes it, with `modifiedAt` set to `stamp`, so two manifests compare without the save's stamp. Two
+ * things are left out, because they are not the book (DS-2): `derived` is a cache that a load which finds it empty rebuilds with a new stamp
+ * (read.ts), so a folder's copy never carries the stored copy's; and the serializer keeps each node's keys in the order the object was made
+ * in, which a project made in this browser and the same project read from its folder do not share, so the keys are sorted.
+ */
+function manifestTextOf(state: ProjectState, stamp: string): string {
+  const manifest = { ...state.manifest, project: { ...state.manifest.project, modifiedAt: stamp } };
+  const parsed = JSON.parse(serializeManifest(manifest, PRODUCTION_FORMAT)) as Record<string, unknown>;
+  delete parsed.derived;
+  return sortedJson(parsed);
+}
+
+/** JSON with every object's keys sorted, at every depth, so a value compares the same whatever order its keys were written in. */
+function sortedJson(value: unknown): string {
+  return JSON.stringify(value, (_key, item: unknown) => {
+    if (typeof item !== 'object' || item === null || Array.isArray(item)) return item;
+    return Object.fromEntries(Object.entries(item).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
+  });
+}
+
+/**
+ * Opens a project this browser already keeps, as the folder's own session (DS-2): the stored state, the folder attached for its exports and
+ * findings, and the pictures the folder holds. A project another tab holds is refused with `ProjectOpenElsewhereError`, as the projects list
+ * refuses it: the folder is not opened again as a second copy of a book that tab already has open.
+ */
+async function openStored(
+  store: RuntimeStore,
+  projectId: string,
+  folder: DirectoryHandleLike,
+  load: { readonly notices: readonly string[]; readonly droppedFields: readonly string[]; readonly folderLog: readonly SessionRecord[] },
+  assets: Readonly<Record<string, Uint8Array>>,
+): Promise<Opened> {
+  // The lease comes first, as an open takes it. A refusal propagates to the writer: the folder is not opened as a copy of a project another
+  // tab has open.
+  const lease = await leaseFor(projectId);
+  let state: ProjectState;
+  try {
+    state = await readProjectState(store, projectId);
+  } catch (error) {
+    lease.release();
+    throw error;
+  }
+  const session = await sessionFor(store, state, shadowOf(state), lease, folder);
+  try {
+    // Every line of the folder's log the store does not hold is carried into the store, so the save can write the folder's whole history back.
+    await carryFolderSessions(store, projectId, load.folderLog);
+    await session.assets.loadAll(assets);
+    const noticesOut = [...load.notices];
+    try {
+      await session.attachFolder(folder);
+    } catch (error) {
+      noticesOut.push(exportsKeptHere(error));
+    }
+    await session.settle();
+    return { session, notices: noticesOut, droppedFields: [...load.droppedFields], copiedFrom: null };
+  } catch (error) {
+    await session.close().catch(() => undefined);
+    throw error;
+  }
+}
+
+/**
+ * The project id a folder's `caotang.json` names, or `undefined` when the text names none (a manifest this check cannot read is not an
+ * identity to protect, and the verdict in `saveFolder` deals with it).
+ */
+function projectIdOf(manifestText: string): string | undefined {
+  try {
+    const id = (JSON.parse(manifestText) as { project?: { id?: unknown } } | null)?.project?.id;
+    return typeof id === 'string' ? id : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The errors that mean "this caotang.json will not load", where the §5 ladder applies: one that will not parse, or one whose fields fail the
+ * schema. A manifest this build refuses outright (another app, a newer format: `ProjectRefusedError`) is not one of them, and is refused.
+ */
+function isUnreadableManifest(error: unknown): boolean {
+  if (error instanceof ProjectRefusedError) return false;
+  return error instanceof ManifestUnreadableError || error instanceof ProjectValidationError;
+}
+
+/** The ladder's offer for a folder or bundle, or the plain reason it has none. Read only: nothing is written here. */
+async function recoveryFor(
+  name: string,
+  fs: ArtifactFs,
+  sessions: readonly SessionRecord[],
+  folder: DirectoryHandleLike | null,
+  digests: ReadonlyMap<string, string>,
+): Promise<PendingRecovery> {
+  const found = await recoverProject(fs);
+  if (found.status === 'unrecoverable') {
+    throw new Error(
+      'Caotang could not find a readable copy of this project. caotang.json cannot be read, and there is no backup or document file to rebuild it from.',
+    );
+  }
+  return { name, offer: found.offer, fs, sessions, folder, digests };
+}
+
+/**
+ * Import a `.caotang` bundle as a fresh working copy. A bundle whose `caotang.json` will not load is offered its recovery
+ * (`recover`), and is opened only when the writer accepts it (`completeRecovery`).
+ */
+export async function importBundle(store: RuntimeStore, bytes: Uint8Array, name: string): Promise<OpenOutcome> {
+  const unpacked = await importProjectZip(bytes);
+  let loaded: LoadResult;
+  try {
+    loaded = await readProject(unpacked.fs);
+  } catch (error) {
+    if (!isUnreadableManifest(error)) throw error;
+    return { kind: 'recover', recovery: await recoveryFor(name, unpacked.fs, unpacked.sessions, null, new Map()) };
+  }
+  const coherence = (await unpacked.fs.exists(COHERENCE_FILE)) ? await unpacked.fs.read(COHERENCE_FILE) : undefined;
+  return {
+    kind: 'opened',
+    opened: await adopt(
+      store,
+      loaded.state,
+      unpacked.sessions,
+      noticesOf(loaded.notices),
+      droppedFieldsOf(loaded.notices),
+      null,
+      unpacked.assets,
+      coherence,
+    ),
+  };
+}
+
+/**
+ * Open a project folder through the File System Access API, as a working copy in the runtime store. The folder's `caotang.json`
+ * text is kept as the baseline a later save is checked against. A folder whose manifest will not load is offered its recovery.
+ */
+export async function openFolder(store: RuntimeStore, root: DirectoryHandleLike): Promise<OpenOutcome> {
+  const fs = folderArtifactFs(root);
+  const onDisk = await readManifestText(fs);
+  // The folder's document and codex files are digested before anything is read, so a change made while the project is read is one the
+  // first save sees, not one this session is taken to have loaded (DS-1).
+  let digests = await projectFileDigests(fs);
+  let loaded: LoadResult;
+  try {
+    loaded = await readProject(fs);
+  } catch (error) {
+    if (!isUnreadableManifest(error)) throw error;
+    return { kind: 'recover', recovery: await recoveryFor(root.name, fs, await folderSessionsOf(fs), root, digests) };
+  }
+  // An identity the open made (epub-metadata.md: the identifier, the language) is written back to the folder before the
+  // session starts, so the next open reads the same values and the book keeps its identifier. The project opens even when
+  // that write is skipped or fails; the reason is a notice, because the next open would then make another identifier. A
+  // folder another program holds (the MCP server's lock) is not written to here: the writer has not been asked.
+  const notices = noticesOf(loaded.notices);
+  const droppedFields = droppedFieldsOf(loaded.notices);
+  // The folder's session log (project-format §4) is the history a copy opened from it starts with (adopt), or the one a stored copy carries on.
+  const folderLog = await folderSessionsOf(fs);
+  let baselineText = onDisk ?? '';
+  if (loaded.notices.some((notice) => (BACKFILLABLE_FIELDS as readonly string[]).includes(notice.path))) {
+    if (await fs.exists(MCP_LOCK_FILE)) {
+      notices.push('The details Caotang made for this project as it opened were not saved to the folder, because another program, such as the Caotang MCP server, may be using it. The next open may make another set.');
+    } else {
+      const report = emptyReport();
+      try {
+        // A backfill is not a save of the writer's deletions, so it removes no file from the folder (DS-1): an empty list says so. Each file
+        // is checked against the digest taken above, as a save checks it.
+        await writeProject(fs, copyState(loaded.state), { now: new Date(), pruneDocumentIds: [], expectedDigests: digests, report });
+        baselineText = (await readManifestText(fs)) ?? '';
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        notices.push(`The details Caotang made for this project as it opened could not be saved to the folder, so the next open may make another set. ${sentenceOf(reason)}`);
+      }
+      digests = await digestsAfterWrite(fs, digests, report);
+    }
+  }
+  // A project this browser keeps that is the same book as the folder opens as the folder's own session (DS-2). Otherwise the folder opens
+  // as a copy, which cannot be saved back into the folder. The folder's pictures go into the browser's copy as the project opens, so a
+  // later open from the list (no folder) reads them too.
+  const pictures = await folderPictures(root);
+  const projectId = loaded.state.manifest.project.id;
+  const stored = (await listProjectIds(store)).includes(projectId) ? await readProjectState(store, projectId) : null;
+  const route = folderOpenRoute({ storedHasId: stored !== null, sameBook: stored !== null && sameBook(stored, loaded.state) });
+  // A stored copy that differs from the folder is not copied without a word: the writer is asked which version to keep (answerFolderDiffers).
+  if (route === 'ask' && stored !== null) {
+    return {
+      kind: 'differs',
+      differs: {
+        projectId,
+        projectName: stored.manifest.project.name,
+        folderName: root.name,
+        root,
+        state: loaded.state,
+        folderLog,
+        notices,
+        droppedFields,
+        pictures,
+        baselineText,
+        digests,
+      },
+    };
+  }
+  // A stored copy of this book opens as the folder's own session, and another tab's hold on it refuses the open (openStored, DS-2).
+  const opened =
+    route === 'own'
+      ? await openStored(store, projectId, root, { notices, droppedFields, folderLog }, pictures)
+      : await adopt(store, loaded.state, folderLog, notices, droppedFields, root, pictures);
+  holdFolderCopy(opened.session, root, baselineText, digests);
+  await rememberFolder(opened.session.projectId, root);
+  await rememberHeldCopy(opened.session);
+  return { kind: 'opened', opened };
+}
+
+/**
+ * A folder whose project this browser keeps, in a version that differs from the folder's (`FolderOpenRoute` `ask`): everything the open
+ * read, held until the writer answers, so the answer opens the project without reading the folder again. Nothing has been written for it.
+ */
+export interface FolderDiffers {
+  readonly projectId: string;
+  /** The project's name as this browser keeps it. */
+  readonly projectName: string;
+  readonly folderName: string;
+  readonly root: DirectoryHandleLike;
+  /** The folder's version of the project, as the open read it. */
+  readonly state: ProjectState;
+  readonly folderLog: readonly SessionRecord[];
+  readonly notices: readonly string[];
+  readonly droppedFields: readonly string[];
+  readonly pictures: Readonly<Record<string, Uint8Array>>;
+  /** The folder's `caotang.json` text and the digests of its files, as the open read them: the baseline a later save is checked against. */
+  readonly baselineText: string;
+  readonly digests: ReadonlyMap<string, string>;
+}
+
+/**
+ * Opens a folder whose version differs from this browser's, the way the writer chose (`FolderDiffersAnswer`):
+ * - `use-folder`: this browser's copy is removed and the folder's version takes its place, under the same id, with the writing history of
+ *   both (each session line once). The folder is then the project's own, and later saves go back to it.
+ * - `keep-browser`: this browser's copy opens with the folder attached, and `saveToFolder` asks the workspace to save it there. The save is
+ *   checked against the folder as it stands, with this browser's version of each file it holds (`keepBrowserDigests`), so a document the
+ *   save would write over is named in the changed-documents question first, and nothing is written until the writer answers.
+ * - `separate-copy`: the folder opens as a second project with its own id, as it did before the question existed (adopt, DS-2).
+ */
+export async function answerFolderDiffers(store: RuntimeStore, differs: FolderDiffers, answer: FolderDiffersAnswer): Promise<Opened> {
+  const { root } = differs;
+  if (answer === 'separate-copy') {
+    const opened = await adopt(store, differs.state, differs.folderLog, differs.notices, differs.droppedFields, root, differs.pictures);
+    holdFolderCopy(opened.session, root, differs.baselineText, differs.digests);
+    return opened;
+  }
+  if (answer === 'use-folder') {
+    const storedLog = await readSessions(store, differs.projectId);
+    // This browser's copy is held in memory as a bundle before it is removed (its state, session log, pictures and findings), so an adopt
+    // that fails puts it back rather than leaving the writer with neither version in this browser.
+    const kept = await exportStoredBundle(store, differs.projectId);
+    // So are the records folder-memory.ts keeps for it (its folder, the folder copy last seen there, and the project it was copied from), which
+    // the removal forgets.
+    const keptRecords: KeptFolderRecords = {
+      folder: await rememberedFolder(differs.projectId),
+      folderCopy: await rememberedFolderCopy(differs.projectId),
+      copiedFrom: await copiedFromOf(differs.projectId),
+    };
+    // The removal takes the project's lease, so a copy another tab has open is refused here, before anything changes (DS-5).
+    await removeProject(store, differs.projectId);
+    const log = [...differs.folderLog, ...linesNotHeld(storedLog, differs.folderLog)];
+    let opened: Opened;
+    try {
+      opened = await adopt(store, differs.state, log, differs.notices, differs.droppedFields, root, differs.pictures);
+    } catch (error) {
+      await restoreBrowserCopy(store, differs.projectId, kept.bytes, keptRecords);
+      throw error;
+    }
+    holdFolderCopy(opened.session, root, differs.baselineText, differs.digests);
+    await rememberFolder(opened.session.projectId, root);
+    await rememberHeldCopy(opened.session);
+    return opened;
+  }
+  // This browser's version opens as the folder's session. The folder's own load notices are about a version the writer set aside, so
+  // they are not said, and the folder's pictures do not replace this browser's.
+  const opened = await openStored(store, differs.projectId, root, { notices: [], droppedFields: [], folderLog: differs.folderLog }, {});
+  const browser = new MemoryArtifactFs();
+  await writeProject(browser, copyState(opened.session.state), { now: new Date() });
+  holdFolderCopy(opened.session, root, differs.baselineText, keepBrowserDigests(await projectFileDigests(browser), differs.digests));
+  return { ...opened, saveToFolder: root };
+}
+
+/**
+ * Puts this browser's copy of a project back from the bundle `answerFolderDiffers` held before it removed the copy, after the folder's
+ * version failed to take its place. Whatever the failed adopt left under the id is removed first, so the copy comes back under its own id
+ * (an import into a taken id would make a second copy). The restored session is closed at once: the caller reports the adopt's failure,
+ * and the project is in the projects list as it was. Only the version history of earlier bodies (the store's snapshots) is not in a bundle.
+ */
+async function restoreBrowserCopy(store: RuntimeStore, projectId: string, bytes: Uint8Array, records: KeptFolderRecords): Promise<void> {
+  if ((await listProjectIds(store)).includes(projectId)) await removeProject(store, projectId);
+  const restored = await importBundle(store, bytes, 'this browser’s copy');
+  if (restored.kind === 'opened') await restored.opened.session.close();
+  // The removal forgot the records the project kept beside it: they are kept again as they were, so the projects list still offers the
+  // folder, a save to it is checked against the folder copy last seen there, and a separate copy is still refused in its original's folder.
+  if (records.folder !== null) await rememberFolder(projectId, records.folder);
+  if (records.folderCopy !== null) await rememberFolderCopy(projectId, records.folderCopy);
+  if (records.copiedFrom !== null) await rememberCopiedFrom(projectId, records.copiedFrom);
+}
+
+/** The folder-memory.ts records of a project, read before `answerFolderDiffers` removes this browser's copy, so a failed adopt puts them back. */
+interface KeptFolderRecords {
+  readonly folder: DirectoryHandleLike | null;
+  readonly folderCopy: RememberedFolderCopy | null;
+  readonly copiedFrom: string | null;
+}
+
+/** What the writer has said about a recovery the folder check asked about: the same lock answer a folder save takes. */
+export interface RecoveryAnswers {
+  /** Recover although a lock file says another program, such as the Caotang MCP server, may be using the folder (see `FolderSaveAnswers`). */
+  readonly lockConfirmed?: boolean;
+}
+
+/**
+ * Why a recovery was not written: the folder is locked, its `caotang.json` changed after Caotang read it, or a document or codex file in it did
+ * (`files`, named in the outcome). Nothing was written either way.
+ */
+export type RecoveryRefusal = 'locked' | 'changed' | 'files';
+
+/** The result of accepting a recovery: opened, or refused for one reason the writer must answer first (or reopen the folder for). */
+export type RecoveryOutcome =
+  | { readonly kind: 'opened'; readonly opened: Opened }
+  | {
+      readonly kind: 'refused';
+      readonly reason: RecoveryRefusal;
+      /** The document and codex files another program changed, removed or added, in the words the dialog shows (`files` only). */
+      readonly files: readonly FolderFileChange[];
+    };
+
+/**
+ * Accepts a recovery the writer has been offered (project-format §5.3): the recovered project is written as the new manifest,
+ * the unreadable one is kept beside it, and the result is opened. Only the recovery dialog calls this, after the writer says yes.
+ *
+ * A folder is checked when the recovery is accepted, not when it was offered, because another program may have changed it since: its
+ * `caotang.json` must still be the text the offer read (`folderSaveVerdict`), and a lock file needs the writer's `lockConfirmed`. A refusal
+ * writes nothing. The copy kept beside the new manifest is the text read here, so the bytes kept are the bytes replaced.
+ */
+export async function completeRecovery(
+  store: RuntimeStore,
+  recovery: PendingRecovery,
+  answers: RecoveryAnswers = {},
+): Promise<RecoveryOutcome> {
+  let offer = recovery.offer;
+  if (recovery.folder !== null) {
+    const onDisk = await readManifestText(recovery.fs);
+    const verdict = folderSaveVerdict({
+      // A folder with no manifest reads as the empty text the offer read too, so only a file that appeared since is a change.
+      onDisk: onDisk ?? '',
+      baseline: offer.corruptManifest?.contents ?? '',
+      locked: await recovery.fs.exists(MCP_LOCK_FILE),
+      lockConfirmed: answers.lockConfirmed === true,
+      overwriteConfirmed: false,
+      filesChanged: false,
+    });
+    // The baseline is always the offer's text, so `unknown` cannot come back. It is a change if it ever did.
+    if (verdict !== 'write') return { kind: 'refused', reason: verdict === 'locked' ? 'locked' : 'changed', files: [] };
+    // The document and codex files are checked against the digests the offer read, as a save checks them (DS-1): a file another program
+    // changed since is named, and the recovery writes nothing.
+    const drift = driftOf(recovery.digests, await projectFileDigests(recovery.fs));
+    if (hasDrift(drift)) return { kind: 'refused', reason: 'files', files: folderChanges(drift, offer.state, new Map()) };
+    offer = withPreservedManifest(offer, onDisk);
+  }
+  await commitRecovery(recovery.fs, offer, { now: new Date() });
+  // The recovery's own notes say which copy was used, and the dialog has already said it, so they are not repeated as field notices.
+  const opened = await adopt(store, offer.state, recovery.sessions, [], [], recovery.folder);
+  if (recovery.folder !== null) {
+    // The recovery wrote the folder, so the digests are taken as the folder now stands: the next save is checked against what it holds.
+    holdFolderCopy(opened.session, recovery.folder, (await readManifestText(recovery.fs)) ?? '', await projectFileDigests(recovery.fs));
+  }
+  return { kind: 'opened', opened };
+}
+
+/**
+ * The offer with its preserved copy set to the text on disk when it was checked, so the copy kept is the copy removed. With no file on
+ * disk there is nothing to keep, and the offer carries no copy.
+ */
+function withPreservedManifest(offer: RecoveryOffer, onDisk: string | null): RecoveryOffer {
+  if (offer.corruptManifest === undefined) return offer;
+  if (onDisk === null) return { ...offer, corruptManifest: undefined };
+  return { ...offer, corruptManifest: { path: offer.corruptManifest.path, contents: onDisk } };
+}
+
+/** What the writer has said about a folder save the checks asked about (see `folderSaveVerdict`). */
+export interface FolderSaveAnswers {
+  /** Save although the Caotang MCP server holds the folder. */
+  readonly lockConfirmed?: boolean;
+  /** Replace a manifest that changed, or that this session never saw. */
+  readonly overwriteConfirmed?: boolean;
+}
+
+/** One document or codex file another program changed, removed or added, in the words the folder question shows (`folderChanges`). */
+export type FolderFileChange = ProjectFileChange;
+
+/**
+ * The changes a drift names, in the folder question's words: a document by its title, a codex entry by its name, and a file this copy does
+ * not hold described, so no node id and no file name reaches the writer (DS-1). The wording is the store's, which the MCP server shares.
+ */
+export function folderChanges(drift: FolderDrift, state: ProjectState, heldTitles: ReadonlyMap<string, string>): FolderFileChange[] {
+  return projectFileChanges(drift, state, heldTitles, 'this copy');
+}
+
+/**
+ * The result of a save to a folder: written, or refused for one reason the writer must answer first. `files` names the documents and codex
+ * entries another program changed, removed or added, in words (`folderChanges`), so the question can say which ones it is about. `partial`
+ * is set when the change was found during the write rather than before it: the files before the changed one, and the pictures, were written.
+ */
+export type FolderSaveOutcome =
+  | { readonly kind: 'saved' }
+  | {
+      readonly kind: 'refused';
+      readonly reason: Exclude<FolderSaveVerdict, 'write'>;
+      readonly files: readonly FolderFileChange[];
+      readonly partial?: true;
+      /** Set on a changed refusal when the folder's `caotang.json` is gone, rather than changed: there is no newer copy to open. */
+      readonly removed?: true;
+    };
+
+/** What a copy opened from a folder says when it is asked to save into that folder (DS-2): a copy of the book, not the book. */
+const COPY_CANNOT_SAVE_INTO_FOLDER =
+  'This copy cannot be saved into that folder. It is a second copy of the book the folder holds, and saving it there would change the folder’s book into this copy. Nothing was written. Save this copy to a new folder, or export a backup.';
+
+/**
+ * Write the project's current state into a folder as an artifact (project-format §4), when the folder still holds the copy this
+ * session last loaded or saved (`folderSaveVerdict`). Otherwise nothing is written, and the reason is returned for the shell to ask about.
+ * Only the documents this session deleted are removed from `docs/`: a file another writer put in the folder stays where it is.
+ */
+export async function saveFolder(
+  session: ProjectSession,
+  root: DirectoryHandleLike,
+  answers: FolderSaveAnswers = {},
+): Promise<FolderSaveOutcome> {
+  // Another tab holds newer text, which this session stopped on (persistence.ts). Writing this state into a folder would replace that text.
+  if (session.persistence.isStopped()) {
+    throw new Error('This tab cannot save: another tab has newer text for this project. Export a backup to keep the words in this tab.');
+  }
+  await session.settle();
+  const fs = folderArtifactFs(root);
+  const onDisk = await readManifestText(fs);
+  // Whose project the folder holds (`folderProjectRoute`). A separate copy made from the folder's own book has an id of its own (adopt), and
+  // writing it there would turn the folder's book into the copy, so that save is refused, before anything is written and whatever the
+  // writer answers (DS-2). Any other project is asked about (`unknown`), and this project's own earlier save is never called another project.
+  const route = folderProjectRoute({
+    folderId: onDisk === null ? undefined : projectIdOf(onDisk),
+    ownId: session.state.manifest.project.id,
+    copiedFrom: session.copiedFrom() ?? (await copiedFromOf(session.projectId)),
+  });
+  if (route === 'original') throw new Error(COPY_CANNOT_SAVE_INTO_FOLDER);
+  // The copy this session holds is a baseline only for the folder it was taken from (`FolderBaseline`). A folder holding this project's own
+  // earlier save, which this session holds no copy of (after a reload), is compared with the copy kept for it across the reload. Any other
+  // folder is compared with nothing.
+  const copy = session.folderBaseline();
+  let held = copy !== null && (await isSameFolder(copy.folder, root)) ? copy : null;
+  if (held === null && route === 'own') held = await rememberedCopyFor(session.projectId, root);
+  // What the folder holds now, digested before anything is compared or written, so the check and the write see the same files (DS-1).
+  const before = await projectFileDigests(fs);
+  const files = held === null ? [] : folderChanges(driftOf(held.digests, before), session.state, held.titles);
+  const verdict = folderSaveVerdict({
+    onDisk,
+    baseline: held?.manifestText ?? null,
+    locked: await fs.exists(MCP_LOCK_FILE),
+    lockConfirmed: answers.lockConfirmed === true,
+    overwriteConfirmed: answers.overwriteConfirmed === true,
+    filesChanged: files.length > 0,
+    sameProject: route === 'own',
+  });
+  if (verdict !== 'write') {
+    return verdict === 'changed' && onDisk === null ? { kind: 'refused', reason: verdict, files, removed: true } : { kind: 'refused', reason: verdict, files };
+  }
+  // The session log is written first, so a log the folder cannot take refuses the save before any project file is written (writeFolderLog).
+  await writeFolderLog(session, fs);
+  // The pictures are copied before the manifest names them, so the folder never holds a manifest without the files it names. A folder
+  // holding a different file under one of those names is refused here, before anything is written (project-assets.ts).
+  await session.assets.copyTo(root);
+  const report = emptyReport();
+  try {
+    await writeProject(fs, copyState(session.state), {
+      now: new Date(),
+      // Only the copy's own folder can hold documents this session deleted. Any other folder keeps every file it has.
+      pruneDocumentIds: held === null ? [] : deletedSince(held, session.state),
+      // Each file is checked against the digest the folder held just before this save, as it is written or removed (DS-1).
+      expectedDigests: before,
+      report,
+    });
+  } catch (error) {
+    if (!(error instanceof FolderDriftError)) throw error;
+    // Another program changed a file after the check above, and the write stopped before that file. The copy keeps the digests of what this
+    // save did write and of no other, so the next save still sees that other change. Nothing it changed is overwritten.
+    if (held !== null) session.setFolderBaseline(root, held.manifestText, held.documentIds, await digestsAfterWrite(fs, before, error.partial), held.titles);
+    const changed = { changed: [...error.paths], removed: [], added: [] };
+    return { kind: 'refused', reason: 'files', files: folderChanges(changed, session.state, held?.titles ?? new Map()), partial: true };
+  }
+  // What is on disk now is what the next save is checked against, so it is read back rather than assumed. The digests are the ones the folder
+  // held before this save, with the files this save wrote digested again (digestsAfterWrite).
+  holdFolderCopy(session, root, (await readManifestText(fs)) ?? '', await digestsAfterWrite(fs, before, report));
+  // The findings file goes beside the project, and stays in step with it from now on (coherence.md §3).
+  await session.attachCoherenceFolder(root);
+  // The project remembers the folder it was saved to, so the projects list can reopen it with one click (folder-memory.ts).
+  await rememberFolder(session.projectId, root);
+  await rememberHeldCopy(session);
+  return { kind: 'saved' };
+}
+
+/**
+ * Writes the session log into the folder as `sessions.jsonl` (project-format §4). The folder's own lines come first, as they are, and the
+ * browser copy's lines the folder does not hold follow them. The file is only appended to (sessions.ts `writeSessionsFile`), so no line the
+ * folder holds is dropped or reordered, and a damaged line is kept as it is. A log that differs from the browser's copy is merged, not
+ * refused, and it is written before any project file, so a save that stops after this step has lost nothing.
+ */
+async function writeFolderLog(session: ProjectSession, fs: ArtifactFs): Promise<void> {
+  const folderLog = await folderSessionsOf(fs);
+  const browserLog = await session.sessionLog();
+  try {
+    await writeSessionsFile(fs, [...folderLog, ...linesNotHeld(browserLog, folderLog)]);
+  } catch (error) {
+    // The folder's record is read again by the write. It can only differ from the read above when another program wrote it in between.
+    if (error instanceof SessionsShrinkError) {
+      throw new Error('The folder’s record of writing sessions changed while Caotang was saving it. Nothing was written. Save again.', { cause: error });
+    }
+    throw error;
+  }
+}
+
+/**
+ * Whether two handles name the same folder. The browser answers with `isSameEntry`, which a second handle to the same folder passes.
+ * A handle that cannot answer is taken as another folder, so the copy held for the first is no baseline for it.
+ */
+async function isSameFolder(a: DirectoryHandleLike, b: DirectoryHandleLike): Promise<boolean> {
+  if (a === b) return true;
+  const { isSameEntry } = a as DirectoryHandleLike & { isSameEntry?: (other: DirectoryHandleLike) => Promise<boolean> };
+  return isSameEntry === undefined ? false : isSameEntry.call(a, b);
+}
+
+/** The part of the settings a demo run reads, and records its sample in. The app's settings store has this shape. */
+export interface DemoSettings {
+  current(): { readonly sampleProjectIds: readonly string[] };
+  update(patch: { readonly sampleProjectIds: readonly string[] }): Promise<unknown>;
+}
+
+/**
+ * The sample a demo run opens (`openOrCreateSample`), and the settings' record of a sample made here, so the next run reuses it. When
+ * that record cannot be written the sample is closed, because the shell will not show it and nothing else would give its lease back.
+ * The failure is passed on to the caller.
+ */
+export async function openDemoSample(store: RuntimeStore, settings: DemoSettings): Promise<ProjectSession> {
+  const { session, created } = await openOrCreateSample(store, settings.current().sampleProjectIds);
+  if (!created) return session;
+  try {
+    await settings.update({ sampleProjectIds: [...settings.current().sampleProjectIds, session.projectId] });
+  } catch (error) {
+    await session.close().catch(() => undefined);
+    throw error;
+  }
+  return session;
+}

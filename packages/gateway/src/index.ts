@@ -1,0 +1,82 @@
+/**
+ * `@caotang/gateway` — the only module that talks to a model endpoint
+ * ([provider-gateway.md](docs/architecture/provider-gateway.md)).
+ *
+ * The mock provider is deliberately not exported from here. It is a test fixture, and
+ * production code that imports it by accident would ship it. Import it from `./mock`.
+ */
+
+export type {
+  ProviderProfile,
+  ProfileKind,
+  ProfileView,
+  NewProfile,
+  ProfilePatch,
+  ResponseFormatProbe,
+  ProviderGateway,
+  ChatRequest,
+  ChatMessage,
+  ChatChunk,
+  ChatRole,
+  Usage,
+  ModelInfo,
+  ModelLimits,
+  UsageAttribution,
+} from './types.js';
+
+export {
+  ProviderError,
+  providerMessages,
+  EgressDeniedError,
+  ProfileError,
+  type ProviderErrorKind,
+  type ProviderErrorInit,
+  type ProfileErrorCode,
+} from './errors.js';
+
+export {
+  createProfileStore,
+  PROFILE_ID_PATTERN,
+  MOCK_DEFAULT_MODEL,
+  DEFAULT_MAX_OUTPUT_TOKENS,
+  mintProfileId,
+  type ProfileStore,
+  type ProfileStoreOptions,
+} from './profiles.js';
+export { normalizeBaseUrl, MOCK_BASE_URL, isLoopbackBase } from './base-url.js';
+
+export {
+  createKeyStore,
+  type KeyStore,
+  type KeyStoreOptions,
+} from './keys/key-store.js';
+export { createMemoryVaultPort, type KeyVaultPort, type SealedEntry } from './keys/vault.js';
+export { createIndexedDbVaultPort, type IndexedDbVaultOptions } from './keys/indexeddb-vault.js';
+
+export { createGateway, type Gateway, type GatewayOptions } from './gateway.js';
+export type { FetchLike } from './transport.js';
+
+export {
+  UsageLedger,
+  localDayKey,
+  MAX_TURN_ROWS,
+  type DayUsageRow,
+  type TurnUsageRow,
+  type UsageTotals,
+  type UsageSnapshot,
+} from './ledger.js';
+export { RequestLog, REQUEST_LOG_CAP, type RequestLogEntry, type RequestOutcome } from './request-log.js';
+
+export {
+  DEFAULT_RETRY,
+  DEFAULT_TIMEOUTS,
+  backoffMs,
+  isRetryable,
+  parseRetryAfter,
+  type RetryPolicy,
+  type TransportTimeouts,
+} from './retry.js';
+
+export { systemClock, createManualClock, type Clock, type ManualClock, type TimerId } from './clock.js';
+export { redact } from './redact.js';
+export { estimateTokens, usageFor } from './tokens.js';
