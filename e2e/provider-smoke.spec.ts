@@ -52,6 +52,14 @@ function memoryDb(): AppDb {
 
 const configured = smokeKeys();
 
+// An empty `configured` map would register no tests at all, which Playwright reports as "No tests
+// found"; the sentinel keeps the file a clean skip instead.
+if (configured.size === 0) {
+  test('no CAOTANG_SMOKE_* variables set — the real-key round is manual', () => {
+    test.skip();
+  });
+}
+
 test.describe('real-key round', () => {
   test.skip(configured.size === 0, 'no CAOTANG_SMOKE_* variables set — the real-key round is manual');
 
