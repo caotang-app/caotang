@@ -12,8 +12,10 @@ import { folderAccessSupported, pickDirectory, type DirectoryHandleLike } from '
 import { folderWithPermission, rememberedFolder } from '../app/folder-memory.js';
 import type { FolderDiffersAnswer } from '../app/integrity-model.js';
 import { browserStorage, clearUnsentCopy } from '../app/unsent-copy.js';
+import { encodingAskerFor, type EncodingDecision } from '../app/encoding-review.js';
 import {
   answerFolderDiffers,
+  completeEncodingReview,
   completeRecovery,
   createProject,
   exportStoredBundle,
@@ -29,6 +31,7 @@ import {
   type FolderFileChange,
   type OpenOutcome,
   type Opened,
+  type PendingEncoding,
   type PendingRecovery,
   type ProjectSummary,
   type RecoveryAnswers,
@@ -37,6 +40,7 @@ import {
 } from '../app/lifecycle.js';
 import type { AppServices } from '../app/services.js';
 import { ChoiceDialog, ConfirmDialog, EmptyState, formatCount, wordsLabel } from './shared.js';
+import { EncodingDialog } from './EncodingDialog.js';
 import { FirstRun } from './FirstRun.js';
 import { RecoveryDialog } from './RecoveryDialog.js';
 import { Settings, type SettingsSection } from './Settings.js';
@@ -77,6 +81,9 @@ export function Home({ store, services, onOpened, onRunDemo, notices }: HomeProp
   }, []);
   // A folder whose project this browser keeps in another version: the writer chooses which to keep before anything opens.
   const [differs, setDiffers] = useState<FolderDiffers | null>(null);
+  // A folder, bundle or accepted recovery holding files that are not UTF-8 text: the writer previews and answers for each
+  // before the open finishes (`completeEncodingReview`).
+  const [encoding, setEncoding] = useState<PendingEncoding | null>(null);
   const importInput = useRef<HTMLInputElement>(null);
   const folderSupported = folderAccessSupported();
   // The folder each project remembers (folder-memory.ts), read with the list, so a reopen asks for permission straight from its click.
@@ -185,11 +192,33 @@ export function Home({ store, services, onOpened, onRunDemo, notices }: HomeProp
     });
   };
 
-  /** A folder or bundle either opens, is offered its recovery first, or asks which version to keep (`OpenOutcome`). */
+  /** A folder or bundle either opens, is offered its recovery first, asks which version to keep, or pauses on non-UTF-8 files (`OpenOutcome`). */
   const settleOpen = (outcome: OpenOutcome): void => {
     if (outcome.kind === 'recover') setRecovery(outcome.recovery);
     else if (outcome.kind === 'differs') setDiffers(outcome.differs);
+    else if (outcome.kind === 'encoding') setEncoding(outcome.encoding);
     else onOpened(outcome.opened);
+  };
+
+  /**
+   * The writer answered for each non-UTF-8 file: the answers are applied and the open continues (`completeEncodingReview`
+   * can itself come back with a recovery to offer, or a version question to ask, so it settles the same way).
+   */
+  const answerEncoding = (decisions: readonly EncodingDecision[]): void => {
+    if (encoding === null) return;
+    const target = encoding;
+    setEncoding(null);
+    void run('Opening the project', async () => {
+      settleOpen(await completeEncodingReview(store, target, decisions));
+    });
+  };
+
+  const cancelEncoding = (): void => {
+    if (encoding === null) return;
+    // An accepted recovery has already written by the time it pauses; its own note says so. Anything else changed nothing.
+    const note = encoding.cancelNote;
+    setEncoding(null);
+    setNotice(note === '' ? 'Nothing was opened or changed.' : note);
   };
 
   /**
@@ -261,6 +290,11 @@ export function Home({ store, services, onOpened, onRunDemo, notices }: HomeProp
       }
       setRecovery(null);
       setRecoveryRefusal(null);
+      // The recovered copy still holds non-UTF-8 files: the writer answers for them before it opens.
+      if (outcome.kind === 'encoding') {
+        setEncoding(outcome.encoding);
+        return;
+      }
       onOpened(outcome.opened);
     });
   };
@@ -538,6 +572,16 @@ export function Home({ store, services, onOpened, onRunDemo, notices }: HomeProp
           files={recoveryRefusal?.files ?? []}
           onConfirm={acceptRecovery}
           onCancel={cancelRecovery}
+        />
+      ) : null}
+
+      {encoding !== null ? (
+        <EncodingDialog
+          pending={encoding}
+          asker={encodingAskerFor(services.providers)}
+          busy={busy !== null}
+          onDone={answerEncoding}
+          onCancel={cancelEncoding}
         />
       ) : null}
 

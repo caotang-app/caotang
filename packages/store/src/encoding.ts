@@ -12,6 +12,10 @@
  *   - *what would they look like as text?* — {@link decodeForPreview}, the
  *     best-effort decode a convert flow previews before it touches anything.
  *
+ * For a convert flow that must offer more than one reading, {@link detectEncoding}
+ * scores the candidate encodings side by side and {@link decodeAs}/{@link decodeStrict}
+ * decode as the writer's pick — the forgiving and the refusing forms.
+ *
  * The guesses are deliberately coarse. A byte histogram cannot tell a
  * Windows-1252 letter from a Shift-JIS one, and `unknown` is an honest answer
  * the caller can escalate (to the writer, or to a smarter pass), which a wrong
@@ -47,9 +51,13 @@ export interface EncodingIssue {
   readonly encoding: EncodingGuess;
 }
 
-/** {@link decodeForPreview}'s result: the encoding the text was decoded as, and the text. */
+/**
+ * {@link decodeForPreview}'s and {@link decodeAs}'s result: the encoding the text was decoded as,
+ * and the text. The wider union covers the candidate encodings a preview decodes as when the writer
+ * picks one; `decodeForPreview` itself still answers only the narrower {@link DecodedEncoding}.
+ */
 export interface DecodedPreview {
-  readonly encoding: DecodedEncoding;
+  readonly encoding: DecodableEncoding | 'unknown';
   readonly text: string;
 }
 
@@ -156,15 +164,198 @@ export function decodeForPreview(bytes: Uint8Array): DecodedPreview {
 /**
  * The name a guess is reported under in a load notice, e.g. "its bytes look
  * like Windows-1252". `'unknown'` has no name; callers phrase that case
- * themselves.
+ * themselves. The candidates are named here too so a preview can label what it
+ * decoded as.
  */
-export function encodingName(guess: Exclude<EncodingGuess, 'unknown'>): string {
-  switch (guess) {
+export function encodingName(encoding: Exclude<DecodableEncoding, 'utf-8'>): string {
+  switch (encoding) {
     case 'utf-16le':
       return 'UTF-16, little-endian';
     case 'utf-16be':
       return 'UTF-16, big-endian';
     case 'windows-1252':
       return 'Windows-1252';
+    case 'iso-8859-15':
+      return 'ISO-8859-15';
+    case 'gb18030':
+      return 'GB18030';
+    case 'big5':
+      return 'Big5';
+    case 'shift_jis':
+      return 'Shift JIS';
+    case 'euc-kr':
+      return 'EUC-KR';
+  }
+}
+
+/**
+ * The encodings a held file can be previewed or converted as, beside UTF-16: the single-byte and
+ * multi-byte sets whose decode the writer is likeliest to meet in a file another tool saved. The
+ * order is the tie-break order, so two readings that score the same prefer the more common one.
+ */
+export type CandidateEncoding = 'windows-1252' | 'iso-8859-15' | 'gb18030' | 'big5' | 'shift_jis' | 'euc-kr';
+export const ENCODING_CANDIDATES: readonly CandidateEncoding[] = [
+  'windows-1252',
+  'iso-8859-15',
+  'gb18030',
+  'big5',
+  'shift_jis',
+  'euc-kr',
+];
+
+/** Every encoding a held file can be decoded as for a preview or a conversion. */
+export type DecodableEncoding = 'utf-8' | 'utf-16le' | 'utf-16be' | CandidateEncoding;
+
+/** One encoding the file could plausibly be in, with how well the decoded text reads (see {@link scoreText}). */
+export interface ScoredEncodingCandidate {
+  readonly encoding: DecodableEncoding;
+  readonly score: number;
+}
+
+/**
+ * What {@link detectEncoding} found: the best single reading of the bytes, whether it is certain (a
+ * BOM names it rather than a statistic), and every candidate scored best-first for a side-by-side
+ * preview. `best` is `'unknown'` when no candidate decodes the bytes as credible text — the
+ * candidates are still ranked, so the writer can preview each and choose.
+ */
+export interface EncodingDetection {
+  readonly best: DecodableEncoding | 'unknown';
+  readonly certain: boolean;
+  readonly candidates: readonly ScoredEncodingCandidate[];
+}
+
+/** A candidate needs at least this mean weight to be named as the best reading; below it the bytes stay `unknown`. */
+const BEST_SCORE_FLOOR = 0.75;
+
+/** The weight one decoded code point adds toward an encoding reading these bytes as text. */
+function charWeight(codePoint: number, char: string): number {
+  if (codePoint === 0xfffd) return -6;
+  if (codePoint < 0x20) return codePoint === 0x09 || codePoint === 0x0a || codePoint === 0x0d ? 1 : -6;
+  if (codePoint === 0x7f || (codePoint >= 0x80 && codePoint <= 0x9f)) return -6;
+  if (codePoint >= 0xe000 && codePoint <= 0xf8ff) return -3;
+  if (codePoint === 0xfeff) return -3;
+  if (codePoint === 0x20) return 1.5;
+  if (codePoint >= 0x30 && codePoint <= 0x39) return 1.5;
+  if ((codePoint >= 0x41 && codePoint <= 0x5a) || (codePoint >= 0x61 && codePoint <= 0x7a)) return 2;
+  if (
+    (codePoint >= 0x1100 && codePoint <= 0x11ff) ||
+    (codePoint >= 0x2e80 && codePoint <= 0x9fff) ||
+    (codePoint >= 0xac00 && codePoint <= 0xd7af) ||
+    (codePoint >= 0xf900 && codePoint <= 0xfaff) ||
+    (codePoint >= 0x20000 && codePoint <= 0x2a6df)
+  ) {
+    return 2.5;
+  }
+  if (codePoint >= 0x3000 && codePoint <= 0x303f) return 1.5;
+  if (codePoint >= 0x00c0 && codePoint <= 0x024f) return 1.2;
+  if (codePoint >= 0xff00 && codePoint <= 0xff65) return 1.2;
+  if (/^\p{L}$/u.test(char)) return 1.5;
+  if (/^[\p{P}\p{Z}\p{N}\p{M}]$/u.test(char)) return 1;
+  return 0.3;
+}
+
+/**
+ * How well `text` reads as prose, as the mean weight over its code points. The same weights for
+ * every candidate keep the comparison deterministic: a reading whose decode fills with U+FFFD,
+ * C0/C1 controls or private-use characters scores low, and one whose characters are letters, spaces
+ * and punctuation of any script scores high. Only the first {@link GUESS_SAMPLE_BYTES} characters
+ * are weighed, so a large file is scored on the same head the guess was.
+ */
+function scoreText(text: string): number {
+  let weight = 0;
+  let count = 0;
+  for (const char of text) {
+    if (count >= GUESS_SAMPLE_BYTES) break;
+    weight += charWeight(char.codePointAt(0)!, char);
+    count += 1;
+  }
+  return count === 0 ? 0 : weight / count;
+}
+
+/** Every candidate's score on the same sampled head of the bytes, best first. */
+function scoredCandidates(bytes: Uint8Array): ScoredEncodingCandidate[] {
+  const head = bytes.subarray(0, GUESS_SAMPLE_BYTES * 4);
+  return ENCODING_CANDIDATES.map((encoding) => ({ encoding, score: scoreText(new TextDecoder(encoding).decode(head)) })).sort(
+    (a, b) => b.score - a.score,
+  );
+}
+
+/**
+ * The multi-encoding answer {@link guessEncoding}'s single pick cannot give: which of several
+ * plausible encodings these bytes decode best as, scored side by side, and whether the best is
+ * certain. Same bytes in → same answer out; the scores need no model and no I/O.
+ *
+ * The marks the bytes carry are read in the same order `guessEncoding` reads them: a UTF-16 BOM is
+ * certain and stands alone; a NUL-byte parity names UTF-16 without a BOM as the best of the ranked
+ * candidates; otherwise every {@link ENCODING_CANDIDATES} member decodes the sample and is scored on
+ * how well the text reads, and the top score is `best` when it clears {@link BEST_SCORE_FLOOR}.
+ * Bytes that are already valid UTF-8 answer `'utf-8'` with no candidates — detection is meant for
+ * files that failed to read, but it does not pretend a healthy file is something else.
+ */
+export function detectEncoding(bytes: Uint8Array): EncodingDetection {
+  if (bytes.length === 0) return { best: 'utf-8', certain: true, candidates: [] };
+  if (bytes[0] === 0xff && bytes[1] === 0xfe) {
+    return { best: 'utf-16le', certain: true, candidates: [{ encoding: 'utf-16le', score: 1 }] };
+  }
+  if (bytes[0] === 0xfe && bytes[1] === 0xff) {
+    return { best: 'utf-16be', certain: true, candidates: [{ encoding: 'utf-16be', score: 1 }] };
+  }
+
+  const sample = bytes.subarray(0, GUESS_SAMPLE_BYTES);
+  if (decodesCleanlyAsUtf8(bytes)) return { best: 'utf-8', certain: true, candidates: [] };
+
+  // The same parity test guessEncoding runs: NULs concentrated on one byte parity are UTF-16
+  // without a BOM. Sixteen pairs is the smallest sample that test runs on.
+  if (sample.length >= 32) {
+    const pairs = Math.floor(sample.length / 2);
+    let evenNul = 0;
+    let oddNul = 0;
+    for (let i = 0; i < pairs; i += 1) {
+      if (sample[i * 2] === 0x00) evenNul += 1;
+      if (sample[i * 2 + 1] === 0x00) oddNul += 1;
+    }
+    const scored = scoredCandidates(bytes);
+    if (oddNul / pairs > 0.4 && evenNul / pairs < 0.05) {
+      return { best: 'utf-16le', certain: false, candidates: [{ encoding: 'utf-16le', score: 0.95 }, ...scored] };
+    }
+    if (evenNul / pairs > 0.4 && oddNul / pairs < 0.05) {
+      return { best: 'utf-16be', certain: false, candidates: [{ encoding: 'utf-16be', score: 0.95 }, ...scored] };
+    }
+  }
+
+  const scored = scoredCandidates(bytes);
+  const best = scored[0];
+  return {
+    best: best !== undefined && best.score >= BEST_SCORE_FLOOR ? best.encoding : 'unknown',
+    certain: false,
+    candidates: scored,
+  };
+}
+
+/**
+ * Decodes the bytes as the named encoding — the writer's chosen reading, not the marks'. The decode
+ * is forgiving: malformed sequences stand out as U+FFFD rather than throwing, so a wrong pick
+ * previews as the mojibake it would save. UTF-16 decoders still consume a matching BOM.
+ */
+export function decodeAs(bytes: Uint8Array, encoding: DecodableEncoding): DecodedPreview {
+  return { encoding, text: new TextDecoder(encoding).decode(bytes) };
+}
+
+/**
+ * The strict form of {@link decodeAs}, for a conversion: malformed sequences throw rather than
+ * become U+FFFD. A conversion writes the text this returns, so a file whose bytes do not fit the
+ * chosen encoding is refused before anything is written.
+ */
+export function decodeStrict(bytes: Uint8Array, encoding: DecodableEncoding): string {
+  return new TextDecoder(encoding, { fatal: true }).decode(bytes);
+}
+
+/** Whether the bytes are already valid UTF-8 — the check {@link decodeForPreview} runs before guessing. */
+function decodesCleanlyAsUtf8(bytes: Uint8Array): boolean {
+  try {
+    new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    return true;
+  } catch {
+    return false;
   }
 }

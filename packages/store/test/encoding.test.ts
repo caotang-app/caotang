@@ -16,7 +16,12 @@ import {
   addDocument,
   createEmptyManifest,
   createProjectState,
+  decodeAs,
   decodeForPreview,
+  decodeStrict,
+  detectEncoding,
+  encodingName,
+  ENCODING_CANDIDATES,
   guessEncoding,
   importProjectZip,
   readProject,
@@ -284,5 +289,102 @@ describe('the load reports each non-UTF-8 file it holds', () => {
     expect(recovered.offer.encodingIssues).toEqual([
       { path, kind: 'document', size: CP1252.length, encoding: 'windows-1252' },
     ]);
+  });
+});
+
+/** A Big5 file: the characters decode cleanly under no other candidate set. */
+const BIG5 = Uint8Array.from([
+  0xa4, 0xe9, 0xa4, 0xd1, 0xaa, 0xba, 0xa5, 0xcd, 0xac, 0xa1, 0xa1, 0x41, 0xa7, 0xda, 0xad, 0xcc, 0xa5, 0x68, 0xbd, 0xf0,
+  0xae, 0x61,
+]);
+
+describe('detectEncoding scores the candidate encodings side by side', () => {
+  it('answers a UTF-16 byte-order mark with certainty and a single candidate', () => {
+    const detection = detectEncoding(utf16('The ferry was late.', 'le', true));
+    expect(detection.best).toBe('utf-16le');
+    expect(detection.certain).toBe(true);
+    expect(detection.candidates).toEqual([{ encoding: 'utf-16le', score: 1 }]);
+  });
+
+  it('answers UTF-16 without a mark by its NUL parity, still scoring the byte encodings after it', () => {
+    const detection = detectEncoding(utf16('The café was late, as always, and the gulls were screaming.', 'le', false));
+    expect(detection.best).toBe('utf-16le');
+    expect(detection.certain).toBe(false);
+    expect(detection.candidates[0]?.encoding).toBe('utf-16le');
+    expect(detection.candidates).toHaveLength(ENCODING_CANDIDATES.length + 1);
+  });
+
+  it('reads Windows-1252 text best as windows-1252, with every candidate ranked', () => {
+    const detection = detectEncoding(CP1252);
+    expect(detection.best).toBe('windows-1252');
+    expect(detection.certain).toBe(false);
+    expect(new Set(detection.candidates.map((candidate) => candidate.encoding))).toEqual(new Set(ENCODING_CANDIDATES));
+    expect(detection.candidates[0]?.encoding).toBe('windows-1252');
+    for (const candidate of detection.candidates) expect(Number.isFinite(candidate.score)).toBe(true);
+  });
+
+  it('reads a Big5 file best as big5 rather than the histogram’s Windows-1252 guess', () => {
+    const detection = detectEncoding(BIG5);
+    expect(detection.best).toBe('big5');
+    expect(detection.candidates[0]?.encoding).toBe('big5');
+    // The single guess calls these bytes windows-1252 — they carry no byte it
+    // can rule out. Scoring the decode is what tells a Han text from a Western
+    // one the histogram cannot see.
+    expect(guessEncoding(BIG5)).toBe('windows-1252');
+    expect(decodeAs(BIG5, 'big5').text).toMatch(/[\u4e00-\u9fff]/);
+  });
+
+  it('still declines binary bytes, but keeps the ranked candidates for a preview the writer chooses', () => {
+    const detection = detectEncoding(BINARY);
+    expect(detection.best).toBe('unknown');
+    expect(detection.certain).toBe(false);
+    expect(detection.candidates).toHaveLength(ENCODING_CANDIDATES.length);
+  });
+
+  it('says a file that is already valid UTF-8 is utf-8, and offers no candidates', () => {
+    const detection = detectEncoding(ENC.encode('plain café\n'));
+    expect(detection).toEqual({ best: 'utf-8', certain: true, candidates: [] });
+  });
+
+  it('is deterministic: the same bytes score to the same ordered list', () => {
+    expect(detectEncoding(CP1252)).toEqual(detectEncoding(CP1252));
+    expect(detectEncoding(BIG5)).toEqual(detectEncoding(BIG5));
+  });
+});
+
+describe('decodeAs and decodeStrict read the file the way the writer picked', () => {
+  it('decodeAs decodes as the chosen encoding, BOM and all', () => {
+    expect(decodeAs(CP1252, 'windows-1252')).toEqual({ encoding: 'windows-1252', text: 'He said “Hi” over café\n' });
+    expect(decodeAs(utf16('The ferry.', 'le', true), 'utf-16le')).toEqual({
+      encoding: 'utf-16le',
+      text: 'The ferry.',
+    });
+  });
+
+  it('decodeAs shows a wrong pick as the mojibake it would be, rather than throwing', () => {
+    const preview = decodeAs(CP1252, 'shift_jis');
+    expect(preview.encoding).toBe('shift_jis');
+    expect(preview.text).not.toContain('café');
+  });
+
+  it('decodeStrict returns the same text when the bytes fit, and throws when they do not', () => {
+    expect(decodeStrict(CP1252, 'windows-1252')).toBe('He said “Hi” over café\n');
+    expect(decodeStrict(BIG5, 'big5')).toBe('日天的生活，我們去踢家');
+    expect(() => decodeStrict(CP1252, 'utf-8')).toThrow();
+    // A lone UTF-16 surrogate cannot decode either: fatal catches it.
+    expect(() => decodeStrict(Uint8Array.from([0x00, 0xd8]), 'utf-16le')).toThrow();
+  });
+});
+
+describe('encodingName names every decodable encoding', () => {
+  it('names the guesses and the candidates alike', () => {
+    expect(encodingName('utf-16le')).toBe('UTF-16, little-endian');
+    expect(encodingName('utf-16be')).toBe('UTF-16, big-endian');
+    expect(encodingName('windows-1252')).toBe('Windows-1252');
+    expect(encodingName('iso-8859-15')).toBe('ISO-8859-15');
+    expect(encodingName('gb18030')).toBe('GB18030');
+    expect(encodingName('big5')).toBe('Big5');
+    expect(encodingName('shift_jis')).toBe('Shift JIS');
+    expect(encodingName('euc-kr')).toBe('EUC-KR');
   });
 });

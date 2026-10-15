@@ -218,14 +218,22 @@ export {
 } from './read.js';
 
 export {
+  decodeAs,
   decodeForPreview,
+  decodeStrict,
+  detectEncoding,
+  ENCODING_CANDIDATES,
   encodingName,
   guessEncoding,
+  type CandidateEncoding,
+  type DecodableEncoding,
   type DecodedEncoding,
   type DecodedPreview,
+  type EncodingDetection,
   type EncodingGuess,
   type EncodingIssue,
   type EncodingIssueKind,
+  type ScoredEncodingCandidate,
 } from './encoding.js';
 
 export {
