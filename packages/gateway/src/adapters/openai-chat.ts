@@ -241,10 +241,11 @@ export const openaiChatAdapter: ProviderAdapter = {
   },
 
   headers(ctx, secrets) {
+    // Order: the preset's headers, then auth, then the profile's custom headers — custom is the escape hatch.
     return {
-      ...authHeaders(ctx, secrets),
       ...(ctx.quirks.versionHeaders ?? {}),
       ...(ctx.quirks.extraHeaders ?? {}),
+      ...authHeaders(ctx, secrets),
       ...Object.fromEntries((secrets.headers ?? []).map((h) => [h.name, h.value])),
     };
   },

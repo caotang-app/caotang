@@ -86,16 +86,21 @@ function responsesStreamParser(): StreamParser {
 
   const recordCall = (item: Record<string, unknown>): void => {
     if (item.type !== 'function_call') return;
-    const id = (typeof item.call_id === 'string' && item.call_id !== '' ? item.call_id : item.id) as string | undefined;
-    if (typeof id !== 'string' || id === '') return;
-    const existing = calls.get(id);
-    calls.set(id, {
-      id,
+    // Deltas accumulate under `item_id`; the call's own id on the wire is `call_id`. Key the map by the item id
+    // (the two differ on the real wire — `fc_…` vs `call_…`) and emit `call_id` as the ToolCall's id, since a
+    // `function_call_output` reply refers to it.
+    const key =
+      typeof item.id === 'string' && item.id !== '' ? item.id : typeof item.call_id === 'string' ? item.call_id : undefined;
+    if (key === undefined || key === '') return;
+    const callId = typeof item.call_id === 'string' && item.call_id !== '' ? item.call_id : key;
+    const existing = calls.get(key);
+    calls.set(key, {
+      id: callId,
       name: typeof item.name === 'string' ? item.name : existing?.name ?? '',
       argumentsJson:
         typeof item.arguments === 'string' && item.arguments !== '' ? item.arguments : (existing?.argumentsJson ?? ''),
     });
-    if (!order.includes(id)) order.push(id);
+    if (!order.includes(key)) order.push(key);
   };
 
   const recordReasoning = (item: Record<string, unknown>): void => {
@@ -214,7 +219,6 @@ export const openaiResponsesAdapter: ProviderAdapter = {
     const headers: Record<string, string> = {
       ...(ctx.quirks.versionHeaders ?? {}),
       ...(ctx.quirks.extraHeaders ?? {}),
-      ...Object.fromEntries((secrets.headers ?? []).map((h) => [h.name, h.value])),
     };
     if (secrets.apiKey !== undefined && secrets.apiKey !== '') {
       switch (ctx.quirks.auth ?? 'bearer') {
@@ -229,7 +233,8 @@ export const openaiResponsesAdapter: ProviderAdapter = {
           break;
       }
     }
-    return headers;
+    // Custom headers go last: a generic profile's own headers are the escape hatch and may override any of the above.
+    return { ...headers, ...Object.fromEntries((secrets.headers ?? []).map((h) => [h.name, h.value])) };
   },
 
   buildBody(input: BodyInput): Record<string, unknown> {

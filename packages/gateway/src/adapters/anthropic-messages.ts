@@ -53,7 +53,7 @@ function splitSystem(messages: readonly ChatMessage[]): { system?: string; rest:
   const parts: string[] = [];
   const rest: ChatMessage[] = [];
   for (const m of messages) {
-    if (m.role === 'system' && m.toolCalls === undefined) parts.push(m.content);
+    if (m.role === 'system') parts.push(m.content);
     else rest.push(m);
   }
   return { system: parts.length > 0 ? parts.join('\n\n') : undefined, rest };
@@ -115,9 +115,12 @@ function wireMessages(req: BodyInput['req']): { system?: string; messages: unkno
   const hint = format !== undefined && format !== 'text' ? `Respond with JSON matching: ${JSON.stringify(format.jsonSchemaHint)}` : undefined;
   if (hint !== undefined) messages.push({ role: 'user', content: hint });
   for (const m of rest) {
+    const content = messageContent(m);
+    // A completely empty assistant turn has no wire form; drop it rather than send `content: []`.
+    if (m.role === 'assistant' && Array.isArray(content) && content.length === 0) continue;
     messages.push({
       role: m.role === 'tool' ? 'user' : m.role,
-      content: messageContent(m),
+      content,
     });
   }
   return { system, messages: mergeConsecutive(messages) };
@@ -126,6 +129,8 @@ function wireMessages(req: BodyInput['req']): { system?: string; messages: unkno
 function anthropicEffort(body: Record<string, unknown>, input: BodyInput): void {
   const level = input.req.thinking;
   if (level === undefined) return;
+  // Another style on the row means the model doesn't take the Messages thinking fields.
+  if (input.ctx.caps.effortStyle !== undefined && input.ctx.caps.effortStyle !== 'anthropic') return;
   const levels = input.ctx.caps.effortLevels;
   if (levels === undefined || levels.length === 0 || !levels.includes(level)) return;
   if (level === 'off') {
@@ -285,7 +290,6 @@ export const anthropicMessagesAdapter: ProviderAdapter = {
       'anthropic-version': '2023-06-01',
       ...(ctx.quirks.versionHeaders ?? {}),
       ...(ctx.quirks.extraHeaders ?? {}),
-      ...Object.fromEntries((secrets.headers ?? []).map((h) => [h.name, h.value])),
     };
     if (ctx.quirks.browserAccess !== false) {
       // Browser fetches to api.anthropic.com are allowed only when this is sent.
@@ -304,7 +308,8 @@ export const anthropicMessagesAdapter: ProviderAdapter = {
           break;
       }
     }
-    return headers;
+    // Custom headers go last: a generic profile's own headers are the escape hatch and may override any of the above.
+    return { ...headers, ...Object.fromEntries((secrets.headers ?? []).map((h) => [h.name, h.value])) };
   },
 
   buildBody(input: BodyInput): Record<string, unknown> {

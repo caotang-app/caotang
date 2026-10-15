@@ -218,6 +218,17 @@ export {
 } from './read.js';
 
 export {
+  decodeForPreview,
+  encodingName,
+  guessEncoding,
+  type DecodedEncoding,
+  type DecodedPreview,
+  type EncodingGuess,
+  type EncodingIssue,
+  type EncodingIssueKind,
+} from './encoding.js';
+
+export {
   commitRecovery,
   recoverProject,
   type RecoverOptions,

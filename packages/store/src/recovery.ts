@@ -42,6 +42,7 @@ import {
 import { createEmptyManifest } from './create.js';
 import { createProjectState, type ProjectState } from './state.js';
 import { importOrphanCodex, importOrphanDocuments, readProject, type LoadNotice } from './read.js';
+import type { EncodingIssue } from './encoding.js';
 import { PRODUCTION_FORMAT, type FormatContext } from './migrations.js';
 import { writeProject, type WriteReport } from './write.js';
 
@@ -62,6 +63,12 @@ export interface RecoveryOffer {
   /** §5.2: what is unrecoverable, stated as the honest bound of one manifest. */
   loss: string[];
   notices: LoadNotice[];
+  /**
+   * Every file the load behind this offer found whose bytes are not UTF-8
+   * text — the same report `readProject` returns (`LoadResult.encodingIssues`),
+   * carried through whichever rung produced the state.
+   */
+  encodingIssues: EncodingIssue[];
   /** `docs/*.md` imported as Recovered documents. */
   recoveredDocuments: string[];
   /** `codex/*.md` imported as codex entries. */
@@ -160,6 +167,7 @@ export async function recoverProject(
         requiresConsent: false,
         loss: [],
         notices: primary.result.notices,
+        encodingIssues: primary.result.encodingIssues,
         recoveredDocuments: primary.result.orphans,
         recoveredCodex: primary.result.orphanCodex,
       },
@@ -192,6 +200,7 @@ export async function recoverProject(
           },
           ...candidate.result.notices,
         ],
+        encodingIssues: candidate.result.encodingIssues,
         recoveredDocuments: candidate.result.orphans,
         recoveredCodex: candidate.result.orphanCodex,
         corruptManifest: corrupt,
@@ -216,6 +225,7 @@ export async function recoverProject(
           },
           ...legacy.result.notices,
         ],
+        encodingIssues: legacy.result.encodingIssues,
         recoveredDocuments: legacy.result.orphans,
         recoveredCodex: legacy.result.orphanCodex,
         corruptManifest: corrupt,
@@ -246,6 +256,7 @@ export async function recoverProject(
         },
         ...rebuild.notices,
       ],
+      encodingIssues: rebuild.encodingIssues,
       recoveredDocuments: rebuild.documents,
       recoveredCodex: rebuild.codex,
       corruptManifest: corrupt,
@@ -277,7 +288,13 @@ async function safeRead(fs: ArtifactFs, path: string): Promise<string> {
 async function rebuildFromRedundancy(
   fs: ArtifactFs,
   now: Date,
-): Promise<{ state: ProjectState; notices: LoadNotice[]; documents: string[]; codex: string[] } | null> {
+): Promise<{
+  state: ProjectState;
+  notices: LoadNotice[];
+  encodingIssues: EncodingIssue[];
+  documents: string[];
+  codex: string[];
+} | null> {
   // The body files a folder can hold: prose `.md`, screenplay `.fountain` and dialogue `.ink` (screenplay.md §2.1,
   // dialogue-narrative.md §2.1). Each is imported by the same code the ordinary load runs, so a `.ink` file is a
   // dialogue container here too.
@@ -293,11 +310,12 @@ async function rebuildFromRedundancy(
 
   const state = createProjectState(manifest);
   const notices: LoadNotice[] = [];
+  const encodingIssues: EncodingIssue[] = [];
 
-  const documents = await importOrphanDocuments(fs, state, [...docFiles].sort(), notices, now);
-  const codex = await importOrphanCodex(fs, state, notices);
+  const documents = await importOrphanDocuments(fs, state, [...docFiles].sort(), notices, now, encodingIssues);
+  const codex = await importOrphanCodex(fs, state, notices, encodingIssues);
 
-  return { state, notices, documents, codex };
+  return { state, notices, encodingIssues, documents, codex };
 }
 
 export interface RecoveryCommit {

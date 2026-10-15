@@ -6,9 +6,13 @@
  * "mock provider importable headless".
  *
  * Guarantees:
- *  - same script + same request = same bytes (no clock, no randomness);
+ *  - same script + same request + same call index = same bytes (no clock, no
+ *    randomness); `complete()` numbers its own calls so `nativeCall` ids are stable;
  *  - every stream that answers ends with exactly one terminal chunk carrying `finishReason`
  *    and `usage`, on normal completion, on a declared error finish, and on abort;
+ *  - a native-mode response (`MockResponse.toolCalls`, which `nativeCall` produces)
+ *    rides that terminal chunk with finishReason 'tool_calls', and its `reasoning` as a
+ *    replayable block; `reasoning` without calls streams as a `reasoningDelta` first;
  *  - a scripted failure (`MockResponse.error`, which `fail(mode)` uses) raises a
  *    `ProviderError` of the §4 kind it names, before any output, as the real gateway does;
  *  - usage = ceil(chars/4) of the prompt and of the completion actually delivered, so
@@ -27,6 +31,7 @@ import type {
   ChatChunk,
   ChatRequest,
   ChatMessage,
+  ModelCaps,
   ModelInfo,
   ProviderGateway,
   Usage,
@@ -77,6 +82,20 @@ async function* responseChunks(req: ChatRequest, response: MockResponse): AsyncG
     });
   }
   if (response.content.length > 0) yield { delta: response.content };
+  const calls = response.toolCalls;
+  if (calls !== undefined && calls.length > 0) {
+    // A native-mode reply ends on the calls it asked for; scripted reasoning becomes a
+    // replayable block on the same chunk, as the adapters' terminal chunks carry it.
+    yield {
+      finishReason: response.finishReason ?? 'tool_calls',
+      toolCalls: calls,
+      ...(response.reasoning !== undefined
+        ? { reasoning: [{ text: response.reasoning, raw: { type: 'mock-reasoning', text: response.reasoning } }] }
+        : {}),
+    };
+    return;
+  }
+  if (response.reasoning !== undefined) yield { reasoningDelta: response.reasoning };
   yield { finishReason: response.finishReason ?? 'stop' };
 }
 
@@ -85,11 +104,16 @@ export interface MockProviderOptions {
   scripts?: MockScript[];
   /** Profile id reported by `listModels`; matches nothing about the request. */
   profileId?: string;
+  /** `modelCaps()` reports the native-tools row `{tools: true}` when set. Default false: the conservative empty row. */
+  capsTools?: boolean;
 }
 
 export class MockProvider implements ProviderGateway {
   private readonly scripts: MockScript[];
   private readonly profileId: string;
+  private readonly capsTools: boolean;
+  /** The count of `complete()` calls served — the `callIndex` scripts see. */
+  private sequence = 0;
   /** Every request this provider has seen — lets evals assert on call history. */
   readonly calls: ChatRequest[] = [];
   /**
@@ -101,6 +125,7 @@ export class MockProvider implements ProviderGateway {
   constructor(options: MockProviderOptions = {}) {
     this.scripts = options.scripts ?? defaultScripts;
     this.profileId = options.profileId ?? 'mock';
+    this.capsTools = options.capsTools ?? false;
   }
 
   private pick(req: ChatRequest): MockScript {
@@ -115,7 +140,8 @@ export class MockProvider implements ProviderGateway {
 
   async *complete(req: ChatRequest, signal?: AbortSignal): AsyncIterable<ChatChunk> {
     this.calls.push(req);
-    const result = this.pick(req).respond(req);
+    this.sequence += 1;
+    const result = this.pick(req).respond(req, this.sequence);
     const source = isAsyncIterable(result) ? result : responseChunks(req, result as MockResponse);
     yield* settle(req, source, signal);
   }
@@ -132,6 +158,15 @@ export class MockProvider implements ProviderGateway {
     this.ledger.record(by, usage, 1);
   }
 
+  /**
+   * The capability row a caller reads to pick native-vs-fallback mode. The mock reports
+   * the conservative empty row unless `capsTools` was set, in which case `{tools: true}`.
+   * MockProvider-only — `ProviderGateway` has no `modelCaps`; the concrete `Gateway` does.
+   */
+  modelCaps(_profileId?: string, _model?: string): ModelCaps {
+    return this.capsTools ? { tools: true } : {};
+  }
+
   /** Test affordance: which profile id this provider answers for. */
   get id(): string {
     return this.profileId;
@@ -139,15 +174,19 @@ export class MockProvider implements ProviderGateway {
 }
 
 /**
- * The one place a mock stream is finished off. It forwards the script's deltas as they
- * are yielded, and remembers what was actually handed to the consumer. The terminal
- * chunk is produced here, once, so every path (normal, script-declared finish, abort)
- * ends the same way.
+ * The one place a mock stream is finished off. It forwards the script's deltas and
+ * reasoning deltas as they are yielded, and remembers what was actually handed to the
+ * consumer — the usage, the declared finish reason, and the native-mode fields
+ * (`toolCalls`, `reasoning`) a script put on its last chunk. The terminal chunk is
+ * produced here, once, so every path (normal, script-declared finish, abort) ends the
+ * same way.
  */
 async function* settle(req: ChatRequest, source: AsyncIterable<ChatChunk>, signal?: AbortSignal): AsyncGenerator<ChatChunk> {
   let delivered = '';
   let scriptUsage: Usage | undefined;
   let scriptFinish: ChatChunk['finishReason'];
+  let scriptToolCalls: ChatChunk['toolCalls'];
+  let scriptReasoning: ChatChunk['reasoning'];
   let interrupted = false;
 
   try {
@@ -158,6 +197,9 @@ async function* settle(req: ChatRequest, source: AsyncIterable<ChatChunk>, signa
       }
       if (chunk.usage !== undefined) scriptUsage = chunk.usage;
       if (chunk.finishReason !== undefined) scriptFinish = chunk.finishReason;
+      if (chunk.toolCalls !== undefined) scriptToolCalls = chunk.toolCalls;
+      if (chunk.reasoning !== undefined) scriptReasoning = chunk.reasoning;
+      if (chunk.reasoningDelta !== undefined) yield { reasoningDelta: chunk.reasoningDelta };
       if (chunk.delta) {
         delivered += chunk.delta;
         yield { delta: chunk.delta };
@@ -176,6 +218,8 @@ async function* settle(req: ChatRequest, source: AsyncIterable<ChatChunk>, signa
   yield {
     finishReason: scriptFinish ?? 'stop',
     usage: scriptUsage ?? usageFor(req.messages, delivered),
+    ...(scriptToolCalls !== undefined ? { toolCalls: scriptToolCalls } : {}),
+    ...(scriptReasoning !== undefined ? { reasoning: scriptReasoning } : {}),
   };
 }
 
