@@ -25,7 +25,7 @@ import {
   type ScopeSpec,
 } from '@caotang/coherence';
 import { detect, selectCandidates } from '@caotang/codex';
-import { type ProfileView, type ProviderGateway } from '@caotang/gateway';
+import { type ProfileView, type ProviderGateway, type TaskRole, type ThinkingLevel } from '@caotang/gateway';
 import { reviewCostAt, type ReviewLimitsSource } from '@caotang/harness';
 import { getBody, type ProjectState, type TreeNode } from '@caotang/store';
 
@@ -90,19 +90,28 @@ export function reviewContextOf(state: ProjectState): ReviewContext {
  * The provider gateway as the engine's model port. The reply is the model's text; the token counts are the engine's own estimate
  * (`ceil(chars/4)`, context-assembly §3), because a one-shot reply carries no usage. The run says so in its notes.
  */
-export function gatewayCoherenceModel(gateway: ProviderGateway, profile: ProfileView): CoherenceModel {
+export function gatewayCoherenceModel(
+  gateway: ProviderGateway,
+  profile: ProfileView,
+  defaults?: { readonly model?: string; readonly thinking?: ThinkingLevel },
+): CoherenceModel {
   return {
-    model: profile.defaultModel,
+    model: defaults?.model ?? profile.defaultModel,
     async complete(request: ModelRequest): Promise<ModelReply> {
       const message = await gateway.completeOnce(
         {
           profileId: profile.id,
+          // The review is a 'chat'-role task (provider-gateway §6): the role rides the ledger row, while the
+          // profile stays pinned to the one the caller resolved.
+          role: 'chat',
           messages: [
             { role: 'system', content: request.system },
             { role: 'user', content: request.user },
           ],
           responseFormat: { jsonSchemaHint: request.jsonSchemaHint },
           temperature: 0,
+          ...(defaults?.model === undefined ? {} : { model: defaults.model }),
+          ...(defaults?.thinking === undefined ? {} : { thinking: defaults.thinking }),
           ...(request.maxOutputTokens !== undefined ? { maxOutputTokens: request.maxOutputTokens } : {}),
         },
         request.signal,
@@ -119,13 +128,19 @@ export function gatewayCoherenceModel(gateway: ProviderGateway, profile: Profile
 }
 
 /**
- * The model a review runs through: the active provider profile, read at each call so a change of provider applies to the next
- * review (provider-gateway §2). Undefined when no provider is active, and then the agent's review is refused with the sentence
- * that names the provider.
+ * The model a review runs through: the profile the 'chat' role resolves to — the active one unless the writer pinned
+ * chat to another — read at each call so a change of provider or of role applies to the next review (provider-gateway
+ * §2, §6). Undefined when no provider resolves, and then the agent's review is refused with the sentence that names it.
  */
-export function activeCoherenceModel(providers: { readonly active: () => ProfileView | undefined; readonly gateway: ProviderGateway }): CoherenceModel | undefined {
-  const profile = providers.active();
-  return profile === undefined ? undefined : gatewayCoherenceModel(providers.gateway, profile);
+export function activeCoherenceModel(providers: {
+  readonly active: () => ProfileView | undefined;
+  readonly gateway: ProviderGateway;
+  /** The provider service's role resolution. A test double without it falls back to the active profile. */
+  readonly resolveForRole?: (role: TaskRole) => { readonly profile: ProfileView; readonly model: string; readonly thinking?: ThinkingLevel } | undefined;
+}): CoherenceModel | undefined {
+  const resolved = providers.resolveForRole?.('chat');
+  const profile = resolved?.profile ?? providers.active();
+  return profile === undefined ? undefined : gatewayCoherenceModel(providers.gateway, profile, resolved);
 }
 
 /** What the writer chose for a review, from the Findings tab and the Settings section. */
@@ -147,11 +162,11 @@ export function planCoherenceReview(state: ProjectState, file: CoherenceFile, ch
 /**
  * A review plan's cost in dollars for a profile, when its model has a price. Display only (provider-gateway §6): an estimate, never a
  * bill. This is the harness's own figure at the harness's own limits (`reviewCostAt`, which the agent's plan card shows for the same
- * review): the profile's default model, the one the desktop's agent session runs on, since it names no model. So the Findings tab and
- * the card cannot disagree.
+ * review): the role's model when it pins one, else the profile's default — the one a review call under it is sent with. So the
+ * Findings tab and the card cannot disagree.
  */
-export function reviewCostFor(plan: ReviewPlan, gateway: ReviewLimitsSource, profileId: string): number | undefined {
-  return reviewCostAt(plan, gateway, profileId)?.totalUsd;
+export function reviewCostFor(plan: ReviewPlan, gateway: ReviewLimitsSource, profileId: string, model?: string): number | undefined {
+  return reviewCostAt(plan, gateway, profileId, model)?.totalUsd;
 }
 
 /**

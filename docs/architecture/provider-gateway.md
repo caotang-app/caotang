@@ -30,6 +30,40 @@ interface ProviderProfile {
 - **Presets** (`packages/gateway/src/presets`): one row per shipped provider — its base URL, default/fast/vision models, auth header style, quirks, a per-model capability table (`ModelCaps`: native tools, images, JSON modes, thinking levels + how they map to wire fields, how reasoning replays) and a browser/CORS note. A preset may split models across adapters (`OpenCode`'s `claude-*` and two Qwen ids run on the Messages route, everything else on Chat). `keyOptional` is true only for `generic` and `opencode` — everywhere else a key is required. The live `/models` answer decides which model ids exist; the table supplies what a listing does not say.
 - A `generic` profile is the hand-rolled escape hatch: custom https base URL, optional sealed headers, OpenAI-Chat route.
 
+The shipped presets (the registry is the source of truth; this table is generated from it — capability rows as of 2026-10):
+
+| Preset | Route | Browser CORS | Notes |
+|---|---|---|---|
+| anthropic | anthropic-messages | ok | `anthropic-dangerous-direct-browser-access` sent |
+| openai | openai-responses | unknown | `store:false` sent |
+| gemini | openai-chat | unknown | — |
+| xai | openai-responses | unknown | `store:false` sent |
+| muse | openai-responses | unknown | encrypted reasoning replay |
+| mistral | openai-chat | unknown | — |
+| cohere | openai-chat | unknown | no `/models` route — the table is the catalogue |
+| deepseek | openai-chat | unknown | — |
+| alibaba | openai-chat | unknown | workspace field builds the URL |
+| tencent-hunyuan | openai-chat | unknown | region field builds the URL |
+| byteplus-ark | openai-chat | unknown | — |
+| moonshot | openai-chat | unknown | — |
+| zhipu-zai | openai-chat | blocked | desktop/hosted only |
+| minimax | openai-chat | unknown | — |
+| xiaomi-mimo | openai-chat | unknown | — |
+| nanogpt | openai-chat | unknown | keyless `/models` listing |
+| openrouter | openai-chat | unknown | keyless `/models` listing |
+| opencode | openai-chat | blocked | key optional (free models); `claude-*` + two Qwen ids on Messages |
+| perplexity | openai-chat | unknown | — |
+| together | openai-chat | unknown | — |
+| fireworks | openai-chat | unknown | — |
+| deepinfra | openai-chat | unknown | keyless `/models` listing |
+| groq | openai-chat | unknown | — |
+| huggingface | openai-chat | unknown | keyless `/models` listing |
+| cerebras | openai-chat | unknown | — |
+| generic | openai-chat | unknown | custom URL + sealed headers; key optional |
+| mock | — | ok | the deterministic fixture; no network |
+
+A `keyless list` flag means the provider's `/models` answers without a key — listing only; inference still needs one. `keyOptional` means inference itself is documented keyless, which holds only for `opencode`'s free models and `generic`.
+
 ## 3. Wire adapters
 
 Three wire formats ship, one adapter each, behind `ProviderAdapter` (`src/adapters/`). The gateway resolves a profile+model to `{adapter, ctx}` — the preset's route, or the generic Chat route — and the adapter owns everything route-specific:

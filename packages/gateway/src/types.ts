@@ -270,6 +270,18 @@ export interface UsageAttribution {
   at?: number;
 }
 
+/**
+ * §6's task-role routing, injected by the app. A request that names a `role` and no `profileId` resolves through
+ * `resolve`: the answer is the profile it sends through, with the model and thinking level the request defaults to
+ * (its own fields win). `allowed` answers the role-referenced profile set: the profile `resolve` named must be in
+ * it, or the request is refused before any key is revealed. An absent resolver leaves the `profileId`-or-active
+ * rule unchanged.
+ */
+export interface RoleResolver {
+  resolve(role: TaskRole): { profileId: string; model?: string; thinking?: ThinkingLevel } | undefined;
+  allowed(role: TaskRole): readonly string[];
+}
+
 export interface ProviderGateway {
   complete(req: ChatRequest, signal?: AbortSignal): AsyncIterable<ChatChunk>;
   completeOnce(req: ChatRequest, signal?: AbortSignal): Promise<ChatMessage>;

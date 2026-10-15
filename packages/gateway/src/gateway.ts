@@ -18,7 +18,7 @@
 import { systemClock, type Clock } from './clock.js';
 import { hostOf, originOf } from './base-url.js';
 import { type ProfileStore } from './profiles.js';
-import { ProfileError, ProviderError, providerMessages } from './errors.js';
+import { EgressDeniedError, ProfileError, ProviderError, providerMessages } from './errors.js';
 import type { KeyStore } from './keys/key-store.js';
 import { UsageLedger } from './ledger.js';
 import { createMockProvider, type MockProvider } from './mock/mock-provider.js';
@@ -48,6 +48,8 @@ import type {
   ModelLimits,
   ProfileView,
   ProviderGateway,
+  RoleResolver,
+  ThinkingLevel,
   Usage,
   UsageAttribution,
 } from './types.js';
@@ -95,6 +97,11 @@ export interface GatewayOptions {
   requestLog?: RequestLog;
   /** the mock used for mock profiles; defaults to the shipped script library */
   mock?: MockProvider;
+  /**
+   * §6's task-role routing. A request that names a `role` and no `profileId` resolves through this; a request
+   * that names neither keeps the active-profile rule. Absent means no routing: roles ride the ledger only.
+   */
+  roles?: RoleResolver;
 }
 
 const ZERO: Usage = { promptTokens: 0, completionTokens: 0 };
@@ -206,15 +213,29 @@ export function createGateway(options: GatewayOptions): Gateway {
   };
 
   async function* complete(req: ChatRequest, signal?: AbortSignal): AsyncGenerator<ChatChunk, void, undefined> {
-    const profile = targetOf(req.profileId);
-    const model = req.model ?? profile.defaultModel;
+    // §6: a request that names a role and no profile resolves through the injected router. The answer is the
+    // profile it sends through, and the model and thinking level become the defaults the request's own fields
+    // still beat. A resolver with no answer leaves the named-or-active rule in place, as a roleless request.
+    let routed: { profileId: string; model?: string; thinking?: ThinkingLevel } | undefined;
+    if (req.role !== undefined && req.profileId === undefined && options.roles !== undefined) {
+      routed = options.roles.resolve(req.role);
+      // The role-referenced set is the egress allow-list for a routed request (P9): a role may only ever send
+      // through a profile the resolver names for it. This refusal lands before any profile lookup or key reveal.
+      if (routed !== undefined && !options.roles.allowed(req.role).includes(routed.profileId)) {
+        throw new EgressDeniedError(`Refused a request under the "${req.role}" role: it resolved to a profile that role may not use.`);
+      }
+    }
+    const profile = targetOf(routed?.profileId ?? req.profileId);
+    const model = req.model ?? routed?.model ?? profile.defaultModel;
+    const sent: ChatRequest =
+      req.thinking === undefined && routed?.thinking !== undefined ? { ...req, thinking: routed.thinking } : req;
     const startedAt = clock.now();
     const stats: StreamStats = { attempts: 0, usage: undefined };
 
     try {
       if (profile.kind === 'mock') {
         stats.attempts = 1;
-        for await (const chunk of mock.complete(req, signal)) {
+        for await (const chunk of mock.complete(sent, signal)) {
           if (chunk.usage !== undefined) stats.usage = chunk.usage;
           yield chunk;
         }
@@ -225,13 +246,13 @@ export function createGateway(options: GatewayOptions): Gateway {
       // The §5 probe answer governs, and a capability row that names jsonObject false
       // can refuse it — but a row that says nothing leaves the probe to decide.
       const jsonObject =
-        req.responseFormat !== undefined &&
-        req.responseFormat !== 'text' &&
+        sent.responseFormat !== undefined &&
+        sent.responseFormat !== 'text' &&
         profile.responseFormat?.supportsJsonObject === true &&
         route.ctx.caps.jsonObject !== false;
       assertEgress(deps, `${profile.baseUrl}${route.adapter.completePath(model)}`, profile.id);
       const revealed = await secretsFor(profile);
-      const spec = { ...chatSpec(profile, req, route, jsonObject, revealed), signal };
+      const spec = { ...chatSpec(profile, sent, route, jsonObject, revealed), signal };
       yield* streamChat(deps, spec, stats);
     } finally {
       if (stats.attempts > 0) {

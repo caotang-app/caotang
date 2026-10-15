@@ -59,7 +59,7 @@
 import { preloadAnchorLibraries } from '@caotang/editor';
 import { err, ok, type CommandError, type Result, type UndoOutcome } from '@caotang/bus';
 import { ContextError, type AgentTask, type PromptPreview, type RecentTurn, type SelectionSpan } from '@caotang/context';
-import type { ChatMessage, Gateway, ThinkingLevel, ToolCall as WireToolCall, ToolDef } from '@caotang/gateway';
+import type { ChatMessage, Gateway, TaskRole, ThinkingLevel, ToolCall as WireToolCall, ToolDef } from '@caotang/gateway';
 import { newId } from '@caotang/ids';
 import { getBody, getRevision, type ProjectState, type TreeNode } from '@caotang/store';
 import { dialogueDraftTool, resolveContainer } from '@caotang/dialogue';
@@ -150,6 +150,12 @@ export interface AgentSessionOptions {
   readonly emit?: (event: AgentEvent) => void;
   readonly profileId?: string;
   readonly model?: string;
+  /**
+   * The task role the session's model calls run under (provider-gateway §6): stamped on every request the turn
+   * makes, so the ledger accounts it and the gateway resolves the role's profile when `profileId` pins none.
+   * The prompt-pack's calls are stamped 'drafting' instead. Absent, no role is sent.
+   */
+  readonly role?: TaskRole;
   /**
    * The effort level every model request of the session is sent with (`ChatRequest.thinking`). Absent,
    * the provider's own default applies.
@@ -556,20 +562,23 @@ export function createAgentSession(options: AgentSessionOptions): AgentSession {
 
   /**
    * The one budgeted call site. Every model request a turn makes passes through here, drafts and retries
-   * included, and is counted against the turn's bound before it is sent.
+   * included, and is counted against the turn's bound before it is sent. The session's role is stamped on the
+   * request here too (provider-gateway §6); the prompt-pack's calls pass 'drafting' for it instead.
    */
-  const modelCall = (turn: Turn, onDelta?: (delta: string) => void): ModelCall => ({
+  const modelCall = (turn: Turn, onDelta?: (delta: string) => void, role: TaskRole | undefined = options.role): ModelCall => ({
     gateway: {
       complete: (request, signal) => {
         if (turn.modelCalls >= maxModelCalls) throw new BudgetExceeded(maxModelCalls);
         turn.modelCalls += 1;
-        return gateway.complete(request, signal);
+        return gateway.complete(role === undefined ? request : { ...request, role }, signal);
       },
     },
     turnId: turn.id,
-    ...(options.profileId === undefined ? {} : { profileId: options.profileId }),
-    ...(options.model === undefined ? {} : { model: options.model }),
-    ...(options.thinking === undefined ? {} : { thinking: options.thinking }),
+    // The session's pins apply to its own role only: a call under another role resolves that role's
+    // profile, model and thinking at the gateway instead of borrowing the session's.
+    ...(options.profileId === undefined || role !== options.role ? {} : { profileId: options.profileId }),
+    ...(options.model === undefined || role !== options.role ? {} : { model: options.model }),
+    ...(options.thinking === undefined || role !== options.role ? {} : { thinking: options.thinking }),
     // A draft's deltas go to its scene's ghost region (`draft.delta`), and every other call's to the panel's stream tail.
     onDelta: onDelta ?? ((delta) => emit({ type: 'model.delta', turnId: turn.id, delta })),
   });
@@ -654,9 +663,15 @@ export function createAgentSession(options: AgentSessionOptions): AgentSession {
   /** How many model calls the turn may still make. */
   const callsLeft = (turn: Turn): number => maxModelCalls - turn.modelCalls;
 
-  /** The model the prompt-pack engine calls through: each of its requests is one generation of the turn, so it counts against the bound. */
+  /**
+   * The model the prompt-pack engine calls through: each of its requests is one generation of the turn, so it
+   * counts against the bound — and each runs under the 'drafting' role, whatever role the session itself carries.
+   */
   const promptModel = (turn: Turn) =>
-    promptModelOf(async (messages, jsonSchemaHint) => (await complete(modelCall(turn), messages, { jsonSchemaHint })).text, options.model ?? '');
+    promptModelOf(
+      async (messages, jsonSchemaHint) => (await complete(modelCall(turn, undefined, 'drafting'), messages, { jsonSchemaHint })).text,
+      options.model ?? '',
+    );
 
   const nextCallPrefix = (turn: Turn, letter: string): string => {
     turn.seq += 1;

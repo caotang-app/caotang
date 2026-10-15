@@ -97,7 +97,11 @@ export function FindingsPanel({ session, onReveal, settings = DEFAULT_COHERENCE_
   const currentDocId = session.view.activeDocId ?? undefined;
   const runs = runViewsOf(file, (docId) => session.state.manifest.tree.find((node) => node.id === docId)?.title ?? docId);
   const activeProfile = providers?.active();
-  const mockOnly = activeProfile === undefined || activeProfile.kind === 'mock';
+  // The model review is a 'chat'-role call (provider-gateway §6): it runs on the profile the role resolves to —
+  // the active one unless the writer pinned chat to another — with the role's model and thinking defaults.
+  const chatResolution = providers?.resolveForRole?.('chat');
+  const chatProfile = chatResolution?.profile ?? activeProfile;
+  const mockOnly = chatProfile === undefined || chatProfile.kind === 'mock';
 
   /** A large scope asks first. The panel says so in its own words, and the control that answers it is shown beside the scan. */
   const askForApproval = (scope: ScopeSpec): void => {
@@ -175,14 +179,16 @@ export function FindingsPanel({ session, onReveal, settings = DEFAULT_COHERENCE_
 
   const startReview = async (plan: ReviewPlan): Promise<void> => {
     const current = session.coherenceFile();
-    if (current === undefined || providers === undefined || activeProfile === undefined) {
+    const resolved = providers?.resolveForRole?.('chat');
+    const profile = resolved?.profile ?? activeProfile;
+    if (current === undefined || providers === undefined || profile === undefined) {
       report({ text: 'Connect a provider in Settings to review the story with a model.', tone: 'error' });
       return;
     }
     const controller = new AbortController();
     setReview({ plan, controller });
     try {
-      const model = gatewayCoherenceModel(providers.gateway, activeProfile);
+      const model = gatewayCoherenceModel(providers.gateway, profile, resolved);
       const result = await runCoherenceReview({
         state: session.state,
         file: current,
@@ -254,7 +260,7 @@ export function FindingsPanel({ session, onReveal, settings = DEFAULT_COHERENCE_
   const plan = review !== null && !running ? review.plan : null;
   // The same figure the agent's plan card shows for this review: one function, reading the gateway's limits for the profile as the agent's loop does (coherence-review.ts).
   const cost =
-    plan === null || providers === undefined || activeProfile === undefined ? undefined : reviewCostFor(plan, providers.gateway, activeProfile.id);
+    plan === null || providers === undefined || chatProfile === undefined ? undefined : reviewCostFor(plan, providers.gateway, chatProfile.id, chatResolution?.model);
 
   return (
     <div className="findings" data-testid="findings-panel">
