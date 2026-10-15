@@ -41,7 +41,7 @@ const EXPECTED_IDS = [
 ] as const;
 
 describe('the registry', () => {
-  it('ships every researched provider exactly once, plus the generic endpoint', () => {
+  it('ships every registered provider exactly once, plus the generic endpoint', () => {
     expect(PRESETS.map((p) => p.id).sort()).toEqual([...EXPECTED_IDS].sort());
     expect(new Set(PRESETS.map((p) => p.id)).size).toBe(PRESETS.length);
   });

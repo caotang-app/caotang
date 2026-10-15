@@ -68,7 +68,7 @@ Not "Fix bug" or "Update exporter". Use the body for the reason, when the subjec
 - Include tests: a unit test for module behaviour, an end-to-end test for anything a writer sees.
 - Update the docs a writer reads ([README.md](README.md), [docs/USER-GUIDE.md](docs/USER-GUIDE.md), [CHANGELOG.md](CHANGELOG.md)) when behaviour changes. Tests check that the guide lists no built feature as missing.
 - Write user-facing text in plain words, in whole sentences, and name what the writer can do next.
-- Every pull request gets an independent review before it is merged. Expect questions, and expect to be asked to split a large change.
+- Every pull request is reviewed before it is merged. Expect questions, and expect to be asked to split a large change.
 
 For a large change, open an issue first so the design can be agreed before you build it.
 

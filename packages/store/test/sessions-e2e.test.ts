@@ -7,7 +7,7 @@
  * What this does not cover is the desktop app calling this path. apps/desktop does
  * not yet pass a tracker to `createAutosave` or begin and end a session around the
  * editor, so in the running app the log stays empty. That caller is out of this
- * package's scope and is listed in the workstream's known gaps.
+ * package's scope and is listed in the known gaps.
  */
 import { describe, expect, it } from 'vitest';
 

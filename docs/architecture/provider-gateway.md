@@ -150,5 +150,5 @@ The app calls providers straight from the page, so a preset's usefulness in the 
 |---|---|---|
 | D1 | Three adapters — Chat Completions, Responses, Messages — behind `ProviderAdapter` | Built; presets pick a route per provider, per model where a provider splits them. |
 | D2 | `response_format` via capability rows on presets, probe-gated on generic | Rows answer for shipped presets; the generic profile keeps the save-time probe. |
-| D3 | Keys: IndexedDB + AES-GCM non-extractable key | Delegated; the threat model is stated in §7. |
+| D3 | Keys: IndexedDB + AES-GCM non-extractable key | Built; the threat model is stated in §7. |
 | D4 | Usage display-only, no quota enforcement | Display only: Caotang is free and BYOK, so there is no quota logic. `pricePer1k` per profile powers pre-approval cost estimates (context-assembly §5). |

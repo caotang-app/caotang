@@ -67,7 +67,7 @@ export function resolveKey(facts: KeyFacts, context: KeyContext): KeyAction | nu
   if (cmd && !facts.alt && key === 'z' && !facts.shift) return context.inTextField ? null : 'undo';
   if (cmd && !facts.alt && key === 'f' && facts.shift) return 'focus-mode';
   // binder-filters §5: Ctrl+Alt+F focuses the filter field. Ctrl+Shift+F stays focus mode, which the toolbar and the user
-  // guide name, so the filter chord is the one that moves (the decision is recorded in the furniture workstream's report).
+  // guide name, so the filter chord is the one that moves (the decision is recorded in docs/decisions.md).
   if (cmd && facts.alt && !facts.shift && key === 'f') return 'focus-filter';
   // Ctrl+Enter inside a field is a line break the writer may mean, so it yields.
   if (cmd && !facts.alt && key === 'Enter') return context.inTextField ? null : 'open-in-editor';

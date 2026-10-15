@@ -2,7 +2,7 @@
  * complete()'s task-role routing (provider-gateway §6): a request that names a role and no profile resolves
  * through the injected resolver — the role's profile is the target, and its model and thinking level are the
  * defaults the request's own fields beat. The role-referenced set is the egress allow-list the answer is checked
- * against before any key is revealed (P9), and the ledger rows carry the role the call ran under.
+ * against before any key is revealed, and the ledger rows carry the role the call ran under.
  */
 
 import { describe, expect, it, vi } from 'vitest';

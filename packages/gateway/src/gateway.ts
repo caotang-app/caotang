@@ -219,7 +219,7 @@ export function createGateway(options: GatewayOptions): Gateway {
     let routed: { profileId: string; model?: string; thinking?: ThinkingLevel } | undefined;
     if (req.role !== undefined && req.profileId === undefined && options.roles !== undefined) {
       routed = options.roles.resolve(req.role);
-      // The role-referenced set is the egress allow-list for a routed request (P9): a role may only ever send
+      // The role-referenced set is the egress allow-list for a routed request: a role may only ever send
       // through a profile the resolver names for it. This refusal lands before any profile lookup or key reveal.
       if (routed !== undefined && !options.roles.allowed(req.role).includes(routed.profileId)) {
         throw new EgressDeniedError(`Refused a request under the "${req.role}" role: it resolved to a profile that role may not use.`);

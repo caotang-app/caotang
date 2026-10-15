@@ -14,7 +14,7 @@
  * that changes the map, so no reader can observe a state with none or two active.
  *
  * **Persistence.** Profiles are held in memory. The non-secret part is small and belongs
- * to the settings workstream to persist; the secret part is already in IndexedDB via the
+ * to app settings, which persists it; the secret part is already in IndexedDB via the
  * key store. That split is deliberate: the thing that must survive a reload safely is the
  * thing that is sealed.
  */

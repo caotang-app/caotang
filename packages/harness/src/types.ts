@@ -13,7 +13,7 @@
  *
  * A **port** tool has no commands of its own. Its implementation is injected, and
  * until one is supplied the call is refused with the not-wired error. The four
- * port tools need later workstreams (codex, the provider loop), and their
+ * port tools need their host features (codex, the provider loop), and their
  * metadata and schemas are real even though their behaviour is not.
  */
 

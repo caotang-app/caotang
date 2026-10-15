@@ -25,12 +25,12 @@ The registry's `cors` field records the swept answer; presets that cannot answer
 
 ## 3. The real-key round
 
-No provider was ever called with a real key during development. `e2e/real-key.spec.ts` is the owner's verification round — env-gated, never run in CI, and skipped silently without its variables.
+Preflights prove reachability, not that a provider actually answers a real account. `e2e/provider-smoke.spec.ts` is the credential check — env-gated, never run in CI, and skipped silently without its variables.
 
 ```sh
 CAOTANG_SMOKE_ANTHROPIC=sk-ant-... \
 CAOTANG_SMOKE_OPENAI=sk-... \
-pnpm exec playwright test e2e/real-key.spec.ts
+pnpm exec playwright test e2e/provider-smoke.spec.ts
 ```
 
 One `CAOTANG_SMOKE_<PRESET>` variable per provider, named by preset id uppercased (`CAOTANG_SMOKE_OPENROUTER`, `CAOTANG_SMOKE_DEEPSEEK`, …). For each variable present, the round checks, in order:
@@ -49,5 +49,5 @@ Keys live only in `caotang.env` (gitignored) or the shell. The spec never prints
 ## 4. What the round does not cover
 
 - Local/loopback servers (Ollama, LM Studio) are out of scope for this release — provider profiles are https-only.
-- Rate limits, quota exhaustion, and regional endpoint variants are the owner's live checks, not the sweep's.
+- Rate limits, quota exhaustion, and regional endpoint variants are live-account checks, not the sweep's.
 - A provider that passes the sweep can still fail a real account — the row's `cors` field says what the sweep found, not a guarantee.
