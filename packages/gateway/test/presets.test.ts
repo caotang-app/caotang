@@ -81,8 +81,8 @@ describe('the registry', () => {
     const cors = new Map(PRESETS.map((p) => [p.id, p.cors]));
     expect(cors.get('anthropic')).toBe('ok'); // documents the browser-access header
     expect(cors.get('mock')).toBe('ok'); // the local seam is not a network call
-    expect(cors.get('zhipu-zai')).toBe('blocked'); // no CORS answers on paas/v4
-    expect(cors.get('opencode')).toBe('blocked'); // no preflight answers on the inference hosts
+    expect(cors.get('zhipu-zai')).toBe('ok'); // the sweep read a 401 through a browser preflight
+    expect(cors.get('opencode')).toBe('ok'); // the sweep read a 401 through a browser preflight
     // Everything else is 'unknown' — never claimed reachable without documentation.
     for (const preset of PRESETS) {
       if (!['anthropic', 'mock', 'zhipu-zai', 'opencode'].includes(preset.id)) {

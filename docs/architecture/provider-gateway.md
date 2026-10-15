@@ -46,12 +46,12 @@ The shipped presets (the registry is the source of truth; this table is generate
 | tencent-hunyuan | openai-chat | unknown | region field builds the URL |
 | byteplus-ark | openai-chat | unknown | — |
 | moonshot | openai-chat | unknown | — |
-| zhipu-zai | openai-chat | blocked | desktop/hosted only |
+| zhipu-zai | openai-chat | ok | — |
 | minimax | openai-chat | unknown | — |
 | xiaomi-mimo | openai-chat | unknown | — |
 | nanogpt | openai-chat | unknown | keyless `/models` listing |
 | openrouter | openai-chat | unknown | keyless `/models` listing |
-| opencode | openai-chat | blocked | key optional (free models); `claude-*` + two Qwen ids on Messages |
+| opencode | openai-chat | ok | key optional (free models); `claude-*` + two Qwen ids on Messages |
 | perplexity | openai-chat | unknown | — |
 | together | openai-chat | unknown | — |
 | fireworks | openai-chat | unknown | — |

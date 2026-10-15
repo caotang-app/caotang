@@ -323,8 +323,8 @@ export const PRESETS: readonly PresetDef[] = [
     defaultModel: 'glm-5.3',
     quirks: {},
     // The BYOK base is the general paas/v4 host; Coding Plan bases are excluded.
-    cors: 'blocked',
-    corsNote: 'The paas/v4 API does not answer browser CORS preflights; this preset is desktop or hosted only.',
+    cors: 'ok',
+    corsNote: 'The paas/v4 API answers the browser preflight; the sweep read a 401 for a placeholder key.',
     docsUrl: 'https://docs.z.ai',
     models: [
       // glm-5.3 family cannot disable thinking; medium is unsupported (send high).
@@ -444,8 +444,8 @@ export const PRESETS: readonly PresetDef[] = [
       // The docs ask clients to send their own user agent.
       extraHeaders: { 'user-agent': 'caotang' },
     },
-    cors: 'blocked',
-    corsNote: 'The inference hosts do not answer browser CORS preflights; this preset is desktop or hosted only.',
+    cors: 'ok',
+    corsNote: 'The inference host answers the browser preflight; the sweep read a 401 for a placeholder key. `user-agent` is a forbidden header in the browser — it is sent only where fetch allows it (desktop/hosted).',
     docsUrl: 'https://opencode.ai/docs',
     // Vision, tools and thinking parameters are documented on no route: every row is
     // text-only (vision: false) and nothing else is claimed.
