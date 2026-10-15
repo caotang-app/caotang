@@ -40,6 +40,14 @@
  * refused back to the model with a corrective hint, and a retry the turn cannot afford is a notice on
  * the card. The call site refuses anything past the bound as a backstop.
  *
+ * ## The wire
+ *
+ * The planner's calls go over one of two protocols, chosen per turn by what the gateway's `modelCaps`
+ * reports for the profile and model: native tool calls when it reports `tools`, the JSON-in-text
+ * envelope otherwise (protocol.ts). Both produce the same plan — a native reply's calls are its steps
+ * and its text is the card's rationale — and a step's risk, its card, and the ladder that follows a
+ * refusal do not read which wire brought the call.
+ *
  * ## Identity
  *
  * A session names its turns, so two sessions that share a gateway (and its usage ledger) or a harness
@@ -51,7 +59,7 @@
 import { preloadAnchorLibraries } from '@caotang/editor';
 import { err, ok, type CommandError, type Result, type UndoOutcome } from '@caotang/bus';
 import { ContextError, type AgentTask, type PromptPreview, type RecentTurn, type SelectionSpan } from '@caotang/context';
-import type { ChatMessage, Gateway } from '@caotang/gateway';
+import type { ChatMessage, Gateway, ThinkingLevel, ToolCall as WireToolCall, ToolDef } from '@caotang/gateway';
 import { newId } from '@caotang/ids';
 import { getBody, getRevision, type ProjectState, type TreeNode } from '@caotang/store';
 import { dialogueDraftTool, resolveContainer } from '@caotang/dialogue';
@@ -103,6 +111,7 @@ import {
   sceneRole,
   scanContinuity,
   synopsisRole,
+  type Completion,
   type FindingsProposal,
   type ModelCall,
   type SceneProposal,
@@ -114,6 +123,8 @@ import {
   loadedToolsMessage,
   parseReply,
   plannerSystem,
+  plannerSystemNative,
+  plannerToolDefs,
   refusalSentence,
   refusedStepsMessage,
   REPLY_SCHEMA_HINT,
@@ -139,6 +150,11 @@ export interface AgentSessionOptions {
   readonly emit?: (event: AgentEvent) => void;
   readonly profileId?: string;
   readonly model?: string;
+  /**
+   * The effort level every model request of the session is sent with (`ChatRequest.thinking`). Absent,
+   * the provider's own default applies.
+   */
+  readonly thinking?: ThinkingLevel;
   /** The most model calls one turn may make, retries and drafts included. Default 8. */
   readonly maxModelCalls?: number;
   /** How many times the verify ladder may adjust and re-show a refused step (agent-harness §7). Default 2. */
@@ -195,6 +211,21 @@ class BudgetExceeded extends Error {
   }
 }
 
+/**
+ * A native-mode reply the model made, and the outcomes its calls got as they ran. It is held until the
+ * results are flushed into tool messages, so a call's answer always lands before the next request.
+ */
+interface WireReply {
+  readonly calls: readonly WireToolCall[];
+  readonly results: Map<string, WireResult>;
+}
+
+/** The result one native call is answered with: its data, or the reason it did not run. */
+interface WireResult {
+  readonly ok: boolean;
+  readonly body: unknown;
+}
+
 interface Turn {
   readonly id: string;
   readonly messages: ChatMessage[];
@@ -212,6 +243,18 @@ interface Turn {
   undoGroupId?: string;
   /** The loaded-tools addendum the model was last told, so a request after a new load is told again (context-assembly §2). */
   addendumSent?: string;
+  /**
+   * Whether the planner speaks native tool calls this turn: set when the first planner call is built
+   * (`plannedTurn`), from the model's capabilities. On the JSON fallback it stays `false`.
+   */
+  native: boolean;
+  /** The native replies whose calls still owe tool messages, oldest first. Empty on the JSON wire. */
+  readonly wireReplies: WireReply[];
+  /**
+   * The wire call a plan step answers, by the step object the plan currently carries. An edit replaces
+   * the object, so `reconcileWire` re-binds a step's call to the step the writer left in its place.
+   */
+  readonly wireSteps: Map<PlanStep, WireToolCall>;
 }
 
 /** How the turn ended, before the report is built from it. */
@@ -267,6 +310,51 @@ function needsWriterApproval(error: CommandError): boolean {
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** The reason a native call's tool message reports when the call never ran (the step was cancelled or edited away). */
+const NOT_RUN = 'the call did not run: its step was cancelled or changed before it ran';
+
+/**
+ * A native reply's step expectation. The wire carries no `expect`, so the step takes the reply's own
+ * text — what the model said the calls were for — as the expectation the card shows. A reply that
+ * asked for calls and said nothing else gets the placeholder.
+ */
+function expectOf(text: string): string {
+  const trimmed = text.trim();
+  return trimmed === '' ? 'the step the call asks for' : trimmed;
+}
+
+/**
+ * A native call's arguments, parsed. A call that names no arguments is read as none; one whose JSON does
+ * not parse or is not an object is a refusal the model corrects, like a JSON reply it cannot parse.
+ */
+function callArgs(call: WireToolCall): { readonly params?: CallParams; readonly error?: string } {
+  const source = call.argumentsJson.trim();
+  if (source === '') return { params: {} };
+  let value: unknown;
+  try {
+    value = JSON.parse(source);
+  } catch {
+    return { error: 'the call\'s arguments were not valid JSON, so it did not run: send the call again with its arguments as one JSON object' };
+  }
+  if (!isRecord(value)) {
+    return { error: `the call's arguments must be one JSON object, and this call sent ${value === null ? 'null' : Array.isArray(value) ? 'an array' : `a ${typeof value}`}: send the call again with its arguments as one JSON object` };
+  }
+  return { params: value };
+}
+
+/**
+ * The reply as the conversation keeps it. A native reply's calls and reasoning blocks ride on the
+ * message verbatim — the adapter replays them on the next request, so they are never paraphrased.
+ */
+function assistantOf(reply: Completion): ChatMessage {
+  return {
+    role: 'assistant',
+    content: reply.text,
+    ...(reply.toolCalls === undefined || reply.toolCalls.length === 0 ? {} : { toolCalls: reply.toolCalls }),
+    ...(reply.reasoning === undefined || reply.reasoning.length === 0 ? {} : { reasoning: reply.reasoning }),
+  };
 }
 
 /**
@@ -481,9 +569,87 @@ export function createAgentSession(options: AgentSessionOptions): AgentSession {
     turnId: turn.id,
     ...(options.profileId === undefined ? {} : { profileId: options.profileId }),
     ...(options.model === undefined ? {} : { model: options.model }),
+    ...(options.thinking === undefined ? {} : { thinking: options.thinking }),
     // A draft's deltas go to its scene's ghost region (`draft.delta`), and every other call's to the panel's stream tail.
     onDelta: onDelta ?? ((delta) => emit({ type: 'model.delta', turnId: turn.id, delta })),
   });
+
+  /**
+   * The tool declarations a native planner call may send, or `undefined` on the JSON wire: the model
+   * behind this session's profile and model must report `tools` in its capabilities, and there must be
+   * tools to declare. A gateway with no `modelCaps` reports nothing, which is the fallback either way.
+   */
+  const nativeTools = (): ToolDef[] | undefined => {
+    if (gateway.modelCaps?.(options.profileId, options.model)?.tools !== true) return undefined;
+    const tools = plannerToolDefs(harness.tools(), harness.loadedExternalTools());
+    return tools.length === 0 ? undefined : tools;
+  };
+
+  /**
+   * The planner's own calls: the one budgeted call site, with the turn's declarations added on the
+   * native wire. The list is rebuilt here, on the call itself, so a tool a mid-turn `tool.search`
+   * loaded is declared on the very next request.
+   */
+  const plannerCall = (turn: Turn): ModelCall => {
+    const call = modelCall(turn);
+    if (!turn.native) return call;
+    const tools = plannerToolDefs(harness.tools(), harness.loadedExternalTools());
+    return tools.length === 0 ? call : { ...call, tools };
+  };
+
+  /**
+   * Records a step's outcome as the result its native call is answered with. The step is found by its
+   * own object — an edited step is a new object, so `reconcileWire` re-binds edits before they run.
+   * A step with no call (an app-built plan, or the JSON wire) records nothing.
+   */
+  const wireResult = (turn: Turn, step: PlanStep, result: WireResult): void => {
+    const call = turn.wireSteps.get(step);
+    if (call === undefined) return;
+    const pending = turn.wireReplies.find((reply) => reply.calls.some((candidate) => candidate.id === call.id));
+    pending?.results.set(call.id, result);
+  };
+
+  /**
+   * The tool messages the next request carries, one per call the model made and has not yet heard back
+   * for — every call is answered, so the model is never left guessing whether one ran. A call with no
+   * recorded outcome is reported not run: its step was cancelled, declined or edited away.
+   */
+  const flushWire = (turn: Turn): void => {
+    for (const reply of turn.wireReplies) {
+      for (const call of reply.calls) {
+        const result = reply.results.get(call.id) ?? { ok: false, body: NOT_RUN };
+        turn.messages.push({
+          role: 'tool',
+          toolCallId: call.id,
+          content: JSON.stringify(result.ok ? { ok: true, data: result.body } : { ok: false, error: result.body }),
+          ...(result.ok ? {} : { isError: true }),
+        });
+      }
+    }
+    turn.wireReplies.length = 0;
+  };
+
+  /** Gives a step the wire call of the one it replaced, when an edit or a retry made it a new object. */
+  const transferWire = (turn: Turn, from: PlanStep, to: PlanStep): void => {
+    if (turn.wireSteps.has(to)) return;
+    const call = turn.wireSteps.get(from);
+    if (call !== undefined) turn.wireSteps.set(to, call);
+  };
+
+  /**
+   * Re-binds the wire calls of an editable plan after the writer decided its card: an edited step is a
+   * new object, so its call follows it by its origin — the reply step it stands for — or its result
+   * would be reported not run. Steps that kept their objects (moves, and steps no edit touched) are
+   * already bound, and a dropped step keeps no binding: its call is reported not run.
+   */
+  const reconcileWire = (turn: Turn, before: EditableSteps, after: EditableSteps): void => {
+    if (turn.wireSteps.size === 0) return;
+    for (const [index, step] of after.steps.entries()) {
+      if (turn.wireSteps.has(step)) continue;
+      const prior = before.steps[before.origins.indexOf(after.origins[index] ?? index)];
+      if (prior !== undefined) transferWire(turn, prior, step);
+    }
+  };
 
   /** How many model calls the turn may still make. */
   const callsLeft = (turn: Turn): number => maxModelCalls - turn.modelCalls;
@@ -545,6 +711,7 @@ export function createAgentSession(options: AgentSessionOptions): AgentSession {
     const id = nextCallPrefix(turn, 'x');
     cardFor(turn, id, step.tool, step.params, 'running');
     moveCard(turn, id, 'failed', { error: message });
+    wireResult(turn, step, { ok: false, body: message });
   };
 
   /**
@@ -851,14 +1018,23 @@ export function createAgentSession(options: AgentSessionOptions): AgentSession {
       } else {
         cardFor(turn, id, step.tool, step.params, 'running');
       }
-      results.push(settleRead(turn, index, step, callId, outcome));
+      const result = settleRead(turn, index, step, callId, outcome);
+      wireResult(turn, step, { ok: result.ok, body: result.body });
+      results.push(result);
       if (step.tool === 'tool.search' && outcome.ok && Array.isArray(outcome.value.data['surfaced'])) {
         for (const name of outcome.value.data['surfaced'] as string[]) surfaced.add(name);
       }
     }
     const loadedNow = harness.loadedExternalTools().filter((tool) => surfaced.has(tool.qualifiedName));
-    const sections = [resultsMessage(results), ...(loadedNow.length === 0 ? [] : [loadedToolsMessage(loadedNow)])];
-    turn.messages.push({ role: 'user', content: sections.join('\n\n') });
+    if (turn.native) {
+      // On the native wire each call is answered by its own tool message, keyed by its id; a search that
+      // surfaced tools still puts their descriptors in a user note after the results, as the JSON wire does.
+      flushWire(turn);
+      if (loadedNow.length > 0) turn.messages.push({ role: 'user', content: loadedToolsMessage(loadedNow) });
+    } else {
+      const sections = [resultsMessage(results), ...(loadedNow.length === 0 ? [] : [loadedToolsMessage(loadedNow)])];
+      turn.messages.push({ role: 'user', content: sections.join('\n\n') });
+    }
     // The descriptors just sent name every tool the search loaded, so the planner's one-line addendum for the same set is not
     // sent again in the next request: the same names would reach the model twice (context-assembly §2).
     if (loadedNow.length > 0) turn.addendumSent = harness.loadedAddendum();
@@ -1085,12 +1261,14 @@ export function createAgentSession(options: AgentSessionOptions): AgentSession {
       turn.trace.push({ tool: step.tool, callId: id, outcome: 'ok', params: step.params });
       turn.steps.push({ index, tool: step.tool, expect: step.expect, status: 'done', summary: outcome.value.summary, data: outcome.value.data });
       moveCard(turn, id, 'done', { summary: outcome.value.summary });
+      wireResult(turn, step, { ok: true, body: outcome.value.data });
       return { ok: true, effect: true, completed: [index] };
     }
     const reason = errorSummary(outcome.error);
     turn.trace.push({ tool: step.tool, callId: id, outcome: 'refused', code: outcome.error.code, params: step.params });
     turn.steps.push({ index, tool: step.tool, expect: step.expect, status: 'failed', error: reason });
     moveCard(turn, id, 'failed', { error: reason });
+    wireResult(turn, step, { ok: false, body: reason });
     // A write that failed may have reached the server or the findings file, so it is never adjusted (`effect`).
     return { ok: false, failedAt: index, effect: write, askBack: askBackFor(outcome.error), completed: [] };
   }
@@ -1173,6 +1351,8 @@ export function createAgentSession(options: AgentSessionOptions): AgentSession {
         turn.cards.push({ kind: 'confirm', tools: [step.tool], decision: 'approved', edits: decided.edits, retries: decided.retries });
         phase(turn, 'running');
         const approved = decided.editable.steps[0] ?? step;
+        // The step the writer left in the card is the call's answer, even when an edit made it a new object.
+        transferWire(turn, step, approved);
         const write = await runAwaited(turn, index, approved, id, 'confirmed', undefined);
         if (!write.ok) {
           cancelAfter(turn, editable, index, 'plan', prefix);
@@ -1215,6 +1395,7 @@ export function createAgentSession(options: AgentSessionOptions): AgentSession {
         turn.trace.push({ tool: ran.tool, callId: doneId, outcome: 'ok', params: ran.params });
         turn.steps.push({ index: done.index, tool: ran.tool, expect: ran.expect, status: 'done', summary: done.value.summary, data: done.value.data });
         moveCard(turn, doneId, 'done', { summary: done.value.summary });
+        wireResult(turn, ran, { ok: true, body: done.value.data });
         completed.push(done.index);
       }
       if (outcome.undoGroupId !== undefined) undoGroupId ??= outcome.undoGroupId;
@@ -1231,6 +1412,7 @@ export function createAgentSession(options: AgentSessionOptions): AgentSession {
       turn.trace.push({ tool: failed.tool, callId: failedId, outcome: 'refused', code: outcome.error.code, params: failed.params });
       turn.steps.push({ index: failedIndex, tool: failed.tool, expect: failed.expect, status: 'failed', error: reason });
       moveCard(turn, failedId, 'failed', { error: reason });
+      wireResult(turn, failed, { ok: false, body: reason });
       cancelAfter(turn, editable, failedIndex, 'plan', prefix);
       return {
         ok: false,
@@ -1271,12 +1453,14 @@ export function createAgentSession(options: AgentSessionOptions): AgentSession {
         turn.trace.push({ tool: step.tool, callId: id, outcome: 'ok', params: step.params });
         turn.steps.push({ index: from, tool: step.tool, expect: step.expect, status: 'done', summary: outcome.value.summary, data: outcome.value.data });
         moveCard(turn, id, 'done', { summary: outcome.value.summary });
+        wireResult(turn, step, { ok: true, body: outcome.value.data });
         return { ok: true, ...(outcome.value.undoGroupId === undefined ? {} : { undoGroupId: outcome.value.undoGroupId }), effect: true, completed: [from] };
       }
       const reason = errorSummary(outcome.error);
       turn.trace.push({ tool: step.tool, callId: id, outcome: 'refused', code: outcome.error.code, params: step.params });
       turn.steps.push({ index: from, tool: step.tool, expect: step.expect, status: 'failed', error: reason });
       moveCard(turn, id, 'failed', { error: reason });
+      wireResult(turn, step, { ok: false, body: reason });
       const group = outcome.error.details?.['undoGroupId'];
       return {
         ok: false,
@@ -1309,6 +1493,7 @@ export function createAgentSession(options: AgentSessionOptions): AgentSession {
       turn.trace.push({ tool: step.tool, callId: id, outcome: 'ok', params: step.params });
       turn.steps.push({ index: done.index, tool: step.tool, expect: step.expect, status: 'done', summary: done.value.summary, data: done.value.data });
       moveCard(turn, id, 'done', { summary: done.value.summary });
+      wireResult(turn, step, { ok: true, body: done.value.data });
     }
     const completed = finished.map((done) => done.index);
     if (outcome.status === 'applied') {
@@ -1323,6 +1508,7 @@ export function createAgentSession(options: AgentSessionOptions): AgentSession {
     turn.trace.push({ tool: failed.tool, callId: failedId, outcome: 'refused', code: outcome.error.code, params: failed.params });
     turn.steps.push({ index: failedIndex, tool: failed.tool, expect: failed.expect, status: 'failed', error: reason });
     moveCard(turn, failedId, 'failed', { error: reason });
+    wireResult(turn, failed, { ok: false, body: reason });
     for (let index = failedIndex + 1; index < editable.steps.length; index += 1) {
       if (ranAt(editable, index)) continue;
       const later = editable.steps[index] as PlanStep;
@@ -1345,8 +1531,20 @@ export function createAgentSession(options: AgentSessionOptions): AgentSession {
 
   /** The adjusted step the model sends for a refused one. Anything other than one step of the same tool is not an adjustment. */
   async function adjustStep(turn: Turn, tool: string): Promise<PlanStep | undefined> {
-    const reply = await complete(modelCall(turn), turn.messages, { jsonSchemaHint: REPLY_SCHEMA_HINT });
-    turn.messages.push({ role: 'assistant', content: reply.text });
+    const reply = await complete(plannerCall(turn), turn.messages, turn.native ? undefined : { jsonSchemaHint: REPLY_SCHEMA_HINT });
+    turn.messages.push(assistantOf(reply));
+    if (turn.native) {
+      const calls = reply.toolCalls ?? [];
+      const only = calls.length === 1 ? calls[0] : undefined;
+      if (only === undefined || only.name !== tool) return undefined;
+      const args = callArgs(only);
+      if (args.error !== undefined) return undefined;
+      // The adjustment's call is registered like a plan's: its result is flushed at the next request.
+      turn.wireReplies.push({ calls, results: new Map() });
+      const step: PlanStep = { tool, params: args.params ?? {}, expect: expectOf(reply.text) };
+      turn.wireSteps.set(step, only);
+      return step;
+    }
     const parsed = parseReply(reply.text);
     if (!parsed.ok || parsed.value.kind !== 'steps') return undefined;
     const steps = parsed.value.plan.steps;
@@ -1383,6 +1581,8 @@ export function createAgentSession(options: AgentSessionOptions): AgentSession {
       if (!checked.preflight.ok) {
         const refusedEntry = checked.preflight.steps.find((entry) => entry.status === 'refused');
         refusedBeforeCard(turn, single, refusalSentence(refusedEntry?.error?.message ?? 'refused', refusedEntry?.error?.correctiveHint));
+        // The call's own tool message goes first, so the refusal text that follows reads as its explanation.
+        flushWire(turn);
         turn.messages.push({ role: 'user', content: refusedStepsMessage(checked.preflight) });
         return 'continue';
       }
@@ -1401,6 +1601,8 @@ export function createAgentSession(options: AgentSessionOptions): AgentSession {
     for (;;) {
       const decided = await decideCard(turn, kind, attemptPrefix, { editable, from, revision: edits + retries, ...(notice === undefined ? {} : { notice }) });
       notice = undefined;
+      // The card may have replaced a step's object: its wire call follows the step the writer approved.
+      reconcileWire(turn, editable, decided.editable);
       editable = decided.editable;
       edits += decided.edits;
       retries += decided.retries;
@@ -1449,7 +1651,10 @@ export function createAgentSession(options: AgentSessionOptions): AgentSession {
       ladder += 1;
       phase(turn, 'retrying');
       emit({ type: 'ladder', turnId: turn.id, callId: callIdFor(kind, attemptPrefix, failedAt), attempt: ladder, askBack });
-      turn.messages.push({ role: 'user', content: retryMessage(failedAt, failed.tool, askBack) });
+      // The run's calls are answered first: the failed step's tool message carries its refusal, and the
+      // corrective text that follows names what to correct, as the JSON wire's retry does.
+      flushWire(turn);
+      turn.messages.push({ role: 'user', content: retryMessage(failedAt, failed.tool, askBack, turn.native) });
       const adjusted = await adjustStep(turn, failed.tool);
       if (adjusted === undefined) return settle(turn, executed);
 
@@ -1496,18 +1701,52 @@ export function createAgentSession(options: AgentSessionOptions): AgentSession {
         turn.messages.push({ role: 'user', content: addendum });
         turn.addendumSent = addendum;
       }
-      const reply = await complete(modelCall(turn), turn.messages, { jsonSchemaHint: REPLY_SCHEMA_HINT });
-      turn.messages.push({ role: 'assistant', content: reply.text });
-      const parsed: Result<Reply, string> = parseReply(reply.text);
-      if (!parsed.ok) {
-        turn.messages.push({ role: 'user', content: parsed.error });
-        continue;
-      }
-      if (parsed.value.kind === 'reply') return { status: 'replied', text: parsed.value.text };
+      const reply = await complete(plannerCall(turn), turn.messages, turn.native ? undefined : { jsonSchemaHint: REPLY_SCHEMA_HINT });
+      turn.messages.push(assistantOf(reply));
 
-      const plan = parsed.value.plan;
+      let plan: Plan;
+      if (turn.native) {
+        // A reply's calls are the plan's steps, in the order they were made; its text is the card's
+        // rationale. A call whose arguments do not parse is refused back by its id, like a JSON reply
+        // that could not be parsed, and nothing of the reply is staged.
+        const calls = reply.toolCalls ?? [];
+        if (calls.length === 0) return { status: 'replied', text: reply.text };
+        const pending: WireReply = { calls, results: new Map() };
+        turn.wireReplies.push(pending);
+        const steps: PlanStep[] = [];
+        const malformed: { index: number; tool: string; message: string }[] = [];
+        for (const [index, call] of calls.entries()) {
+          const args = callArgs(call);
+          const step: PlanStep = { tool: call.name, params: args.params ?? {}, expect: expectOf(reply.text) };
+          steps.push(step);
+          turn.wireSteps.set(step, call);
+          if (args.error !== undefined) {
+            malformed.push({ index, tool: call.name, message: args.error });
+            pending.results.set(call.id, { ok: false, body: args.error });
+          }
+        }
+        if (malformed.length > 0) {
+          flushWire(turn);
+          turn.messages.push({
+            role: 'user',
+            content: malformed.map((refused) => `Step ${refused.index + 1} (${refused.tool}) was refused: ${refused.message}`).join('\n'),
+          });
+          continue;
+        }
+        plan = { steps };
+      } else {
+        const parsed: Result<Reply, string> = parseReply(reply.text);
+        if (!parsed.ok) {
+          turn.messages.push({ role: 'user', content: parsed.error });
+          continue;
+        }
+        if (parsed.value.kind === 'reply') return { status: 'replied', text: parsed.value.text };
+        plan = parsed.value.plan;
+      }
+
       const staged = await stage(turn, plan.steps);
       if (staged.refusals.length > 0) {
+        flushWire(turn);
         turn.messages.push({
           role: 'user',
           content: staged.refusals.map((refused) => `Step ${refused.index + 1} (${refused.tool}) was refused: ${refused.message}`).join('\n'),
@@ -1559,11 +1798,15 @@ export function createAgentSession(options: AgentSessionOptions): AgentSession {
 
   /** The planner's turn: the request goes to the model, which answers or proposes steps (agent-harness §2). */
   async function plannedTurn(turn: Turn, intent: string): Promise<Settled> {
+    // The wire is picked here, once per turn, from the model's capabilities: native tool calls when the
+    // model can take them, the JSON envelope otherwise. The system message states the protocol the call
+    // speaks (protocol.ts `plannerSystem`/`plannerSystemNative` — same rules, different wording).
+    turn.native = nativeTools() !== undefined;
     // The planner's call is a `meta` call (context-assembly §3): the protocol and tool list as L0, the project
     // summary as L1, and the request as L7.
     const planner = context.assemble({
       task: { tool: 'meta', instruction: `Request: ${intent}` },
-      role: plannerSystem(harness.tools(), harness.loadedAddendum()),
+      role: turn.native ? plannerSystemNative(harness.tools(), harness.loadedAddendum()) : plannerSystem(harness.tools(), harness.loadedAddendum()),
       turns: turn.priorTurns,
       activity: harness.log.entries(),
     });
@@ -1606,6 +1849,9 @@ export function createAgentSession(options: AgentSessionOptions): AgentSession {
       priorTurns: [...started],
       modelCalls: 0,
       seq: 0,
+      native: false,
+      wireReplies: [],
+      wireSteps: new Map(),
     };
     started.push({ turnId: turn.id, intent });
     phase(turn, 'started');

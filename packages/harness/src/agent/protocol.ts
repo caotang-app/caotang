@@ -1,22 +1,24 @@
 /**
  * The tool-call wire protocol — the model's side of agent-harness.md §2.
  *
- * **Decision (recorded in the package README):** tool calls travel as JSON inside the reply's
- * content, not as native function calls. The gateway's `ChatRequest` has no tools field, and
- * provider-gateway §5 specifies the structured path the gateway does have: `responseFormat`
- * carries a schema hint, the gateway states it in a system message, and the reply is parsed here.
- * A reply is one of two shapes, and anything else is refused with the shape it should have had:
+ * The loop speaks it one of two ways, picked per planner call by what the gateway's
+ * `modelCaps` reports for the request's profile and model:
  *
- * - `{"steps": [{"tool", "params", "expect"}, ...]}` — tool calls, in order. The plan schema
- *   (`planParams`, plan.ts) checks them, and each step's params are checked by its own tool later.
- * - `{"reply": "..."}` — an answer, with no tool call.
+ * - **JSON mode** (the fallback): no `tools` are declared; `responseFormat` carries
+ *   `REPLY_SCHEMA_HINT`, and the reply is one JSON object in the content, parsed by
+ *   `parseReply`. It is either `{"steps": [{"tool", "params", "expect"}, ...]}` — tool
+ *   calls, in order, checked against the plan schema — or `{"reply": "..."}`, an answer.
+ * - **Native mode**: the request declares `tools` (`plannerToolDefs`) and the reply's
+ *   terminal `toolCalls` are the plan's steps; the reply's text is the card's rationale,
+ *   and each call is answered by a `tool`-role message keyed by its id. The corrective
+ *   and refusal texts the model reads are the same ones JSON mode sends, as user messages.
  *
- * The model never writes generated prose or a synopsis into a step: those are proposals the loop
- * stages, and the card shows them before anything is applied (protocol.ts never accepts a proposal
- * from the wire).
+ * In both modes the model never writes generated prose or a synopsis into a step: those are
+ * proposals the loop stages, and the card shows them before anything is applied.
  */
 
 import { err, ok, type CommandError, type Result } from '@caotang/bus';
+import type { ToolDef } from '@caotang/gateway';
 import type { ExternalToolDescriptor } from '@caotang/mcp-client';
 
 import { checkParams } from '../validate.js';
@@ -102,28 +104,55 @@ export function parseReply(content: string): Result<Reply, string> {
 }
 
 /**
- * The planner's system message: the protocol, and the tools that can be called in this build, each
- * with its risk, its description and its schema. Built from the registry, so a tool the registry does
- * not list cannot be offered to the model.
+ * The planner's callable surface this turn: the tools the model may call — callable and wired, with
+ * the superseded read hidden once the review is wired (see `plannerSystem`). The system message and
+ * the native tool declarations are both built from this one set, so the two can never disagree about
+ * what is offered.
  */
-export function plannerSystem(tools: readonly ToolListing[], loaded?: string): string {
+export function plannerTools(tools: readonly ToolListing[]): readonly ToolListing[] {
   // continuity.scan is superseded by the coherence review once the review is wired (agent-harness §3, tool 10's note): the review
   // writes its findings to the inbox, where continuity.scan's stay in the transcript. The tool stays callable for older turns.
   const reviewWired = tools.some((tool) => tool.name === 'coherence.review' && tool.callable && tool.wired);
-  const listed = tools.filter((tool) => tool.callable && tool.wired && !(reviewWired && tool.name === 'continuity.scan'));
-  const lines = listed.map(
+  return tools.filter((tool) => tool.callable && tool.wired && !(reviewWired && tool.name === 'continuity.scan'));
+}
+
+/**
+ * The tools a native-mode request declares: the planner's callable set, then the external tools the
+ * turn has loaded. A native tool goes by its registry name, an external one by the qualified name
+ * `tool.search` returned; each carries its description and its JSON Schema verbatim. The list is
+ * built fresh for each request, so a tool a mid-turn search loaded joins the next request.
+ */
+export function plannerToolDefs(tools: readonly ToolListing[], externals: readonly ExternalToolDescriptor[]): ToolDef[] {
+  return [
+    ...plannerTools(tools).map((tool) => ({ name: tool.name, description: tool.description, parameters: tool.schema })),
+    ...externals.map((tool) => ({ name: tool.qualifiedName, description: tool.description, parameters: tool.inputSchema })),
+  ];
+}
+
+const JSON_WIRE_RULES = [
+  '- Put every read and every write for this turn into one "steps" list, in the order they should run.',
+  '- read tools run at once and their results come back to you in the next message.',
+  '- write-confirm tools are shown to the user for approval before they run. Do not ask for approval in text.',
+  '- A step that is refused comes back with the reason. Correct it and reply again.',
+] as const;
+
+const NATIVE_WIRE_RULES = [
+  '- Make every read call and every write call for this turn in one reply, in the order they should run.',
+  '- read tools run at once and their results come back to you in the next message.',
+  '- write-confirm tools are shown to the user for approval before they run. Do not ask for approval in text.',
+  '- A call that is refused comes back with the reason. Correct it and call again.',
+] as const;
+
+function plannerPrompt(tools: readonly ToolListing[], loaded: string | undefined, wire: { readonly hint?: string; readonly rules: readonly string[] }): string {
+  const lines = plannerTools(tools).map(
     (tool) => `- ${tool.name} [${tool.risk}] — ${tool.description}\n  params: ${JSON.stringify(tool.schema)}`,
   );
   return [
     `${PLANNER_SYSTEM_PREFIX} You act on the user's project only through the tools below.`,
     '',
-    SHAPE_HINT,
-    '',
+    ...(wire.hint === undefined ? [] : [wire.hint, '']),
     'Rules:',
-    '- Put every read and every write for this turn into one "steps" list, in the order they should run.',
-    '- read tools run at once and their results come back to you in the next message.',
-    '- write-confirm tools are shown to the user for approval before they run. Do not ask for approval in text.',
-    '- A step that is refused comes back with the reason. Correct it and reply again.',
+    ...wire.rules,
     '',
     'Tools:',
     ...lines,
@@ -132,6 +161,24 @@ export function plannerSystem(tools: readonly ToolListing[], loaded?: string): s
     // request is built once per turn and a search runs within it.
     ...(loaded === undefined ? [] : ['', loaded]),
   ].join('\n');
+}
+
+/**
+ * The planner's system message: the protocol, and the tools that can be called in this build, each
+ * with its risk, its description and its schema. Built from the registry, so a tool the registry does
+ * not list cannot be offered to the model.
+ */
+export function plannerSystem(tools: readonly ToolListing[], loaded?: string): string {
+  return plannerPrompt(tools, loaded, { hint: SHAPE_HINT, rules: JSON_WIRE_RULES });
+}
+
+/**
+ * The planner's system message when the request declares its tools natively: the same tools, and the
+ * same rules worded for calls instead of the JSON envelope — there is no reply shape to state,
+ * because the calls themselves are the reply.
+ */
+export function plannerSystemNative(tools: readonly ToolListing[], loaded?: string): string {
+  return plannerPrompt(tools, loaded, { rules: NATIVE_WIRE_RULES });
 }
 
 /**
@@ -185,13 +232,15 @@ export function refusalSentence(message: string, hint: string | undefined): stri
 
 /**
  * The verify ladder's retry message (agent-harness §7): the failed step, and the ask-back payload
- * verbatim, which is also what the user is shown. One format serves the model and the card.
+ * verbatim, which is also what the user is shown. One format serves the model and the card. The last
+ * line names the correction in the wire's own words: a corrected step in the JSON envelope, or one
+ * corrected call when the turn speaks native tool calls.
  */
-export function retryMessage(index: number, tool: string, askBack: AskBack): string {
+export function retryMessage(index: number, tool: string, askBack: AskBack, native = false): string {
   return [
     `Step ${index + 1} (${tool}) did not apply, so nothing it would have written was written. The ask-back is:`,
     JSON.stringify(askBack),
-    `Reply with {"steps": [one corrected step for ${tool}]} and nothing else.`,
+    native ? `Reply with one corrected call for ${tool} and nothing else.` : `Reply with {"steps": [one corrected step for ${tool}]} and nothing else.`,
   ].join('\n');
 }
 

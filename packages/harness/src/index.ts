@@ -111,7 +111,18 @@ export {
   type TurnReport,
   type TurnStatus,
 } from './agent/events.js';
-export { DRAFT_SYSTEM_PREFIX, PLANNER_SYSTEM_PREFIX, REPLY_SCHEMA_HINT, parseReply, plannerSystem, refusalSentence, type Reply } from './agent/protocol.js';
+export {
+  DRAFT_SYSTEM_PREFIX,
+  PLANNER_SYSTEM_PREFIX,
+  REPLY_SCHEMA_HINT,
+  parseReply,
+  plannerSystem,
+  plannerSystemNative,
+  plannerToolDefs,
+  plannerTools,
+  refusalSentence,
+  type Reply,
+} from './agent/protocol.js';
 export {
   draftScene,
   fillSynopses,

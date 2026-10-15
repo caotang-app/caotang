@@ -20,7 +20,7 @@
  *    nothing is staged from it and the turn stops (`GenerationStopped`).
  */
 
-import type { ChatChunk, ChatMessage, ChatRequest, ProviderGateway } from '@caotang/gateway';
+import type { ChatChunk, ChatMessage, ChatRequest, ProviderGateway, ReasoningBlock, ThinkingLevel, ToolCall, ToolDef } from '@caotang/gateway';
 import { countBody } from '@caotang/store';
 
 import { err, ok, type Result } from '@caotang/bus';
@@ -39,6 +39,14 @@ export interface ModelCall {
   readonly turnId: string;
   readonly profileId?: string;
   readonly model?: string;
+  /**
+   * The tools the request declares for native tool calling. Set only on planner calls for a model
+   * `modelCaps` reports as tool-capable; drafting calls leave it unset, and their replies never
+   * carry `toolCalls`.
+   */
+  readonly tools?: readonly ToolDef[];
+  /** The session's effort level, when it pins one — passed to the request as `thinking`. */
+  readonly thinking?: ThinkingLevel;
   readonly onDelta?: (text: string) => void;
 }
 
@@ -53,10 +61,16 @@ export class GenerationStopped extends Error {
   }
 }
 
-/** A completion's text, and whether the provider stopped it at its output limit. */
+/**
+ * A completion's text, and whether the provider stopped it at its output limit. A native-mode reply
+ * also carries the calls it asked for and the reasoning blocks that preceded them, exactly as the
+ * provider sent them — the loop replays both verbatim on the next request.
+ */
 export interface Completion {
   readonly text: string;
   readonly cut: boolean;
+  readonly toolCalls?: readonly ToolCall[];
+  readonly reasoning?: readonly ReasoningBlock[];
 }
 
 /** The estimated prompt and completion tokens of one generation, on the budgets' own estimate (context-assembly §3). */
@@ -72,22 +86,35 @@ export interface Spend {
 export async function complete(call: ModelCall, messages: readonly ChatMessage[], responseFormat?: ChatRequest['responseFormat']): Promise<Completion> {
   let text = '';
   let finish: ChatChunk['finishReason'];
+  let toolCalls: readonly ToolCall[] | undefined;
+  let reasoning: readonly ReasoningBlock[] | undefined;
   const request: ChatRequest = {
     messages: [...messages],
     turnId: call.turnId,
     ...(call.profileId === undefined ? {} : { profileId: call.profileId }),
     ...(call.model === undefined ? {} : { model: call.model }),
     ...(responseFormat === undefined ? {} : { responseFormat }),
+    ...(call.tools === undefined || call.tools.length === 0 ? {} : { tools: call.tools, toolChoice: 'auto' as const }),
+    ...(call.thinking === undefined ? {} : { thinking: call.thinking }),
   };
   for await (const chunk of call.gateway.complete(request)) {
     if (chunk.delta !== undefined && chunk.delta.length > 0) {
       text += chunk.delta;
       call.onDelta?.(chunk.delta);
     }
+    // Calls and reasoning arrive on the terminal chunk; take the last value either way, so a
+    // provider that announces them piecemeal still lands its final form.
+    if (chunk.toolCalls !== undefined) toolCalls = chunk.toolCalls;
+    if (chunk.reasoning !== undefined) reasoning = chunk.reasoning;
     if (chunk.finishReason !== undefined) finish = chunk.finishReason;
   }
   if (finish === 'error') throw new GenerationStopped(`the provider ended the answer on an error after ${text.length} characters`);
-  return { text, cut: finish === 'length' };
+  return {
+    text,
+    cut: finish === 'length',
+    ...(toolCalls === undefined ? {} : { toolCalls }),
+    ...(reasoning === undefined ? {} : { reasoning }),
+  };
 }
 
 /** The estimated spend of one generation: its messages, and the text it produced. */
