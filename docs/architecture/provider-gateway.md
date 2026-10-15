@@ -62,7 +62,7 @@ The shipped presets (the registry is the source of truth; this table is generate
 | generic | openai-chat | unknown | custom URL + sealed headers; key optional |
 | mock | — | ok | the deterministic fixture; no network |
 
-A `keyless list` flag means the provider's `/models` answers without a key — listing only; inference still needs one. `keyOptional` means inference itself is documented keyless, which holds only for `opencode`'s free models and `generic`.
+A `keylessModels` flag means the provider's `/models` answers without a key — listing only; inference still needs one. `keyOptional` means inference itself is documented keyless, which holds only for `opencode`'s free models and `generic`.
 
 ## 3. Wire adapters
 
@@ -142,7 +142,7 @@ interface MockScript {
 
 ## 9. CORS and the browser
 
-The app calls providers straight from the page, so a preset's usefulness in the browser depends on its CORS answer. The registry records what the sweep found (`cors: 'ok'|'blocked'|'preflight-fails'|'unknown'` + a note); presets that cannot answer a browser request are shown disabled with the honest label *"Desktop app or hosted only"*. The sweep itself is a committed script (`scripts/`), run on demand — see [providers-browser-cors.md](providers-browser-cors.md).
+The app calls providers straight from the page, so a preset's usefulness in the browser depends on its CORS answer. The registry records what the sweep found (`cors: 'ok'|'blocked'|'preflight-fails'|'unknown'` + a note); presets that cannot answer a browser request are shown disabled with the honest label *"Desktop app or hosted only"*. The sweep itself is `e2e/providers-cors.spec.ts` — a real Playwright page running a real preflight per preset — run on demand; see [providers-browser-cors.md](providers-browser-cors.md).
 
 ## 10. Decisions logged / assumptions
 
