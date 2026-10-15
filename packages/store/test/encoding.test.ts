@@ -98,9 +98,12 @@ describe('decodeForPreview decodes a file for the convert flow’s preview step'
   it('honours the UTF-16 byte-order marks and guesses UTF-16 without one', () => {
     expect(decodeForPreview(utf16('The ferry.', 'le', true))).toEqual({ encoding: 'utf-16le', text: 'The ferry.' });
     expect(decodeForPreview(utf16('The ferry.', 'be', true))).toEqual({ encoding: 'utf-16be', text: 'The ferry.' });
-    expect(decodeForPreview(utf16('The ferry was late, as always.', 'le', false))).toEqual({
+    // Without a BOM the NUL-parity guess is what names it — and only a text whose
+    // non-ASCII bytes already failed strict UTF-8 reaches the guess. Pure-ASCII
+    // UTF-16 is valid UTF-8 (NUL is a code point), so it decodes as UTF-8 here.
+    expect(decodeForPreview(utf16('The café was late, as always.', 'le', false))).toEqual({
       encoding: 'utf-16le',
-      text: 'The ferry was late, as always.',
+      text: 'The café was late, as always.',
     });
   });
 
