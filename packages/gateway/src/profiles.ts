@@ -340,6 +340,11 @@ export function createProfileStore(options: ProfileStoreOptions): ProfileStore {
       let keyChanged = false;
       if (rec.kind === 'endpoint') {
         const keyOptional = preset?.keyOptional === true;
+        // A secret belongs to the origin it was entered for. Keeping it across an origin change would
+        // send it to an origin the user has not entered it for, so the save is refused before anything
+        // is written, and the stored secret stays where it was. This holds for the key and for custom
+        // headers alike, whichever of them the patch re-enters.
+        const originMoved = originOf(fields.baseUrl) !== originOf(rec.baseUrl);
         if (patch.apiKey !== undefined || patch.customHeaders !== undefined) {
           // The payload holds key and headers together, so either edit opens it once and
           // re-seals both — a key change cannot drop the headers, and a header change
@@ -352,17 +357,27 @@ export function createProfileStore(options: ProfileStoreOptions): ProfileStore {
               : patch.customHeaders !== undefined
                 ? fields.customHeaders
                 : existing?.customHeaders;
+          if (originMoved) {
+            if (patch.apiKey === undefined && (existing?.apiKey ?? '') !== '') {
+              throw new ProfileError('invalid', 'Enter the API key again for the new endpoint.', 'apiKey');
+            }
+            if (patch.customHeaders === undefined && existing?.customHeaders !== undefined && Object.keys(existing.customHeaders).length > 0) {
+              throw new ProfileError('invalid', 'Enter the extra headers again for the new endpoint.', 'customHeaders');
+            }
+          }
           if (key === '' && (headers === undefined || Object.keys(headers).length === 0)) await keys.remove(id);
           else await keys.putPayload(id, { apiKey: key, ...(headers === undefined ? {} : { customHeaders: headers }) });
           hasKey = key !== '';
           keyChanged = true;
         } else {
-          // A key belongs to the origin it was entered for. Keeping it across an origin change
-          // would send it to an origin the user has not entered it for, so the save is refused
-          // before anything is written, and the stored key stays where it was.
-          const originMoved = originOf(fields.baseUrl) !== originOf(rec.baseUrl);
           if (originMoved && rec.hasKey) {
             throw new ProfileError('invalid', 'Enter the API key again for the new endpoint.', 'apiKey');
+          }
+          if (originMoved) {
+            const existing = await keys.revealPayload(id);
+            if (existing?.customHeaders !== undefined && Object.keys(existing.customHeaders).length > 0) {
+              throw new ProfileError('invalid', 'Enter the extra headers again for the new endpoint.', 'customHeaders');
+            }
           }
           requireKeyFor(rec.hasKey, keyOptional);
         }

@@ -369,7 +369,11 @@ function* chunksOf(
         state.sawDelta = true;
         yield { delta: piece.text };
       }
-      if (piece.reasoning !== undefined && piece.reasoning !== '') yield { reasoningDelta: piece.reasoning };
+      if (piece.reasoning !== undefined && piece.reasoning !== '') {
+        // Reasoning is delivered too: a retry after it would duplicate the Thinking block.
+        state.sawDelta = true;
+        yield { reasoningDelta: piece.reasoning };
+      }
     }
     // A parsed event — even a keep-alive like Anthropic's `ping` — means the provider is talking.
     acc.alive = true;

@@ -304,6 +304,55 @@ describe('the key boundary', () => {
     expect(await keys.reveal(created.id)).toBe('sk-moved-key-123456');
   });
 
+  it('refuses an origin change that re-enters the key but lets stored headers ride', async () => {
+    const { profiles, keys } = store();
+    const created = await profiles.create(endpoint('x', { customHeaders: { 'x-proxy-secret': 'hunter2' } }));
+    const attempt = profiles.update(created.id, { baseUrl: 'https://attacker.example/v1', apiKey: 'sk-moved-key-123456' });
+    await expect(attempt).rejects.toBeInstanceOf(ProfileError);
+    await expect(attempt).rejects.toMatchObject({ code: 'invalid', field: 'customHeaders' });
+    await expect(attempt).rejects.toThrow('Enter the extra headers again for the new endpoint.');
+
+    expect(profiles.get(created.id)?.baseUrl).toBe('https://a.example/v1');
+    expect((await keys.revealPayload(created.id))?.customHeaders).toEqual({ 'x-proxy-secret': 'hunter2' });
+    expect((await keys.revealPayload(created.id))?.apiKey).toBe(KEY);
+  });
+
+  it('refuses an origin change that re-enters headers but lets the stored key ride', async () => {
+    const { profiles, keys } = store();
+    const created = await profiles.create(endpoint('x', { customHeaders: { 'x-proxy-secret': 'hunter2' } }));
+    const attempt = profiles.update(created.id, {
+      baseUrl: 'https://attacker.example/v1',
+      customHeaders: { 'x-proxy-secret': 'hunter2' },
+    });
+    await expect(attempt).rejects.toMatchObject({ code: 'invalid', field: 'apiKey' });
+    await expect(attempt).rejects.toThrow('Enter the API key again for the new endpoint.');
+
+    expect(profiles.get(created.id)?.baseUrl).toBe('https://a.example/v1');
+    expect(await keys.reveal(created.id)).toBe(KEY);
+  });
+
+  it('refuses an origin change for a keyless profile whose stored headers would ride', async () => {
+    const { profiles } = store();
+    const created = await profiles.create(endpoint('local', { apiKey: '', customHeaders: { 'x-team': 'blue-42' } }));
+    const attempt = profiles.update(created.id, { baseUrl: 'https://remote.example/v1' });
+    await expect(attempt).rejects.toMatchObject({ code: 'invalid', field: 'customHeaders' });
+    expect(profiles.get(created.id)?.baseUrl).toBe('https://a.example/v1');
+  });
+
+  it('moves origin when the patch re-enters both secrets', async () => {
+    const { profiles, keys } = store();
+    const created = await profiles.create(endpoint('x', { customHeaders: { 'x-proxy-secret': 'hunter2' } }));
+    const moved = await profiles.update(created.id, {
+      baseUrl: 'https://b.example/v1',
+      apiKey: 'sk-moved-key-123456',
+      customHeaders: { 'x-proxy-secret': 'fresh-secret' },
+    });
+    expect(moved.baseUrl).toBe('https://b.example/v1');
+    const payload = await keys.revealPayload(created.id);
+    expect(payload?.apiKey).toBe('sk-moved-key-123456');
+    expect(payload?.customHeaders).toEqual({ 'x-proxy-secret': 'fresh-secret' });
+  });
+
   it('keeps the key when only the path changes on the same origin', async () => {
     const { profiles, keys } = store();
     const created = await profiles.create(endpoint('x'));

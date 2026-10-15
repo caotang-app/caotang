@@ -280,7 +280,7 @@ function keyHint(preset: PresetDef | undefined, form: FormState, view: ProfileVi
 /** The task roles' display order and what each one is for (provider-gateway §6). */
 const ROLE_NAMES: readonly { readonly id: TaskRole; readonly label: string; readonly hint: string }[] = [
   { id: 'chat', label: 'Chat', hint: 'the agent panel' },
-  { id: 'drafting', label: 'Drafting', hint: 'the prose a plan writes' },
+  { id: 'drafting', label: 'Drafting', hint: 'the prompt pack’s generations' },
   { id: 'background', label: 'Background', hint: 'checks and encoding work' },
 ];
 
