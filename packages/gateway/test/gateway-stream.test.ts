@@ -188,18 +188,21 @@ describe('complete() — abort (§3)', () => {
 });
 
 describe('complete() — the egress guard (command-bus §4, extensibility §4)', () => {
-  it('refuses a request to an origin other than the active profile’s, before any socket opens or key is read', async () => {
-    const h = harness({ net: new ScriptedFetch().push(() => sseResponse([finish('stop')])) });
+  it('sends a request for a non-active profile to that profile’s own origin with that profile’s key', async () => {
+    const h = harness({ net: new ScriptedFetch().push(() => sseResponse([finish('stop'), '[DONE]'])) });
     await addEndpoint(h, { name: 'active', baseUrl: 'https://a.example/v1' });
-    const other = await addEndpoint(h, { name: 'other', baseUrl: 'https://b.example/v1' });
+    const other = await addEndpoint(h, { name: 'other', baseUrl: 'https://b.example/v1', apiKey: 'sk-other-key-123456' });
     const reveal = vi.spyOn(h.keys, 'reveal');
 
     const { error } = await collect(h.gateway.complete({ ...userMessage('x'), profileId: other.id }));
 
-    expect(error).toBeInstanceOf(EgressDeniedError);
-    expect((error as Error).message).toMatch(/b\.example.*a\.example/);
-    expect(h.net.calls).toHaveLength(0);
-    expect(reveal).not.toHaveBeenCalled();
+    expect(error).toBeUndefined();
+    expect(h.net.calls).toHaveLength(1);
+    expect(h.net.calls[0]?.url).toBe('https://b.example/v1/chat/completions');
+    expect(h.net.headerOf(0, 'authorization')).toBe('Bearer sk-other-key-123456');
+    // The key that was read is the request's own profile's — never the active one.
+    expect(reveal).toHaveBeenCalledWith(other.id);
+    expect(reveal).toHaveBeenCalledTimes(1);
   });
 
   it('allows a request to the active profile’s origin even when a different profile is named, if they share it', async () => {
@@ -225,14 +228,16 @@ describe('complete() — the egress guard (command-bus §4, extensibility §4)',
     expect(h.net.headerOf(0, 'authorization')).toBe(`Bearer ${KEY}`);
   });
 
-  it('refuses every network request while the active profile is the mock', async () => {
-    const h = harness();
+  it('pins each request to its resolved profile’s origin, so a non-active endpoint still answers on its own endpoint while the mock is active', async () => {
+    const h = harness({ net: new ScriptedFetch().push(() => sseResponse([delta('ok'), finish('stop'), '[DONE]'])) });
     await h.profiles.create({ name: 'Offline', kind: 'mock' });
     const endpoint = await addEndpoint(h, { name: 'remote', baseUrl: 'https://a.example/v1' });
 
     const { error } = await collect(h.gateway.complete({ ...userMessage('x'), profileId: endpoint.id }));
-    expect(error).toBeInstanceOf(EgressDeniedError);
-    expect(h.net.calls).toHaveLength(0);
+    expect(error).toBeUndefined();
+    expect(h.net.calls).toHaveLength(1);
+    expect(h.net.calls[0]?.url).toBe('https://a.example/v1/chat/completions');
+    expect(h.net.headerOf(0, 'authorization')).toBe(`Bearer ${KEY}`);
   });
 
   it('refuses a redirect instead of following it, so a POST body is never sent to the new location', async () => {

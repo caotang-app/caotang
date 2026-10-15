@@ -37,7 +37,8 @@ import {
 } from './transport.js';
 import { DEFAULT_MAX_OUTPUT_TOKENS } from './profiles.js';
 import { usageFor } from './tokens.js';
-import { chatBody, parseModels, wireMessages, type WireMessage } from './wire.js';
+import { openaiChatAdapter } from './adapters/openai-chat.js';
+import type { AdapterContext, ProviderAdapter } from './adapters/types.js';
 import type {
   ChatChunk,
   ChatRequest,
@@ -105,11 +106,11 @@ export function createGateway(options: GatewayOptions): Gateway {
     timeouts: { ...DEFAULT_TIMEOUTS, ...options.timeouts },
     retry: { ...DEFAULT_RETRY, ...options.retry },
     log: requestLog,
-    // The egress guard compares against the *active* profile, read at send time, so a
-    // switch of profile takes effect on the next request and not the one after.
-    activeOrigin: () => {
-      const active = profiles.active();
-      return active !== undefined && active.kind === 'openai-compatible' ? originOf(active.baseUrl) : undefined;
+    // The egress pin is the profile a request resolved to, read live from the store, so
+    // a key can only ever reach the origin it was entered for — never another profile's.
+    profileOrigin: (profileId) => {
+      const profile = profiles.get(profileId);
+      return profile !== undefined && profile.kind === 'openai-compatible' ? originOf(profile.baseUrl) : undefined;
     },
   };
 
@@ -133,34 +134,50 @@ export function createGateway(options: GatewayOptions): Gateway {
     return key;
   };
 
+  /**
+   * The route a (profile, model) pair speaks. M3 hangs the preset registry and
+   * per-model route maps off this seam; until then every endpoint profile is the
+   * OpenAI-compatible route the gateway has always spoken.
+   */
+  const routeOf = (profile: ProfileView, model: string): { adapter: ProviderAdapter; ctx: AdapterContext } => {
+    void model;
+    return {
+      adapter: openaiChatAdapter,
+      ctx: { baseUrl: profile.baseUrl, model, quirks: {}, caps: {} },
+    };
+  };
+
   const chatSpec = (
     profile: ProfileView,
     req: ChatRequest,
-    model: string,
-    messages: readonly WireMessage[],
+    route: { adapter: ProviderAdapter; ctx: AdapterContext },
     jsonObject: boolean,
     apiKey: string | undefined,
   ): CallSpec => {
-    const body = chatBody({
-      model,
-      messages,
+    const { adapter, ctx } = route;
+    const body = adapter.buildBody({
+      req,
+      ctx,
       temperature: req.temperature ?? profile.temperature ?? 0.7,
       maxTokens: req.maxOutputTokens ?? profile.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
-      stop: req.stop,
       jsonObject,
     });
+    const path = adapter.completePath(ctx.model);
+    const secrets: string[] = apiKey === undefined || apiKey === '' ? [] : [apiKey];
     return {
       profileId: profile.id,
-      model,
+      model: ctx.model,
       host: hostOf(profile.baseUrl),
       baseUrl: profile.baseUrl,
-      path: '/chat/completions',
-      url: `${profile.baseUrl}/chat/completions`,
+      path,
+      url: `${profile.baseUrl}${path}`,
       method: 'POST',
       accept: 'text/event-stream',
       body: JSON.stringify(body),
-      apiKey,
-      promptTokens: usageFor(messages, '').promptTokens,
+      headers: adapter.headers(ctx, { apiKey }, 'complete'),
+      secrets,
+      parser: adapter.createStreamParser(ctx),
+      promptTokens: usageFor(req.messages, '').promptTokens,
     };
   };
 
@@ -180,16 +197,20 @@ export function createGateway(options: GatewayOptions): Gateway {
         return;
       }
 
-      assertEgress(deps, `${profile.baseUrl}/chat/completions`);
-      const messages = wireMessages(req);
       const jsonObject =
         req.responseFormat !== undefined && req.responseFormat !== 'text' && profile.responseFormat?.supportsJsonObject === true;
+      const route = routeOf(profile, model);
+      assertEgress(deps, `${profile.baseUrl}${route.adapter.completePath(model)}`, profile.id);
       const apiKey = await keyFor(profile);
-      const spec = { ...chatSpec(profile, req, model, messages, jsonObject, apiKey), signal };
+      const spec = { ...chatSpec(profile, req, route, jsonObject, apiKey), signal };
       yield* streamChat(deps, spec, stats);
     } finally {
       if (stats.attempts > 0) {
-        ledger.record({ profileId: profile.id, model, turnId: req.turnId, at: startedAt }, stats.usage ?? ZERO, stats.attempts);
+        ledger.record(
+          { profileId: profile.id, model, turnId: req.turnId, role: req.role, at: startedAt },
+          stats.usage ?? ZERO,
+          stats.attempts,
+        );
       }
     }
   }
@@ -205,22 +226,28 @@ export function createGateway(options: GatewayOptions): Gateway {
       return models;
     }
 
-    const url = `${profile.baseUrl}/models`;
-    assertEgress(deps, url);
+    const { adapter, ctx } = routeOf(profile, profile.defaultModel);
+    const modelsPath = adapter.modelsPath(ctx);
+    if (modelsPath === null) {
+      throw new ProviderError('endpoint', providerMessages.endpoint('/models', profile.baseUrl));
+    }
+    const url = `${profile.baseUrl}${modelsPath}`;
+    assertEgress(deps, url, profile.id);
     const apiKey = await keyFor(profile);
     const json = await requestJson(deps, {
       profileId: profile.id,
       model: profile.defaultModel,
       host: hostOf(profile.baseUrl),
       baseUrl: profile.baseUrl,
-      path: '/models',
+      path: modelsPath,
       url,
       method: 'GET',
       accept: 'application/json',
-      apiKey,
+      headers: adapter.headers(ctx, { apiKey }, 'models'),
+      secrets: apiKey === undefined || apiKey === '' ? [] : [apiKey],
       promptTokens: 0,
     });
-    const models = parseModels(json);
+    const models = adapter.parseModels(json);
     if (models === undefined) {
       throw new ProviderError('protocol', providerMessages.protocol(hostOf(profile.baseUrl), 'the model list had no data array'));
     }
@@ -249,12 +276,11 @@ export function createGateway(options: GatewayOptions): Gateway {
     }
 
     const url = `${profile.baseUrl}/chat/completions`;
-    assertEgress(deps, url);
+    assertEgress(deps, url, profile.id);
     const apiKey = await keyFor(profile);
-    const messages: WireMessage[] = [{ role: 'user', content: PROBE_PROMPT }];
     const body = JSON.stringify({
       model: profile.defaultModel,
-      messages,
+      messages: [{ role: 'user', content: PROBE_PROMPT }],
       max_tokens: 16,
       stream: false,
       response_format: { type: 'json_object' },
@@ -269,8 +295,9 @@ export function createGateway(options: GatewayOptions): Gateway {
       method: 'POST',
       accept: 'application/json',
       body,
-      apiKey,
-      promptTokens: usageFor(messages, '').promptTokens,
+      headers: apiKey === undefined || apiKey === '' ? {} : { authorization: `Bearer ${apiKey}` },
+      secrets: apiKey === undefined || apiKey === '' ? [] : [apiKey],
+      promptTokens: usageFor([{ role: 'user', content: PROBE_PROMPT }], '').promptTokens,
     });
     profiles.recordProbe(profile.id, { supportsJsonObject: supported, probedAt: clock.now() });
     ledger.record({ profileId: profile.id, model: profile.defaultModel, at: clock.now() }, ZERO, 1);
@@ -278,7 +305,11 @@ export function createGateway(options: GatewayOptions): Gateway {
   }
 
   function accountTokens(usage: Usage, by: UsageAttribution): void {
-    ledger.record({ profileId: by.profileId, model: by.model, turnId: by.turnId, at: by.at ?? clock.now() }, usage, 1);
+    ledger.record(
+      { profileId: by.profileId, model: by.model, turnId: by.turnId, role: by.role, at: by.at ?? clock.now() },
+      usage,
+      1,
+    );
   }
 
   return {

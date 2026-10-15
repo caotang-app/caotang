@@ -12,7 +12,7 @@
  */
 
 import { type Clock, systemClock } from './clock.js';
-import type { Usage, UsageAttribution } from './types.js';
+import type { TaskRole, Usage, UsageAttribution } from './types.js';
 
 export interface UsageTotals {
   promptTokens: number;
@@ -25,12 +25,15 @@ export interface DayUsageRow extends UsageTotals {
   date: string;
   profileId: string;
   model: string;
+  /** the task role the usage ran under; 'chat' when the caller did not name one */
+  role: TaskRole;
 }
 
 export interface TurnUsageRow extends UsageTotals {
   turnId: string;
   profileId: string;
   model: string;
+  role: TaskRole;
 }
 
 export interface UsageSnapshot {
@@ -66,15 +69,16 @@ export class UsageLedger {
     const at = by.at ?? this.clock.now();
     const date = localDayKey(at);
 
-    const dayKey = `${date}\u0000${by.profileId}\u0000${by.model}`;
-    const day = this.days.get(dayKey) ?? { date, profileId: by.profileId, model: by.model, ...ZERO };
+    const role = by.role ?? 'chat';
+    const dayKey = `${date}\u0000${by.profileId}\u0000${by.model}\u0000${role}`;
+    const day = this.days.get(dayKey) ?? { date, profileId: by.profileId, model: by.model, role, ...ZERO };
     add(day, usage, requests);
     this.days.set(dayKey, day);
 
     if (by.turnId !== undefined) {
-      const turnKey = `${by.turnId}\u0000${by.profileId}\u0000${by.model}`;
+      const turnKey = `${by.turnId}\u0000${by.profileId}\u0000${by.model}\u0000${role}`;
       const existing = this.turns.get(turnKey);
-      const turn = existing ?? { turnId: by.turnId, profileId: by.profileId, model: by.model, ...ZERO };
+      const turn = existing ?? { turnId: by.turnId, profileId: by.profileId, model: by.model, role, ...ZERO };
       add(turn, usage, requests);
       if (existing === undefined) this.turns.set(turnKey, turn);
       this.trimTurns();

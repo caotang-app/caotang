@@ -78,6 +78,8 @@ interface StoredProfile {
   id: string;
   name: string;
   kind: ProfileKind;
+  /** the preset the profile was created under; absent on hand-rolled openai-compatible profiles */
+  preset?: string;
   baseUrl: string;
   defaultModel: string;
   temperature?: number;
@@ -177,6 +179,7 @@ function toView(rec: StoredProfile): ProfileView {
     id: rec.id,
     name: rec.name,
     kind: rec.kind,
+    ...(rec.preset === undefined ? {} : { preset: rec.preset }),
     baseUrl: rec.baseUrl,
     defaultModel: rec.defaultModel,
     isActive: rec.isActive,
@@ -219,7 +222,14 @@ export function createProfileStore(options: ProfileStoreOptions): ProfileStore {
       const anyActive = [...records.values()].some((r) => r.isActive);
       const activate = input.isActive === true || !anyActive;
       if (activate) for (const r of records.values()) r.isActive = false;
-      records.set(id, { id, kind: input.kind, ...fields, isActive: activate, hasKey: key !== '' });
+      records.set(id, {
+        id,
+        kind: input.kind,
+        ...(input.preset === undefined ? {} : { preset: input.preset }),
+        ...fields,
+        isActive: activate,
+        hasKey: key !== '',
+      });
       return toView(requireRecord(id));
     },
 

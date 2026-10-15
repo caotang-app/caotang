@@ -18,6 +18,13 @@ export type {
   ChatMessage,
   ChatChunk,
   ChatRole,
+  FinishReason,
+  ThinkingLevel,
+  TaskRole,
+  ToolDef,
+  ToolCall,
+  ReasoningBlock,
+  ModelCaps,
   Usage,
   ModelInfo,
   ModelLimits,
@@ -55,6 +62,20 @@ export { createIndexedDbVaultPort, type IndexedDbVaultOptions } from './keys/ind
 
 export { createGateway, type Gateway, type GatewayOptions } from './gateway.js';
 export type { FetchLike } from './transport.js';
+export { adapterFor } from './adapters/index.js';
+export type {
+  AdapterId,
+  AdapterContext,
+  BodyInput,
+  CallSecrets,
+  EffortStyle,
+  ProviderAdapter,
+  QuirkFlags,
+  ReplayStyle,
+  RouteSpec,
+  StreamParser,
+  StreamPiece,
+} from './adapters/types.js';
 
 export {
   UsageLedger,

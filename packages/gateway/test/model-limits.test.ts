@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { estimateTokens as codexEstimate } from '@caotang/codex';
 
 import { DEFAULT_MAX_OUTPUT_TOKENS, estimateTokens } from '../src/index.js';
-import { parseModels } from '../src/wire.js';
+import { parseModels } from '../src/adapters/models.js';
 import { addEndpoint, harness, ScriptedFetch } from './helpers.js';
 
 describe('one token estimator for the app (context-assembly §3)', () => {

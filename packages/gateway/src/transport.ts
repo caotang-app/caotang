@@ -23,11 +23,11 @@ import { abortError, EgressDeniedError, ProviderError, providerMessages } from '
 import { backoffMs, isRetryable, parseRetryAfter, type RetryPolicy, type TransportTimeouts } from './retry.js';
 import type { RequestLog, RequestOutcome } from './request-log.js';
 import { redact } from './redact.js';
-import { createSseParser } from './sse.js';
+import { createSseParser, type SseEvent } from './sse.js';
 import { CallerCancelled, DeadlineReached, guard, sleep } from './timing.js';
 import { estimateTokens } from './tokens.js';
-import { type FinishReason, parseChunk } from './wire.js';
-import type { ChatChunk, Usage } from './types.js';
+import type { StreamParser } from './adapters/types.js';
+import type { ChatChunk, FinishReason, ReasoningBlock, ToolCall, Usage } from './types.js';
 
 export type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
 
@@ -38,11 +38,16 @@ export interface TransportDeps {
   readonly timeouts: TransportTimeouts;
   readonly retry: RetryPolicy;
   readonly log: RequestLog;
-  /** the origin of the active profile's endpoint, or undefined when no endpoint profile is active */
-  readonly activeOrigin: () => string | undefined;
+  /**
+   * The egress pin: the origin of the profile a request resolved to, read live from
+   * the store. A request may only reach its own profile's origin — the key enters
+   * the headers and the URL is checked before a socket opens, so a key can never
+   * travel to an origin it was not entered for.
+   */
+  readonly profileOrigin: (profileId: string) => string | undefined;
 }
 
-/** One logical call: everything a request needs, with the key attached for this call only. */
+/** One logical call: everything a request needs, with the secrets attached for this call only. */
 export interface CallSpec {
   readonly profileId: string;
   readonly model: string;
@@ -50,13 +55,18 @@ export interface CallSpec {
   readonly host: string;
   /** the normalised base, for the endpoint message */
   readonly baseUrl: string;
-  readonly path: '/chat/completions' | '/models';
+  /** the route's endpoint path — the adapter chooses it, per model where routes differ */
+  readonly path: string;
   readonly url: string;
   readonly method: 'GET' | 'POST';
   readonly accept: string;
   readonly body?: string;
-  /** plaintext, for this call's Authorization header only. Never stored on an error or a log entry. */
-  readonly apiKey?: string;
+  /** The request headers the adapter built — auth, protocol versions, preset extras. */
+  readonly headers: Record<string, string>;
+  /** Every secret value in `headers` (key, custom header values). Scrubbed from excerpts; never stored on an error or a log entry. */
+  readonly secrets: readonly string[];
+  /** the stream dialect, for calls that read SSE (`streamChat`) */
+  readonly parser?: StreamParser;
   /** the prompt's estimated size, the fallback when a provider sends no usage */
   readonly promptTokens: number;
   readonly signal?: AbortSignal;
@@ -102,6 +112,8 @@ interface WireAccumulator {
 interface StreamOutcome {
   readonly finish: FinishReason;
   readonly usage: Usage | undefined;
+  /** The assembled tool calls and replay blocks the adapter collected across the stream. */
+  readonly terminal: { toolCalls?: readonly ToolCall[]; reasoning?: readonly ReasoningBlock[] };
 }
 
 const EXCERPT_LIMIT = 300;
@@ -126,7 +138,7 @@ function describe(err: unknown): string {
 
 /** Redacts, collapses whitespace, and bounds. Every excerpt that leaves this file passes through here. */
 function clean(text: string, spec: CallSpec): string {
-  return redact(text, [spec.apiKey]).replace(/\s+/g, ' ').trim().slice(0, EXCERPT_LIMIT);
+  return redact(text, spec.secrets).replace(/\s+/g, ' ').trim().slice(0, EXCERPT_LIMIT);
 }
 
 /** Appends `text` to the kept head of a body, up to `HEAD_LIMIT`, and no further. */
@@ -159,19 +171,21 @@ function limitAt(deps: TransportDeps, deadline: Deadline, phaseEnd: number, phas
 }
 
 /**
- * The egress guard. A request whose origin is not the active profile's endpoint origin
- * is refused. This is checked in the transport, before a socket opens, and also in the
- * gateway before any key is decrypted, so a refused request never touches key material.
+ * The egress guard. A request whose origin is not the origin of the profile it resolved
+ * to is refused — the pin is the resolved profile, so one profile's key can never ride
+ * to another profile's endpoint. Checked in the transport, before a socket opens, and
+ * in the gateway before any key is decrypted, so a refused request never touches key
+ * material.
  */
-export function assertEgress(deps: TransportDeps, url: string): void {
+export function assertEgress(deps: TransportDeps, url: string, profileId: string): void {
   const requested = new URL(url).origin;
-  const allowed = deps.activeOrigin();
+  const allowed = deps.profileOrigin(profileId);
   if (allowed === undefined) {
-    throw new EgressDeniedError(`Refused a request to ${requested}: no endpoint profile is active.`);
+    throw new EgressDeniedError(`Refused a request to ${requested}: the profile has no endpoint to pin to.`);
   }
   if (requested !== allowed) {
     throw new EgressDeniedError(
-      `Refused a request to ${requested}: only the active profile's endpoint (${allowed}) may be contacted.`,
+      `Refused a request to ${requested}: only the profile's own endpoint (${allowed}) may be contacted.`,
     );
   }
 }
@@ -273,11 +287,10 @@ async function statusError(deps: TransportDeps, spec: CallSpec, response: Respon
  * mapping. Returns the response only for a 2xx. Everything else throws.
  */
 async function connect(deps: TransportDeps, spec: CallSpec, deadline: Deadline, controller: AbortController): Promise<Response> {
-  assertEgress(deps, spec.url);
+  assertEgress(deps, spec.url, spec.profileId);
 
-  const headers: Record<string, string> = { accept: spec.accept };
-  if (spec.body !== undefined) headers['content-type'] = 'application/json';
-  if (spec.apiKey !== undefined && spec.apiKey !== '') headers.authorization = `Bearer ${spec.apiKey}`;
+  const headers: Record<string, string> = { accept: spec.accept, ...spec.headers };
+  if (spec.body !== undefined && headers['content-type'] === undefined) headers['content-type'] = 'application/json';
 
   let pending: Promise<Response>;
   try {
@@ -332,29 +345,35 @@ function retryWait(deps: TransportDeps, err: ProviderError, retries: number, max
   return deps.clock.now() + wait < totalAt ? wait : undefined;
 }
 
-function* deltasOf(spec: CallSpec, payloads: readonly string[], acc: WireAccumulator): Generator<string, void, undefined> {
-  for (const payload of payloads) {
+function* chunksOf(
+  spec: CallSpec,
+  events: readonly SseEvent[],
+  acc: WireAccumulator,
+  state: StreamState,
+): Generator<ChatChunk, void, undefined> {
+  const parser = spec.parser;
+  if (parser === undefined) throw protocolError(spec, 'no stream parser for this call');
+  for (const ev of events) {
     if (acc.done) return;
-    if (payload === '[DONE]') {
-      acc.done = true;
-      return;
+    for (const piece of parser.push(ev)) {
+      if (piece.malformed !== undefined) throw protocolError(spec, piece.malformed);
+      if (piece.error !== undefined) {
+        const detail = clean(piece.error, spec);
+        throw new ProviderError('provider', providerMessages.providerStream(spec.host, detail), { detail });
+      }
+      if (piece.usage !== undefined) acc.usage = piece.usage;
+      if (piece.finish !== undefined) acc.finish = piece.finish;
+      if (piece.done === true) acc.done = true;
+      if (piece.text !== undefined && piece.text !== '') {
+        state.delivered += piece.text;
+        state.sawDelta = true;
+        yield { delta: piece.text };
+      }
+      if (piece.reasoning !== undefined && piece.reasoning !== '') yield { reasoningDelta: piece.reasoning };
     }
-    let json: unknown;
-    try {
-      json = JSON.parse(payload);
-    } catch {
-      throw protocolError(spec, payload);
-    }
-    const parsed = parseChunk(json);
-    if (parsed === undefined) throw protocolError(spec, payload);
+    // A parsed event — even a keep-alive like Anthropic's `ping` — means the provider is talking.
     acc.alive = true;
-    if (parsed.error !== undefined) {
-      const detail = clean(parsed.error, spec);
-      throw new ProviderError('provider', providerMessages.providerStream(spec.host, detail), { detail });
-    }
-    if (parsed.usage !== undefined) acc.usage = parsed.usage;
-    if (parsed.finish !== undefined) acc.finish = parsed.finish;
-    yield* parsed.deltas;
+    if (acc.done) return;
   }
 }
 
@@ -409,21 +428,13 @@ async function* readStream(
       if (read.done) {
         const tail = decoder.decode();
         head = keepHead(head, tail);
-        for (const delta of deltasOf(spec, [...parser.push(tail), ...parser.end()], acc)) {
-          state.delivered += delta;
-          state.sawDelta = true;
-          yield { delta };
-        }
+        for (const chunk of chunksOf(spec, [...parser.push(tail), ...parser.end()], acc, state)) yield chunk;
         break;
       }
 
       const text = decoder.decode(read.value, { stream: true });
       head = keepHead(head, text);
-      for (const delta of deltasOf(spec, parser.push(text), acc)) {
-        state.delivered += delta;
-        state.sawDelta = true;
-        yield { delta };
-      }
+      for (const chunk of chunksOf(spec, parser.push(text), acc, state)) yield chunk;
       if (acc.done) break;
     }
   } finally {
@@ -438,7 +449,7 @@ async function* readStream(
     if (!acc.alive) throw protocolError(spec, head.trim() === '' ? 'the response was empty' : head);
     throw networkError(spec, 'the stream ended before the response finished');
   }
-  return { finish: acc.finish ?? 'stop', usage: acc.usage };
+  return { finish: acc.finish ?? 'stop', usage: acc.usage, terminal: spec.parser?.finish() ?? {} };
 }
 
 /**
@@ -480,7 +491,7 @@ export async function* streamChat(
         const usage = outcome.usage ?? estimated();
         stats.usage = usage;
         logAttempt(deps, spec, attempt, 'ok', { status });
-        yield { finishReason: outcome.finish, usage };
+        yield { finishReason: outcome.finish, usage, ...outcome.terminal };
         return;
       } catch (err) {
         if (err instanceof CallerCancelled) {

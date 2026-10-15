@@ -28,7 +28,9 @@ export interface ProviderProfile {
   name: string;
   /** the transport this profile speaks */
   kind: ProfileKind;
-  /** stored WITHOUT trailing slash; `/chat/completions` appended at call time */
+  /** the preset id this profile was created from; undefined for a hand-rolled openai-compatible profile */
+  preset?: string;
+  /** stored WITHOUT trailing slash; the endpoint path appended at call time */
   baseUrl: string;
   /** stored via §7 (AES-GCM, non-extractable). Never persisted in plaintext. */
   apiKey: string;
@@ -61,6 +63,8 @@ export interface ProfileView extends Omit<ProviderProfile, 'apiKey'> {
 export interface NewProfile {
   name: string;
   kind: ProfileKind;
+  /** the preset this profile is created under; omitted on hand-rolled `openai-compatible` profiles */
+  preset?: string;
   /** required for `openai-compatible`; `mock` defaults to `mock://caotang` */
   baseUrl?: string;
   /** required for `openai-compatible` unless the base is loopback; ignored for `mock` */
@@ -89,9 +93,57 @@ export interface ProfilePatch {
 
 export type ChatRole = 'system' | 'user' | 'assistant' | 'tool';
 
+/** The finish reasons a caller sees. 'tool_calls' means the reply is a request to run tools, not an answer. */
+export type FinishReason = 'stop' | 'length' | 'error' | 'tool_calls';
+
+/** The normalised thinking levels. A model's capability row says which of these it can be sent. */
+export type ThinkingLevel = 'off' | 'low' | 'medium' | 'high' | 'max';
+
+/** The task roles requests are attributed to — provider-gateway §6 records usage per role. */
+export type TaskRole = 'chat' | 'drafting' | 'background';
+
+/** A tool the model may call, declared in each route's own wire shape by the adapter. */
+export interface ToolDef {
+  /** The name the model calls it by: the harness name for natives, the qualified name for external tools. */
+  name: string;
+  description: string;
+  /** The parameters' JSON Schema, passed to the wire verbatim. */
+  parameters: unknown;
+}
+
+/** A tool call the model asked for, normalised. A tool result answers one call by its `id`. */
+export interface ToolCall {
+  /** The provider-assigned call id. Result messages are keyed by it. */
+  id: string;
+  name: string;
+  /** The arguments as one JSON string, exactly as the wire sent them. */
+  argumentsJson: string;
+}
+
+/**
+ * One reasoning block the model produced, opaque to everything above the adapter. The
+ * adapter replays it verbatim on tool turns: `raw` carries whatever the route needs
+ * back — Anthropic's signed thinking block, a Responses reasoning item, a chat route's
+ * `reasoning_content` string. Nothing outside the adapter inspects `raw`.
+ */
+export interface ReasoningBlock {
+  /** The display text, when the route exposes any (a summary, or the thinking itself). */
+  text: string;
+  /** The provider's own structure for this block. Stored and replayed; never interpreted. */
+  raw?: unknown;
+}
+
 export interface ChatMessage {
   role: ChatRole;
   content: string;
+  /** assistant only: the calls it asked for. May accompany empty content on a tools-only reply. */
+  toolCalls?: readonly ToolCall[];
+  /** tool role only: the call this message answers. */
+  toolCallId?: string;
+  /** tool role only: the result is an error payload (`is_error` on the wire). */
+  isError?: boolean;
+  /** assistant only: reasoning blocks the adapter replays verbatim on tool turns. */
+  reasoning?: readonly ReasoningBlock[];
 }
 
 export interface Usage {
@@ -101,8 +153,14 @@ export interface Usage {
 
 export interface ChatChunk {
   delta?: string;
-  finishReason?: 'stop' | 'length' | 'error';
+  /** Reasoning/thinking text as it streams. Shown collapsed in the agent panel; replayed via terminal `reasoning`. */
+  reasoningDelta?: string;
+  finishReason?: FinishReason;
   usage?: Usage;
+  /** On the terminal chunk: the calls the model asked for this reply. */
+  toolCalls?: readonly ToolCall[];
+  /** On the terminal chunk: the reasoning blocks to replay verbatim on the next request. */
+  reasoning?: readonly ReasoningBlock[];
 }
 
 /**
@@ -143,10 +201,47 @@ export interface ChatRequest {
   stop?: string[];
   /** see §5 — schema-in-system-message, plus json_object only after the probe */
   responseFormat?: 'text' | { jsonSchemaHint: object };
-  /** default: active profile */
+  /**
+   * Tools the model may call this turn (native function calling). Absent or empty means
+   * the caller is in JSON-in-text mode: the schema hint above is the whole protocol.
+   */
+  tools?: readonly ToolDef[];
+  /** 'auto' lets the model choose; 'none' forbids calls. Default 'auto' when tools are present. */
+  toolChoice?: 'auto' | 'none';
+  /** The normalised thinking level for this call. The adapter maps it through the model's capability row. */
+  thinking?: ThinkingLevel;
+  /** default: the profile that resolved for the request's role, else the active profile */
   profileId?: string;
   /** the agent turn this request belongs to; keys the per-turn ledger row (§6) */
   turnId?: string;
+  /** the task role this request runs under; recorded on the ledger row (§6) */
+  role?: TaskRole;
+}
+
+/**
+ * A model's capabilities, from the preset's capability table (merged with whatever the
+ * live model list reported). Every field the table does not state is absent, and the
+ * caller treats absent as "not supported".
+ */
+export interface ModelCaps {
+  /** The route can carry native tool declarations for this model. */
+  readonly tools?: boolean;
+  /** The model accepts image input. */
+  readonly vision?: boolean;
+  /** `response_format: {type: 'json_schema'}` is accepted. */
+  readonly jsonSchema?: boolean;
+  /** `response_format: {type: 'json_object'}` is accepted. */
+  readonly jsonObject?: boolean;
+  /** The effort levels the model can be sent, in display order. Absent = no thinking control. */
+  readonly effortLevels?: readonly ThinkingLevel[];
+  /** Whether the route answers the thinking level off, low..max, or cannot turn thinking off. */
+  readonly effortStyle?: string;
+  /** How the model's reasoning is replayed on tool turns (the adapter reads this). */
+  readonly replayStyle?: string;
+  /** The route requires streaming when thinking is enabled. */
+  readonly streamRequired?: boolean;
+  /** Request fields this route rejects and the adapter must omit (e.g. 'temperature'). */
+  readonly denylist?: readonly string[];
 }
 
 /** Who a unit of usage is attributed to. `at` defaults to the gateway clock. */
@@ -154,6 +249,8 @@ export interface UsageAttribution {
   profileId: string;
   model: string;
   turnId?: string;
+  /** the task role the usage ran under, for per-role accounting (§6) */
+  role?: TaskRole;
   at?: number;
 }
 

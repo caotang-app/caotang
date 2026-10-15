@@ -27,6 +27,7 @@ describe('usage ledger — day rows (§6)', () => {
         date: localDayKey(START),
         profileId: mock.id,
         model: 'mock/echo-1',
+        role: 'chat',
         promptTokens: estimateTokens('hello'),
         completionTokens: estimateTokens('hello'),
         requests: 1,
@@ -94,7 +95,7 @@ describe('usage ledger — day rows (§6)', () => {
     const h = harness();
     h.gateway.accountTokens({ promptTokens: 10, completionTokens: 5 }, { profileId: 'p', model: 'm' });
     expect(h.gateway.ledger.dayRows()).toEqual([
-      { date: localDayKey(START), profileId: 'p', model: 'm', promptTokens: 10, completionTokens: 5, requests: 1 },
+      { date: localDayKey(START), profileId: 'p', model: 'm', role: 'chat', promptTokens: 10, completionTokens: 5, requests: 1 },
     ]);
   });
 });
@@ -113,6 +114,7 @@ describe('usage ledger — turn rows (§6)', () => {
         turnId: 'turn-7',
         profileId: mock.id,
         model: 'mock/echo-1',
+        role: 'chat',
         promptTokens: estimateTokens('one') + estimateTokens('two'),
         completionTokens: estimateTokens('one') + estimateTokens('two'),
         requests: 2,
