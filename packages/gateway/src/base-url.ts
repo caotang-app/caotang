@@ -29,9 +29,9 @@ const VERSION_SEGMENT = /^v\d+[a-z0-9.]*$/i;
 const LOOPBACK_IPV4 = /^127\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
 
 /**
- * Hosts where plain http is acceptable: the user's own machine (LM Studio, Ollama). A name
- * that merely starts with `127.`, such as `127.evil.example`, is a public host and is not
- * loopback, so a key cannot be sent to it in clear text or saved to it without one.
+ * Hosts on the user's own machine. Kept for callers that still need the predicate —
+ * since the endpoint contract is HTTPS-only, loopback no longer earns an http pass.
+ * A name that merely starts with `127.`, such as `127.evil.example`, is a public host.
  */
 export function isLoopbackHost(hostname: string): boolean {
   const host = hostname.toLowerCase();
@@ -54,7 +54,10 @@ function invalid(reason: string): ProfileError {
 }
 
 /**
- * Validates and normalises a base URL for an `openai-compatible` profile.
+ * Validates and normalises a base URL for an `endpoint` profile.
+ *
+ * HTTPS only — a key is never sent in plain text, and there is no loopback
+ * exemption: a local server is reached through a preset or not at all.
  *
  * Returns the origin plus the path with trailing slashes removed, so `https://x.io/v1/`
  * and `https://x.io/v1` store the same string. Throws a `ProfileError` naming the
@@ -71,10 +74,7 @@ export function normalizeBaseUrl(input: string): string {
     throw invalid('is not a URL');
   }
 
-  if (url.protocol !== 'https:' && url.protocol !== 'http:') throw invalid('must start with https://');
-  if (url.protocol === 'http:' && !isLoopbackHost(url.hostname)) {
-    throw invalid('must use https:// unless it points at localhost, so the key is not sent in plain text');
-  }
+  if (url.protocol !== 'https:') throw invalid('must start with https://, so the key is never sent in plain text');
   if (url.username !== '' || url.password !== '') throw invalid('must not contain a username or password');
   if (url.search !== '' || url.hash !== '') throw invalid('must not contain a query string or fragment');
 

@@ -1,7 +1,8 @@
 /**
  * A fake OpenAI-compatible endpoint, served to the page by Playwright's route interception (not a server). It runs the
  * app's real transport, so the list-models probe, the response-format probe and the streamed planner reply all travel the
- * same path a real provider's would. The address is loopback, so the profile needs no key (provider-gateway §7).
+ * same path a real provider's would. The profile is a generic endpoint — key-optional, so the fake needs none — and
+ * Playwright answers its https calls before any network sees them (provider-gateway §2, §7).
  *
  * `reply` answers each chat request with the text the model "writes". A planner call (the agent's system message) gets its
  * plan the first time, and a plain reply after the results have come back.
@@ -9,7 +10,7 @@
 
 import { expect, type Page, type Route } from '@playwright/test';
 
-export const FAKE_ENDPOINT = 'http://127.0.0.1:5999/v1';
+export const FAKE_ENDPOINT = 'https://127.0.0.1:5999/v1';
 
 /** The chat request body as the app sends it, reduced to what the fake reads. */
 export interface FakeRequest {
@@ -59,7 +60,7 @@ function sse(text: string): string {
  * or before the click that starts them).
  */
 export async function fakeEndpoint(page: Page, reply: FakeReply): Promise<void> {
-  await page.route('http://127.0.0.1:5999/**', async (route) => {
+  await page.route('https://127.0.0.1:5999/**', async (route) => {
     const request = route.request();
     if (request.method() === 'OPTIONS') {
       await route.fulfill({ status: 204, headers: CORS });

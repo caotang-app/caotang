@@ -26,7 +26,7 @@ function scriptedGateway(replies: readonly (string | Error)[]): { gateway: Provi
 const PROFILE = {
   id: 'pr_TESTPROFIL',
   name: 'Test provider',
-  kind: 'openai-compatible',
+  kind: 'endpoint',
   endpoint: 'https://example.invalid/v1',
   defaultModel: 'test-model',
   hasKey: true,

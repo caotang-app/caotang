@@ -71,6 +71,39 @@ describe('the key never reaches an error, a log, or the ledger', () => {
   });
 });
 
+describe('custom header values are secrets too', () => {
+  const HEADER_VALUE = 'proxy-secret-hunter2';
+
+  it('sends a generic profile’s sealed headers on the wire, and scrubs them from an echoing error and the log', async () => {
+    const net = new ScriptedFetch().push(() => jsonResponse(500, `upstream rejected ${HEADER_VALUE}`));
+    const h = harness({ net, retry: { maxRetries: 0 } });
+    await addEndpoint(h, { customHeaders: { 'x-proxy-secret': HEADER_VALUE } });
+
+    const { error } = await collect(h.gateway.complete(userMessage('x')));
+    // The sealed header reached the wire.
+    expect(net.headerOf(0, 'x-proxy-secret')).toBe(HEADER_VALUE);
+    // …and nowhere else, echoed or stored.
+    expect(JSON.stringify({ message: (error as Error).message, detail: (error as ProviderError).detail })).not.toContain(
+      HEADER_VALUE,
+    );
+    expect(JSON.stringify(h.gateway.requestLog.entries())).not.toContain(HEADER_VALUE);
+    expect(JSON.stringify(h.profiles.list())).not.toContain(HEADER_VALUE);
+    expect(JSON.stringify(h.gateway.ledger.snapshot())).not.toContain(HEADER_VALUE);
+  });
+
+  it('scrubs header values from a /models failure as well', async () => {
+    const net = new ScriptedFetch().push(() => jsonResponse(401, `bad header ${HEADER_VALUE}`));
+    const h = harness({ net });
+    const profile = await addEndpoint(h, { customHeaders: { 'x-proxy-secret': HEADER_VALUE } });
+
+    const error = await h.gateway.listModels(profile.id).catch((e: unknown) => e);
+    expect(net.headerOf(0, 'x-proxy-secret')).toBe(HEADER_VALUE);
+    expect(JSON.stringify({ message: (error as Error).message, detail: (error as ProviderError).detail })).not.toContain(
+      HEADER_VALUE,
+    );
+  });
+});
+
 describe('the serialised profile carries no key', () => {
   afterEach(() => {
     vi.restoreAllMocks();

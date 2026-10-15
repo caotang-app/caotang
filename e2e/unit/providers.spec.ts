@@ -24,7 +24,7 @@ function memoryDb(): AppDb & { rows: Map<string, unknown> } {
   };
 }
 
-const ENDPOINT = 'http://127.0.0.1:5999/v1';
+const ENDPOINT = 'https://127.0.0.1:5999/v1';
 
 /** A fetch that answers the endpoint's three calls: the model list, the format probe, and a streamed reply. */
 function scriptedFetch(options: { failModels?: boolean } = {}): (url: string, init?: RequestInit) => Promise<Response> {
@@ -60,7 +60,7 @@ test('saving an endpoint lists its models, and the trial leaves the active profi
   const { service } = await ProviderService.open({ db: memoryDb(), vault: null, fetch: scriptedFetch() });
   const demo = service.active();
 
-  const saved = await service.addProfile({ name: 'Local', kind: 'openai-compatible', baseUrl: ENDPOINT, defaultModel: 'test-model' });
+  const saved = await service.addProfile({ name: 'Local', kind: 'endpoint', baseUrl: ENDPOINT, defaultModel: 'test-model' });
 
   expect(saved.probeError).toBeUndefined();
   expect(saved.models?.map((model) => model.id)).toEqual(['test-model', 'other-model']);
@@ -72,7 +72,7 @@ test('a probe that fails keeps the profile, names the failure, and changes nothi
   const { service } = await ProviderService.open({ db: memoryDb(), vault: null, fetch: scriptedFetch({ failModels: true }) });
   const demo = service.active();
 
-  const saved = await service.addProfile({ name: 'Broken', kind: 'openai-compatible', baseUrl: ENDPOINT, defaultModel: 'test-model' });
+  const saved = await service.addProfile({ name: 'Broken', kind: 'endpoint', baseUrl: ENDPOINT, defaultModel: 'test-model' });
 
   expect(saved.models).toBeUndefined();
   expect(saved.probeError).toContain('the profile was saved but is not verified');
@@ -82,7 +82,7 @@ test('a probe that fails keeps the profile, names the failure, and changes nothi
 
 test('activating an endpoint runs the response-format probe, and the answer is kept on the profile', async () => {
   const { service } = await ProviderService.open({ db: memoryDb(), vault: null, fetch: scriptedFetch() });
-  const saved = await service.addProfile({ name: 'Local', kind: 'openai-compatible', baseUrl: ENDPOINT, defaultModel: 'test-model' });
+  const saved = await service.addProfile({ name: 'Local', kind: 'endpoint', baseUrl: ENDPOINT, defaultModel: 'test-model' });
 
   const outcome = await service.activate(saved.view.id);
 
@@ -97,7 +97,7 @@ test('activating an endpoint runs the response-format probe, and the answer is k
 test('saving an endpoint probes its response format too, so the first request after a save knows the answer (provider-gateway §5)', async () => {
   const { service } = await ProviderService.open({ db: memoryDb(), vault: null, fetch: scriptedFetch() });
   const before = service.active()?.id;
-  const saved = await service.addProfile({ name: 'Local', kind: 'openai-compatible', baseUrl: ENDPOINT, defaultModel: 'test-model' });
+  const saved = await service.addProfile({ name: 'Local', kind: 'endpoint', baseUrl: ENDPOINT, defaultModel: 'test-model' });
 
   // No activation: the save alone has recorded the answer on the profile, and left the active profile as it was.
   expect(service.get(saved.view.id)?.responseFormat?.supportsJsonObject).toBe(true);
@@ -108,7 +108,7 @@ test('saving an endpoint probes its response format too, so the first request af
 test('a reload restores the profiles under the same ids, the active one, its probe, the usage and the request log', async () => {
   const db = memoryDb();
   const first = await ProviderService.open({ db, vault: null, fetch: scriptedFetch() });
-  const saved = await first.service.addProfile({ name: 'Local', kind: 'openai-compatible', baseUrl: ENDPOINT, defaultModel: 'test-model' });
+  const saved = await first.service.addProfile({ name: 'Local', kind: 'endpoint', baseUrl: ENDPOINT, defaultModel: 'test-model' });
   await first.service.activate(saved.view.id);
   await first.service.persist();
   const ids = first.service.list().map((profile) => profile.id);
@@ -129,7 +129,7 @@ test('a key that is no longer in the vault is named, and its profile is not rest
   const db = memoryDb();
   const remote = 'https://api.example.test/v1';
   const first = await ProviderService.open({ db, vault: null, fetch: scriptedFetch() });
-  await first.service.addProfile({ name: 'Remote', kind: 'openai-compatible', baseUrl: remote, apiKey: 'test-key-1', defaultModel: 'test-model' });
+  await first.service.addProfile({ name: 'Remote', kind: 'endpoint', baseUrl: remote, apiKey: 'test-key-1', defaultModel: 'test-model' });
   await first.service.persist();
 
   // A fresh vault has none of the keys the first one sealed, which is what a cleared site-data store looks like.
@@ -142,7 +142,7 @@ test('a key that is no longer in the vault is named, and its profile is not rest
 
 test('removing the active endpoint makes the demo active again, and removing the last profile makes the demo', async () => {
   const { service } = await ProviderService.open({ db: memoryDb(), vault: null, fetch: scriptedFetch() });
-  const saved = await service.addProfile({ name: 'Local', kind: 'openai-compatible', baseUrl: ENDPOINT, defaultModel: 'test-model' });
+  const saved = await service.addProfile({ name: 'Local', kind: 'endpoint', baseUrl: ENDPOINT, defaultModel: 'test-model' });
   await service.activate(saved.view.id);
 
   await service.remove(saved.view.id);
@@ -161,10 +161,10 @@ test('the demo profile is found by its kind, made again when the writer has remo
   expect(service.list()).toHaveLength(1);
 
   // An endpoint is the active one, and the demo is removed: a demo run makes the demo again, and leaves the endpoint active.
-  const saved = await service.addProfile({ name: 'Local', kind: 'openai-compatible', baseUrl: ENDPOINT, defaultModel: 'test-model' });
+  const saved = await service.addProfile({ name: 'Local', kind: 'endpoint', baseUrl: ENDPOINT, defaultModel: 'test-model' });
   await service.activate(saved.view.id);
   await service.remove(demo.id);
-  expect(service.list().map((profile) => profile.kind)).toEqual(['openai-compatible']);
+  expect(service.list().map((profile) => profile.kind)).toEqual(['endpoint']);
 
   const again = await service.demoProfile();
   expect(again).toMatchObject({ name: DEMO_PROFILE_NAME, kind: 'mock' });

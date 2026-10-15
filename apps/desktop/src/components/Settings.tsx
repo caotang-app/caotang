@@ -149,7 +149,7 @@ interface FormState {
   readonly baseUrl: string;
   readonly model: string;
   readonly apiKey: string;
-  readonly kind: 'openai-compatible' | 'mock';
+  readonly kind: 'endpoint' | 'mock';
   /** The two optional price fields, as typed: dollars per 1,000 prompt tokens and per 1,000 reply tokens. Empty is no price. */
   readonly promptPrice: string;
   readonly completionPrice: string;
@@ -161,7 +161,7 @@ const BLANK: FormState = {
   baseUrl: '',
   model: '',
   apiKey: '',
-  kind: 'openai-compatible',
+  kind: 'endpoint',
   promptPrice: '',
   completionPrice: '',
 };
@@ -173,7 +173,7 @@ function formFor(view: ProfileView): FormState {
     baseUrl: view.baseUrl,
     model: view.defaultModel,
     apiKey: '',
-    kind: view.kind === 'mock' ? 'mock' : 'openai-compatible',
+    kind: view.kind === 'mock' ? 'mock' : 'endpoint',
     promptPrice: view.pricePer1k === undefined ? '' : String(view.pricePer1k.prompt),
     completionPrice: view.pricePer1k === undefined ? '' : String(view.pricePer1k.completion),
   };
@@ -342,7 +342,7 @@ function ProvidersSection({ services, onChanged }: { services: AppServices; onCh
             <span>Name</span>
             <input type="text" value={form.name} maxLength={80} onChange={(event) => setForm({ ...form, name: event.target.value })} />
           </label>
-          {form.kind === 'openai-compatible' ? (
+          {form.kind === 'endpoint' ? (
             <label>
               <span>Endpoint (the base URL, ending in /v1)</span>
               <input
@@ -365,7 +365,7 @@ function ProvidersSection({ services, onChanged }: { services: AppServices; onCh
               ))}
             </datalist>
           ) : null}
-          {form.kind === 'openai-compatible' ? (
+          {form.kind === 'endpoint' ? (
             <fieldset className="price-fields">
               <legend>
                 Price per 1,000 tokens, in dollars (optional: fill both to see the cost of a step). A saved price stays until you type a new
@@ -381,7 +381,7 @@ function ProvidersSection({ services, onChanged }: { services: AppServices; onCh
               </label>
             </fieldset>
           ) : null}
-          {form.kind === 'openai-compatible' ? (
+          {form.kind === 'endpoint' ? (
             <label>
               <span>
                 API key{' '}

@@ -192,7 +192,7 @@ describe('complete() — the egress guard (command-bus §4, extensibility §4)',
     const h = harness({ net: new ScriptedFetch().push(() => sseResponse([finish('stop'), '[DONE]'])) });
     await addEndpoint(h, { name: 'active', baseUrl: 'https://a.example/v1' });
     const other = await addEndpoint(h, { name: 'other', baseUrl: 'https://b.example/v1', apiKey: 'sk-other-key-123456' });
-    const reveal = vi.spyOn(h.keys, 'reveal');
+    const reveal = vi.spyOn(h.keys, 'revealPayload');
 
     const { error } = await collect(h.gateway.complete({ ...userMessage('x'), profileId: other.id }));
 
@@ -272,7 +272,7 @@ describe('complete() — profile resolution', () => {
   it('reports a stored key that cannot be read, rather than sending the request without one', async () => {
     const h = harness({ net: new ScriptedFetch() });
     await addEndpoint(h);
-    vi.spyOn(h.keys, 'reveal').mockResolvedValue(undefined);
+    vi.spyOn(h.keys, 'revealPayload').mockResolvedValue(undefined);
 
     const { error } = await collect(h.gateway.complete(userMessage('x')));
     expect((error as ProfileError).code).toBe('key-unreadable');

@@ -9,6 +9,7 @@
 export type {
   ProviderProfile,
   ProfileKind,
+  LegacyProfileKind,
   ProfileView,
   NewProfile,
   ProfilePatch,
@@ -53,8 +54,20 @@ export {
 export { normalizeBaseUrl, MOCK_BASE_URL, isLoopbackBase } from './base-url.js';
 
 export {
+  PRESETS,
+  presetFor,
+  modelRowFor,
+  resolveRoute,
+  type PresetDef,
+  type PresetField,
+  type ModelRow,
+  type CorsStatus,
+} from './presets/index.js';
+
+export {
   createKeyStore,
   type KeyStore,
+  type KeyPayload,
   type KeyStoreOptions,
 } from './keys/key-store.js';
 export { createMemoryVaultPort, type KeyVaultPort, type SealedEntry } from './keys/vault.js';

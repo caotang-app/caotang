@@ -13,8 +13,14 @@
  *    but not the keys a ledger row needs (`profileId`, `model`).
  */
 
-/** §2 — `openai-compatible` is the real transport; `mock` is the no-key fixture (baseUrl `mock://caotang`). */
-export type ProfileKind = 'openai-compatible' | 'mock';
+/**
+ * §2 — `endpoint` is a real HTTPS transport target (its preset names the route);
+ * `mock` is the no-key fixture (baseUrl `mock://caotang`). `'openai-compatible'` was
+ * the pre-preset name for `endpoint`; persisted records are migrated on read.
+ */
+export type ProfileKind = 'endpoint' | 'mock';
+/** The retired kind name, still found in persisted records written before presets. */
+export type LegacyProfileKind = 'openai-compatible';
 
 /**
  * §2's data shape. The spec stores `apiKey` via §7, and that is how this file reads
@@ -28,8 +34,10 @@ export interface ProviderProfile {
   name: string;
   /** the transport this profile speaks */
   kind: ProfileKind;
-  /** the preset id this profile was created from; undefined for a hand-rolled openai-compatible profile */
+  /** the preset id this profile was created from; a hand-rolled endpoint stores 'generic' */
   preset?: string;
+  /** the preset's extra fields the base URL was derived from (workspace, region) */
+  fields?: Readonly<Record<string, string>>;
   /** stored WITHOUT trailing slash; the endpoint path appended at call time */
   baseUrl: string;
   /** stored via §7 (AES-GCM, non-extractable). Never persisted in plaintext. */
@@ -63,14 +71,18 @@ export interface ProfileView extends Omit<ProviderProfile, 'apiKey'> {
 export interface NewProfile {
   name: string;
   kind: ProfileKind;
-  /** the preset this profile is created under; omitted on hand-rolled `openai-compatible` profiles */
+  /** the preset this profile is created under; `endpoint` profiles default to `generic` */
   preset?: string;
-  /** required for `openai-compatible`; `mock` defaults to `mock://caotang` */
+  /** the preset's base URL when omitted; required when the preset has none (`generic`) */
   baseUrl?: string;
-  /** required for `openai-compatible` unless the base is loopback; ignored for `mock` */
+  /** required for `endpoint` unless the preset marks keys optional; ignored for `mock` */
   apiKey?: string;
-  /** required for `openai-compatible`; `mock` defaults to `mock/echo-1` */
+  /** the preset's default model when omitted */
   defaultModel?: string;
+  /** the preset's extra fields a templated base URL is built from (workspace id, region) */
+  fields?: Readonly<Record<string, string>>;
+  /** extra request headers, sealed with the key; `generic` profiles only. Values never appear on a view. */
+  customHeaders?: Readonly<Record<string, string>>;
   temperature?: number;
   maxOutputTokens?: number;
   pricePer1k?: { prompt: number; completion: number };
@@ -82,8 +94,12 @@ export interface NewProfile {
 export interface ProfilePatch {
   name?: string;
   baseUrl?: string;
-  /** replaces the stored key; an empty string clears it (loopback endpoints only) */
+  /** replaces the stored key; an empty string clears it (key-optional presets only) */
   apiKey?: string;
+  /** replaces the preset fields; a templated base URL is rebuilt from them when `baseUrl` is not given */
+  fields?: Readonly<Record<string, string>>;
+  /** replaces the sealed custom headers (`generic` only); `null` clears them, absent keeps them */
+  customHeaders?: Readonly<Record<string, string>> | null;
   defaultModel?: string;
   temperature?: number;
   maxOutputTokens?: number;

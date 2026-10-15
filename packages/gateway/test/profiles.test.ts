@@ -21,7 +21,7 @@ function store(): { profiles: ProfileStore; keys: ReturnType<typeof createKeySto
 
 const endpoint = (name: string, extra: Record<string, unknown> = {}) => ({
   name,
-  kind: 'openai-compatible' as const,
+  kind: 'endpoint' as const,
   baseUrl: 'https://a.example/v1',
   apiKey: KEY,
   defaultModel: 'model-x',
@@ -180,21 +180,42 @@ describe('validation', () => {
     await expect(profiles.create(endpoint('x', { baseUrl: 'mock://caotang' }))).rejects.toMatchObject({ field: 'baseUrl' });
   });
 
-  it('requires a key for a remote endpoint, but not for a loopback one', async () => {
+  it('defaults an endpoint to the generic preset and refuses a preset that does not exist', async () => {
     const { profiles } = store();
-    await expect(profiles.create(endpoint('remote', { apiKey: '' }))).rejects.toMatchObject({ field: 'apiKey' });
-    const local = await profiles.create(endpoint('local', { baseUrl: 'http://localhost:1234/v1', apiKey: '' }));
-    expect(local.hasKey).toBe(false);
+    const created = await profiles.create(endpoint('x'));
+    expect(created.preset).toBe('generic');
+    await expect(profiles.create(endpoint('x', { preset: 'not-a-provider' }))).rejects.toMatchObject({ field: 'preset' });
   });
 
-  it('refuses a key-less remote endpoint on a host that only starts with 127.', async () => {
+  it('requires a key when the preset does not mark it optional, and not when it does', async () => {
     const { profiles } = store();
-    await expect(profiles.create(endpoint('x', { baseUrl: 'https://127.attacker.test/v1', apiKey: '' }))).rejects.toMatchObject({
-      field: 'apiKey',
+    // openai is a named preset: it documents keyed calls, so the key is required.
+    await expect(profiles.create(endpoint('remote', { preset: 'openai', apiKey: '' }))).rejects.toMatchObject({ field: 'apiKey' });
+    // generic is key-optional: a hand-rolled endpoint may ignore the header entirely.
+    const free = await profiles.create(endpoint('free', { apiKey: '' }));
+    expect(free.hasKey).toBe(false);
+    // opencode documents keyless calls on its free models; with no base URL given, the preset's is used.
+    const zen = await profiles.create({ name: 'zen', kind: 'endpoint', preset: 'opencode', apiKey: '', defaultModel: 'kimi-k3' });
+    expect(zen.hasKey).toBe(false);
+    expect(zen.preset).toBe('opencode');
+    expect(zen.baseUrl).toBe('https://opencode.ai/inference/v1');
+  });
+
+  it('refuses a loopback base even without a key — there is no http exemption anymore', async () => {
+    const { profiles } = store();
+    await expect(profiles.create(endpoint('local', { baseUrl: 'http://localhost:1234/v1', apiKey: '' }))).rejects.toMatchObject({
+      field: 'baseUrl',
     });
+  });
+
+  it('refuses plain http even to a look-alike 127. host, and a named preset still requires its key', async () => {
+    const { profiles } = store();
     await expect(profiles.create(endpoint('x', { baseUrl: 'http://127.attacker.test/v1', apiKey: '' }))).rejects.toMatchObject({
       field: 'baseUrl',
     });
+    await expect(
+      profiles.create(endpoint('x', { baseUrl: 'https://127.attacker.test/v1', preset: 'openai', apiKey: '' })),
+    ).rejects.toMatchObject({ field: 'apiKey' });
   });
 
   it('refuses a key with a space or a line break in it, which would fail every request', async () => {
@@ -291,25 +312,87 @@ describe('the key boundary', () => {
     expect(await keys.reveal(created.id)).toBe(KEY);
   });
 
-  it('refuses a move from a loopback endpoint with no key to a remote one, which always needs a key', async () => {
+  it('lets a keyless generic endpoint move origin without a key, since generic marks the key optional', async () => {
     const { profiles, keys } = store();
-    const local = await profiles.create(endpoint('local', { baseUrl: 'http://localhost:1234/v1', apiKey: '' }));
-    await expect(profiles.update(local.id, { baseUrl: 'https://remote.example/v1' })).rejects.toMatchObject({ field: 'apiKey' });
-    expect(profiles.get(local.id)?.baseUrl).toBe('http://localhost:1234/v1');
+    const local = await profiles.create(endpoint('local', { apiKey: '' }));
+    const moved = await profiles.update(local.id, { baseUrl: 'https://remote.example/v1' });
+    expect(moved.baseUrl).toBe('https://remote.example/v1');
+    expect(moved.hasKey).toBe(false);
     expect(await keys.has(local.id)).toBe(false);
   });
 
-  it('replaces the stored key on update, and clears it only for a loopback endpoint', async () => {
+  it('replaces the stored key on update, and clears it only where the preset marks the key optional', async () => {
     const { profiles, keys } = store();
     const created = await profiles.create(endpoint('x'));
     await profiles.update(created.id, { apiKey: 'sk-replacement-123456' });
     expect(await keys.reveal(created.id)).toBe('sk-replacement-123456');
-    await expect(profiles.update(created.id, { apiKey: '' })).rejects.toMatchObject({ field: 'apiKey' });
-
-    const local = await profiles.create(endpoint('local', { baseUrl: 'http://localhost:1234/v1', apiKey: 'x' }));
-    const cleared = await profiles.update(local.id, { apiKey: '' });
+    const cleared = await profiles.update(created.id, { apiKey: '' });
     expect(cleared.hasKey).toBe(false);
-    expect(await keys.has(local.id)).toBe(false);
+    expect(await keys.has(created.id)).toBe(false);
+
+    // A preset that requires a key refuses to end a save without one.
+    const keyed = await profiles.create(endpoint('keyed', { preset: 'openai', apiKey: 'sk-o-1234567890' }));
+    await expect(profiles.update(keyed.id, { apiKey: '' })).rejects.toMatchObject({ field: 'apiKey' });
+    expect(await keys.reveal(keyed.id)).toBe('sk-o-1234567890');
+  });
+});
+
+describe('custom headers (generic endpoints only)', () => {
+  it('seals custom headers with the key and never puts the values on a view', async () => {
+    const { profiles, keys } = store();
+    const created = await profiles.create(
+      endpoint('proxied', { customHeaders: { 'x-team': 'blue-42', 'x-proxy-secret': 'hunter2' } }),
+    );
+    expect(JSON.stringify(created)).not.toContain('hunter2');
+    expect(JSON.stringify(profiles.list())).not.toContain('hunter2');
+    expect(created).not.toHaveProperty('customHeaders');
+    expect((await keys.revealPayload(created.id))?.customHeaders).toEqual({ 'x-team': 'blue-42', 'x-proxy-secret': 'hunter2' });
+    expect((await keys.revealPayload(created.id))?.apiKey).toBe(KEY);
+  });
+
+  it('refuses custom headers on a named preset, on a mock, and with bad names or values', async () => {
+    const { profiles } = store();
+    await expect(
+      profiles.create(endpoint('x', { preset: 'openai', customHeaders: { 'x-a': 'b' } })),
+    ).rejects.toMatchObject({ field: 'customHeaders' });
+    await expect(
+      profiles.create({ name: 'm', kind: 'mock', customHeaders: { 'x-a': 'b' } }),
+    ).rejects.toMatchObject({ field: 'customHeaders' });
+    await expect(profiles.create(endpoint('x', { customHeaders: { 'bad name': 'v' } }))).rejects.toMatchObject({
+      field: 'customHeaders',
+    });
+    await expect(profiles.create(endpoint('x', { customHeaders: { 'x-a': '  ' } }))).rejects.toMatchObject({
+      field: 'customHeaders',
+    });
+    await expect(profiles.create(endpoint('x', { customHeaders: { 'x-a': 'v\nev' } }))).rejects.toMatchObject({
+      field: 'customHeaders',
+    });
+  });
+
+  it('merges header edits with the sealed key and clears them on null', async () => {
+    const { profiles, keys } = store();
+    const created = await profiles.create(endpoint('x', { customHeaders: { 'x-team': 'blue' } }));
+    // A key-only update keeps the headers.
+    await profiles.update(created.id, { apiKey: 'sk-next-123456' });
+    expect((await keys.revealPayload(created.id))?.customHeaders).toEqual({ 'x-team': 'blue' });
+    // A headers-only update keeps the key.
+    await profiles.update(created.id, { customHeaders: { 'x-new': 'val-9' } });
+    const payload = await keys.revealPayload(created.id);
+    expect(payload?.apiKey).toBe('sk-next-123456');
+    expect(payload?.customHeaders).toEqual({ 'x-new': 'val-9' });
+    // null clears the headers; the key stays.
+    await profiles.update(created.id, { customHeaders: null });
+    expect((await keys.revealPayload(created.id))?.customHeaders).toBeUndefined();
+    expect((await keys.revealPayload(created.id))?.apiKey).toBe('sk-next-123456');
+  });
+
+  it('lets a keyless generic endpoint seal custom headers, and remove drops the entry', async () => {
+    const { profiles, keys } = store();
+    const created = await profiles.create(endpoint('keyless', { apiKey: '', customHeaders: { 'x-team': 'blue' } }));
+    expect(created.hasKey).toBe(false);
+    expect((await keys.revealPayload(created.id))?.customHeaders).toEqual({ 'x-team': 'blue' });
+    await profiles.remove(created.id);
+    expect(await keys.has(created.id)).toBe(false);
   });
 });
 

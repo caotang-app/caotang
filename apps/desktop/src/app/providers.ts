@@ -57,6 +57,13 @@ const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 /** The request-log entries kept across reloads: the log's own cap (provider-gateway §4). */
 const REQUEST_LOG_KEEP = 50;
 
+/**
+ * A profile as the app database may hold it: the current view, or a record written
+ * before presets, whose kind is `openai-compatible` and whose `preset` is absent.
+ * The key is never on it — the vault holds the sealed payload.
+ */
+type PersistedProfile = Omit<ProfileView, 'kind'> & { kind: ProfileView['kind'] | 'openai-compatible' };
+
 /** The provider's mock: the demo intents, a fixed answer for anything else from the planner, and the echo fallback. */
 export function appMockProvider(): MockProvider {
   return createMockProvider({
@@ -168,22 +175,29 @@ export class ProviderService {
   /** Reads the stored profiles, usage and log back into the services. Each part is independent: one failing keeps the rest. */
   private async restore(db: AppDb, notices: string[], pin: (id: string | null) => void): Promise<void> {
     try {
-      const stored = (await db.get<ProfileView[]>(APP_KEYS.profiles)) ?? [];
+      const stored = (await db.get<PersistedProfile[]>(APP_KEYS.profiles)) ?? [];
       let activeId: string | null = null;
       for (const record of stored) {
         try {
-          const apiKey = record.kind === 'openai-compatible' && record.hasKey ? await this.keys.reveal(record.id) : undefined;
-          if (record.kind === 'openai-compatible' && record.hasKey && apiKey === undefined) {
+          // Records written before presets say 'openai-compatible'; that kind is now 'endpoint',
+          // and a record with no preset id runs under 'generic' (the hand-rolled route).
+          const kind: ProfileView['kind'] = (record.kind as string) === 'openai-compatible' ? 'endpoint' : (record.kind as ProfileView['kind']);
+          // The sealed payload holds the key and any custom headers; both come back together.
+          const payload = kind === 'endpoint' ? await this.keys.revealPayload(record.id) : undefined;
+          if (kind === 'endpoint' && record.hasKey && (payload === undefined || payload.apiKey === '')) {
             notices.push(`The key for “${record.name}” is no longer in this browser, so the profile was not restored. Add it again in Settings.`);
             continue;
           }
           pin(record.id);
           const view = await this.profiles.create({
             name: record.name,
-            kind: record.kind,
+            kind,
             baseUrl: record.baseUrl,
             defaultModel: record.defaultModel,
-            ...(apiKey === undefined ? {} : { apiKey }),
+            ...(record.preset === undefined ? {} : { preset: record.preset }),
+            ...(record.fields === undefined ? {} : { fields: record.fields }),
+            ...(payload === undefined || payload.apiKey === '' ? {} : { apiKey: payload.apiKey }),
+            ...(payload?.customHeaders === undefined ? {} : { customHeaders: payload.customHeaders }),
             ...(record.temperature === undefined ? {} : { temperature: record.temperature }),
             ...(record.maxOutputTokens === undefined ? {} : { maxOutputTokens: record.maxOutputTokens }),
             ...(record.pricePer1k === undefined ? {} : { pricePer1k: record.pricePer1k }),
@@ -270,8 +284,8 @@ export class ProviderService {
    */
   async addProfile(input: NewProfile): Promise<SaveOutcome> {
     const view = await this.profiles.create(input);
-    const probe = view.kind === 'openai-compatible' ? await this.probeModels(view.id) : { models: undefined, error: undefined };
-    if (view.kind === 'openai-compatible' && probe.error === undefined) await this.probeFormat(view.id);
+    const probe = view.kind === 'endpoint' ? await this.probeModels(view.id) : { models: undefined, error: undefined };
+    if (view.kind === 'endpoint' && probe.error === undefined) await this.probeFormat(view.id);
     await this.persist();
     return {
       view: this.profiles.get(view.id) ?? view,
@@ -285,10 +299,10 @@ export class ProviderService {
     const before = this.profiles.get(id);
     const view = await this.profiles.update(id, patch);
     const probe =
-      view.kind === 'openai-compatible' && before !== undefined && (before.baseUrl !== view.baseUrl || patch.apiKey !== undefined || before.defaultModel !== view.defaultModel)
+      view.kind === 'endpoint' && before !== undefined && (before.baseUrl !== view.baseUrl || patch.apiKey !== undefined || before.defaultModel !== view.defaultModel)
         ? await this.probeModels(id)
         : { models: undefined, error: undefined };
-    if (view.kind === 'openai-compatible' && probe.models !== undefined) await this.probeFormat(id);
+    if (view.kind === 'endpoint' && probe.models !== undefined) await this.probeFormat(id);
     await this.persist();
     return {
       view: this.profiles.get(id) ?? view,
@@ -307,7 +321,7 @@ export class ProviderService {
     this.profiles.activate(id);
     const view = this.profiles.get(id);
     let note: string | undefined;
-    if (view !== undefined && view.kind === 'openai-compatible') {
+    if (view !== undefined && view.kind === 'endpoint') {
       if (view.responseFormat !== undefined) {
         note = formatNote(view.responseFormat.supportsJsonObject);
       } else {
