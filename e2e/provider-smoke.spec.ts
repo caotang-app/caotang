@@ -21,8 +21,11 @@ function smokeKeys(): ReadonlyMap<string, string> {
   const fromFile = new Map<string, string>();
   const envFile = resolve('caotang.env');
   if (existsSync(envFile)) {
-    for (const line of readFileSync(envFile, 'utf8').split(/\r?\n/)) {
-      const match = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/.exec(line);
+    // Strip a BOM and tolerate `export NAME=value` lines — both are everyday Windows/editor artifacts
+    // that would otherwise silently drop a variable.
+    const text = readFileSync(envFile, 'utf8').replace(/^\uFEFF/, '');
+    for (const line of text.split(/\r?\n/)) {
+      const match = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/.exec(line);
       if (match === null) continue;
       const value = match[2]!.replace(/^['"]|['"]$/g, '');
       if (match[1]!.startsWith('CAOTANG_SMOKE_')) fromFile.set(match[1]!, value);
