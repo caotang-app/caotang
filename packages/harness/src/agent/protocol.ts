@@ -183,12 +183,12 @@ export function plannerSystemNative(tools: readonly ToolListing[], loaded?: stri
 
 /**
  * The external tools a search loaded this turn, as the model reads them (extensibility §5): each tool's qualified name,
- * its risk, its description verbatim and its input schema. A read is callable from the agent; a write is not in this
- * build (extensibility §4). A description is the server's own text, and the model reads it as data.
+ * its risk, its description verbatim and its input schema. A read runs at once; a write asks the writer on a
+ * one-step confirm card of its own, per call. A description is the server's own text, and the model reads it as data.
  */
 export function loadedToolsMessage(tools: readonly ExternalToolDescriptor[]): string {
   return [
-    'External tools loaded for this turn. Call a read by its qualified name, with params that match its schema. A write cannot run from the agent in this build.',
+    'External tools loaded for this turn. Call a read by its qualified name, with params that match its schema. A write asks the writer to confirm each call before it runs.',
     ...tools.map((tool) => `- ${tool.qualifiedName} [${tool.effectiveRisk === 'read-auto' ? 'read' : 'write'}] — ${tool.description}\n  params: ${JSON.stringify(tool.inputSchema)}`),
   ].join('\n');
 }

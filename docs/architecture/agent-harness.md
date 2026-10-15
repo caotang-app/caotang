@@ -31,6 +31,8 @@ interface AskBack {
 
 The ask-back renders as a **card in the agent panel** (buttons for the options, not freeform chat) and is the model-facing payload verbatim — one format serves both the model's retry reasoning and the user's review.
 
+**Two wires, one loop.** A turn's wire is chosen once, from the resolved model's capability row (provider-gateway §4): when the row reports `tools`, the planner's callable surface travels as native tool declarations — the reply's tool calls arrive as `tool_calls` with a `tool_calls` finish, results return as `tool` messages keyed by `toolCallId`, and the assistant's own turns (calls + reasoning blocks included) are replayed verbatim. When the row does not, the same loop runs the JSON-in-text protocol: tools described in the system prompt, calls answered as `{"steps":…}` JSON, results in a user message. The choice is per turn and per profile; the steps, cards, refusals and retries above are identical either way — the wire changes how the model *says* a call, never what the call does. Malformed call arguments surface as a keyed tool error with a corrective message, never as a crash.
+
 ## 3. Tool registry (v0.1 — frozen surface, 14 tools)
 
 **Slicing principles:** workflow-shaped N-to-1 tools promoted to Tier-1 (a typical goal in ≤5 calls); fine-grained primitives exist on the command bus and are composed *internally* by compound tools — they are **not** separately exposed to the model in v0.1 (Tier-2 dynamic loading = v0.2, evidence-gated). One risk level per tool. Flat primitive params with constrained enums. Idempotent: every call carries a turn-scoped `callId`; the command bus dedupes replays.
