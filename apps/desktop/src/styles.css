@@ -2167,6 +2167,59 @@ dialog.confirm::backdrop {
   gap: 8px;
 }
 
+/* The provider form's selects and preset fields style like its inputs. */
+.profile-form select,
+.role-row select,
+.role-row input {
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+/* The custom-headers editor: one row per header, value masked like the key. */
+.header-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.header-row input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+/* The task-role picker: one line per role, the name leading. */
+.role-rows {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.role-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.role-title {
+  min-width: 120px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .form-message {
   margin: 10px 0;
   padding: 8px 10px;
@@ -2328,6 +2381,20 @@ dialog.confirm::backdrop {
   white-space: pre-wrap;
   max-height: 4.5em;
   overflow: hidden;
+}
+
+/* The model's thinking channel on a turn: collapsed and muted, never inline (provider-gateway §6, D12). */
+.agent-reasoning {
+  margin: 6px 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.agent-reasoning-text {
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+  max-height: 10em;
+  overflow-y: auto;
 }
 
 .agent-context {

@@ -48,6 +48,11 @@ export interface ModelCall {
   /** The session's effort level, when it pins one — passed to the request as `thinking`. */
   readonly thinking?: ThinkingLevel;
   readonly onDelta?: (text: string) => void;
+  /**
+   * The call's reasoning deltas as they stream (provider-gateway §3). The panel folds them into its "Thinking" block;
+   * the reply's terminal `reasoning` blocks are replay data for the next request and do not come through here.
+   */
+  readonly onReasoning?: (text: string) => void;
 }
 
 /**
@@ -102,6 +107,9 @@ export async function complete(call: ModelCall, messages: readonly ChatMessage[]
       text += chunk.delta;
       call.onDelta?.(chunk.delta);
     }
+    // Streamed reasoning is panel text (the collapsed "Thinking" block); a terminal `reasoning` block
+    // is replay data for the next request and stays off this channel.
+    if (chunk.reasoningDelta !== undefined && chunk.reasoningDelta.length > 0) call.onReasoning?.(chunk.reasoningDelta);
     // Calls and reasoning arrive on the terminal chunk; take the last value either way, so a
     // provider that announces them piecemeal still lands its final form.
     if (chunk.toolCalls !== undefined) toolCalls = chunk.toolCalls;

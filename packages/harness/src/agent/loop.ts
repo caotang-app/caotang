@@ -581,6 +581,9 @@ export function createAgentSession(options: AgentSessionOptions): AgentSession {
     ...(options.thinking === undefined || role !== options.role ? {} : { thinking: options.thinking }),
     // A draft's deltas go to its scene's ghost region (`draft.delta`), and every other call's to the panel's stream tail.
     onDelta: onDelta ?? ((delta) => emit({ type: 'model.delta', turnId: turn.id, delta })),
+    // Reasoning has one sink on every call — the panel's collapsed "Thinking" block. A draft's reasoning is the
+    // turn's reasoning too: the ghost region gets `draft.delta` prose only, so nothing here lands in the editor.
+    onReasoning: (delta) => emit({ type: 'model.reasoning', turnId: turn.id, delta }),
   });
 
   /**

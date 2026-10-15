@@ -39,10 +39,14 @@ test('saving an endpoint lists its models and probes its response format at save
   const settings = await openSettings(page);
 
   await settings.getByRole('button', { name: 'Add a provider' }).click();
-  await settings.getByLabel('Name').fill('Local test');
-  await settings.getByLabel('Endpoint (the base URL, ending in /v1)').fill(FAKE_ENDPOINT);
-  await settings.getByLabel('Model').fill('test-model');
-  await settings.getByRole('button', { name: 'Save profile' }).click();
+  // The fake endpoint speaks the OpenAI-Chat dialect, so its profile is a generic one. Labels are scoped to the
+  // provider form: the role picker's fields below it carry names too.
+  const form = settings.getByRole('form', { name: 'New provider' });
+  await form.getByRole('combobox', { name: 'Provider' }).selectOption('generic');
+  await form.getByLabel('Name').fill('Local test');
+  await form.getByLabel('Endpoint (the base URL, ending in /v1)').fill(FAKE_ENDPOINT);
+  await form.getByLabel('Model', { exact: true }).fill('test-model');
+  await form.getByRole('button', { name: 'Save profile' }).click();
 
   // The save-time probe: the models the endpoint lists are shown beside the profile.
   await expect(settings.getByText('Saved “Local test”.')).toBeVisible();
@@ -67,10 +71,12 @@ test('the endpoint profile and its activation survive a reload, and the restored
   await page.goto('/');
   let settings = await openSettings(page);
   await settings.getByRole('button', { name: 'Add a provider' }).click();
-  await settings.getByLabel('Name').fill('Survivor');
-  await settings.getByLabel('Endpoint (the base URL, ending in /v1)').fill(FAKE_ENDPOINT);
-  await settings.getByLabel('Model').fill('test-model');
-  await settings.getByRole('button', { name: 'Save profile' }).click();
+  const form = settings.getByRole('form', { name: 'New provider' });
+  await form.getByRole('combobox', { name: 'Provider' }).selectOption('generic');
+  await form.getByLabel('Name').fill('Survivor');
+  await form.getByLabel('Endpoint (the base URL, ending in /v1)').fill(FAKE_ENDPOINT);
+  await form.getByLabel('Model', { exact: true }).fill('test-model');
+  await form.getByRole('button', { name: 'Save profile' }).click();
   await expect(settings.getByText('Saved “Survivor”.')).toBeVisible();
   await settings.locator('[data-profile="Survivor"]').getByRole('button', { name: 'Use this profile' }).click();
   await expect(settings.getByText('is now the active profile')).toBeVisible();

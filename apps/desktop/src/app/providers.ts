@@ -170,11 +170,16 @@ export class ProviderService {
   /**
    * The routing record as the settings slice holds it — absent or `'follow'` roles resolve through 'chat'. Set by
    * whoever holds the settings record (the Providers section, or a test); the gateway reads it at request time.
+   * The method is the same write as the setter, named for call sites a property assignment cannot reach: a JSX
+   * handler may not mutate an object it was handed.
    */
   get roleSettings(): RoleSettings | undefined {
     return this.roleState.current;
   }
   set roleSettings(roles: RoleSettings | undefined) {
+    this.roleState.current = roles;
+  }
+  applyRoleSettings(roles: RoleSettings | undefined): void {
     this.roleState.current = roles;
   }
 

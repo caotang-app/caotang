@@ -228,6 +228,15 @@ function TurnBlock({
 
       {!settled && turn.streamed !== '' ? <p className="agent-stream">{turn.streamed}</p> : null}
 
+      {/* The model's thinking channel, kept collapsed and muted (provider-gateway §6/D12): it is the turn's record,
+          so it stays after the turn settles — never in the editor, never inline-expanded. */}
+      {turn.reasoning !== '' ? (
+        <details className="agent-reasoning" data-testid="agent-thinking">
+          <summary>Thinking</summary>
+          <p className="agent-reasoning-text">{turn.reasoning}</p>
+        </details>
+      ) : null}
+
       {turn.context !== null && turn.context.dropped.length > 0 ? (
         <details className="agent-context">
           <summary>{turn.context.dropped.length} context {turn.context.dropped.length === 1 ? 'item' : 'items'} left out</summary>

@@ -102,12 +102,15 @@ test('a coherence review’s card shows what the review is estimated to cost, at
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const settings = page.getByTestId('settings');
   await settings.getByRole('button', { name: 'Add a provider' }).click();
-  await settings.getByLabel('Name').fill('Priced endpoint');
-  await settings.getByLabel('Endpoint (the base URL, ending in /v1)').fill(FAKE_ENDPOINT);
-  await settings.getByLabel('Model').fill('test-model');
-  await settings.getByLabel('Prompt', { exact: true }).fill('1');
-  await settings.getByLabel('Reply', { exact: true }).fill('2');
-  await settings.getByRole('button', { name: 'Save profile' }).click();
+  // Labels are scoped to the provider form, which the generic preset fills out for the fake endpoint.
+  const form = settings.getByRole('form', { name: 'New provider' });
+  await form.getByRole('combobox', { name: 'Provider' }).selectOption('generic');
+  await form.getByLabel('Name').fill('Priced endpoint');
+  await form.getByLabel('Endpoint (the base URL, ending in /v1)').fill(FAKE_ENDPOINT);
+  await form.getByLabel('Model', { exact: true }).fill('test-model');
+  await form.getByLabel('Prompt', { exact: true }).fill('1');
+  await form.getByLabel('Reply', { exact: true }).fill('2');
+  await form.getByRole('button', { name: 'Save profile' }).click();
   await expect(settings.getByText('Saved “Priced endpoint”.')).toBeVisible();
   await settings.locator('[data-profile="Priced endpoint"]').getByRole('button', { name: 'Use this profile' }).click();
   await expect(settings.getByText('is now the active profile')).toBeVisible();

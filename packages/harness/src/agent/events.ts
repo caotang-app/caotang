@@ -94,6 +94,12 @@ export type AgentEvent =
   | { readonly type: 'turn'; readonly turnId: string; readonly phase: TurnPhase }
   | { readonly type: 'model.delta'; readonly turnId: string; readonly delta: string }
   /**
+   * Reasoning text as the model streams it (the provider's thinking channel). The panel folds it into a collapsed
+   * "Thinking" block (ui-modules §1); the replayable blocks a reply carries on its terminal chunk are context for the
+   * next request, not panel text, and are never emitted here.
+   */
+  | { readonly type: 'model.reasoning'; readonly turnId: string; readonly delta: string }
+  /**
    * A scene draft's text as the model writes it (agent-harness §8): the ghost region of the scene streams it, and the completed
    * draft replaces it. `start` marks the first delta of a draft (or a redraft), so the region is emptied before the text arrives.
    */
