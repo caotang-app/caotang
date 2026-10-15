@@ -42,6 +42,7 @@ import type { AdapterContext, ProviderAdapter } from './adapters/types.js';
 import type {
   ChatChunk,
   ChatRequest,
+  ModelCaps,
   ModelInfo,
   ModelLimits,
   ProfileView,
@@ -62,6 +63,13 @@ export interface Gateway extends ProviderGateway {
    * profile at all it is the defaults, since there is then no request to limit.
    */
   modelLimits(profileId?: string, model?: string): ModelLimits;
+  /**
+   * The capability row for a model on a profile's route: whether it takes native
+   * tools, images, a JSON-schema response format, and which thinking levels the UI
+   * may offer (provider-gateway §5). Absent fields mean "not supported". The preset
+   * registry answers; with no preset it is the generic profile's conservative empty row.
+   */
+  modelCaps(profileId?: string, model?: string): ModelCaps;
   /**
    * §5: asks the endpoint once whether it accepts `response_format: json_object`, and
    * caches the answer on the profile. The settings screen calls this at save time. Until
@@ -304,6 +312,12 @@ export function createGateway(options: GatewayOptions): Gateway {
     return supported;
   }
 
+  function modelCaps(profileId?: string, model?: string): ModelCaps {
+    const profile = profileId === undefined ? profiles.active() : profiles.get(profileId);
+    if (profile === undefined || profile.kind === 'mock') return {};
+    return routeOf(profile, model ?? profile.defaultModel).ctx.caps;
+  }
+
   function accountTokens(usage: Usage, by: UsageAttribution): void {
     ledger.record(
       { profileId: by.profileId, model: by.model, turnId: by.turnId, role: by.role, at: by.at ?? clock.now() },
@@ -320,6 +334,7 @@ export function createGateway(options: GatewayOptions): Gateway {
     completeOnce: (req, signal) => collectOnce(complete(req, signal), signal),
     listModels,
     modelLimits,
+    modelCaps,
     accountTokens,
     probeResponseFormat,
   };
