@@ -1,4 +1,5 @@
-# Builds the web app and deploys apps/desktop/dist to GitHub Pages: the local-only version at caotang.app.
+# Builds the web app and deploys it to GitHub Pages with the landing page: site/ at caotang.app/, and apps/desktop/dist,
+# built for that path, at caotang.app/app/.
 #
 # GitHub Pages must be enabled for the repository (Settings › Pages › Source: GitHub Actions) when the repository goes
 # public; until then the deploy step has nowhere to publish and this workflow fails at that step. The build is the same
@@ -38,14 +39,23 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      - name: Build the web app
+      - name: Build the web app (for caotang.app/app/)
         run: pnpm build
+        env:
+          CAOTANG_BASE: /app/
+
+      - name: Put the landing page at the root and the app under /app/
+        run: |
+          mkdir -p _site
+          cp -R site/. _site/
+          cp -R apps/desktop/dist _site/app
+          cp CNAME _site/CNAME
 
       - uses: actions/configure-pages@v5
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: apps/desktop/dist
+          path: _site
 
   deploy:
     needs: build

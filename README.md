@@ -4,6 +4,8 @@ Caotang is a writing studio for novels and other long fiction. Your manuscript s
 
 Caotang has the structure Scrivener writers know: a binder of chapters and scenes, a corkboard, an inspector, a codex of characters and places, and a compile step that writes Word, EPUB, Markdown or plain text. It also has editors for screenplay scenes (Fountain), branching dialogue (Ink) and storyboards with video prompt packs, and the compile step writes their formats too. The difference is the agent. Bring your own provider key and it works through the app's own commands. It proposes a plan, you approve or change it, and each turn that changes the project leaves a checkpoint you can restore, within the limits in Settings.
 
+Try it at [caotang.app](https://caotang.app/), or open the app directly at [caotang.app/app](https://caotang.app/app/).
+
 Caotang is free and MIT-licensed. There are no accounts, no subscriptions, no credit meters and no Caotang server. If you use a model provider, you pay that provider directly.
 
 ## What works today
@@ -46,7 +48,7 @@ pnpm dev
 
 For a production build, run `pnpm build`, then `pnpm --filter @caotang/desktop preview`. The build goes to `apps/desktop/dist/`, with a `THIRD-PARTY-NOTICES.md` beside it. The preview serves it at http://127.0.0.1:4173 by default. Two things to know about it:
 
-- The build works only at the root of its origin, so serve it from the root, as the preview does.
+- The build works at the root of its origin, so serve it from the root, as the preview does, unless you built it for a sub-path with `CAOTANG_BASE` (see Self-hosting).
 - Projects are kept per origin, which is the address and the port together. A project you made at http://127.0.0.1:5173 does not appear at http://127.0.0.1:4173. Export a bundle to move one.
 
 ## Self-hosting
@@ -55,7 +57,7 @@ Caotang is static files, so any static host can serve it: GitHub Pages, Netlify,
 
 1. Build it: `pnpm install`, then `pnpm build`. The site is everything in `apps/desktop/dist/`, with `THIRD-PARTY-NOTICES.md` beside it. Copy the whole folder.
 2. **Serve it over HTTPS.** Browsers offer the WebCrypto key sealing and the folder access Caotang uses on secure origins only (`https://`, or `http://localhost` and `http://127.0.0.1` on your own machine).
-3. **Serve it at the root of its origin** (`https://writing.example.com/`, not `https://example.com/caotang/`). The build's asset paths start at `/`.
+3. **Serve it at the root of its origin** (`https://writing.example.com/`), or build it for a sub-path with `CAOTANG_BASE`: `CAOTANG_BASE=/caotang/ pnpm build` makes a build that works at `https://example.com/caotang/`. By default the build's asset paths start at `/`.
 4. **Folder saves need a Chromium browser** (Chrome, Edge, Brave, Arc and the like), which have the File System Access API. In other browsers, projects live in the browser and move as `.caotang` bundles.
 
 Projects are kept per origin: a project made on one host does not appear on another. Export a bundle to move one.
@@ -97,7 +99,7 @@ server {
 }
 ```
 
-The repository's [Pages workflow](.github/workflows/pages.yml) builds and deploys the same folder to GitHub Pages.
+The repository's [Pages workflow](.github/workflows/pages.yml) deploys caotang.app: the landing page in [`site/`](site/) at the root, with `llms.txt`, `robots.txt` and a sitemap, and the same build, made with `CAOTANG_BASE=/app/`, at `/app/`.
 
 ## Test
 
