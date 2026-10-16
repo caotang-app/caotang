@@ -53,7 +53,14 @@ function devCsp(): Plugin {
   };
 }
 
+/**
+ * The path the build is served under. `/` by default, as the preview and the e2e suite serve it. The Pages workflow sets
+ * CAOTANG_BASE=/app/, because caotang.app serves the landing page (site/) at the root and the app beneath it.
+ */
+const BASE = process.env['CAOTANG_BASE'] ?? '/';
+
 export default defineConfig(({ command }) => ({
+  base: BASE,
   plugins: [react(), thirdPartyNotices(), devCsp()],
   ...(command === 'serve' ? { html: { cspNonce: DEV_NONCE } } : {}),
   server: {

@@ -1,0 +1,5 @@
+# Caotang welcomes search engines and AI agents. A plain-text summary is at /llms.txt.
+User-agent: *
+Allow: /
+
+Sitemap: https://caotang.app/sitemap.xml
