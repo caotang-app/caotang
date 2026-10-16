@@ -45,7 +45,7 @@ test('the words a shot covers are selected in the script, kept across a reload, 
   // Select the first words of the scene programmatically, then let a keyup carry them to the picker:
   // a mouse or keyboard selection's landing differs between runner OSes, while setSelectionRange is
   // exact, and the picker's own `onKeyUp` sync reads the area's selection as a writer's keys would.
-  await script.evaluate((el) => {
+  await script.evaluate((el: HTMLTextAreaElement) => {
     el.focus();
     el.setSelectionRange(0, 10);
     el.dispatchEvent(new KeyboardEvent('keyup', { key: 'Shift', bubbles: true }));
