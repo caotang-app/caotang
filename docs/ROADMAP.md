@@ -11,18 +11,20 @@ The first release (0.1.0) is a complete writing studio that runs in the browser:
 - **Projects** stored in the browser, as a folder on disk (Chrome and Edge), or as a `.caotang` bundle. Folder saves check the folder first and ask before replacing anything another program changed. A project remembers its folder, so reopening it is one click.
 - **Binder, corkboard, inspector and editor.** Chapters and scenes, index cards, synopsis and notes, a Markdown editor that saves as you type, word counts, a daily target and focus mode.
 - **Codex** of characters, places, objects and lore, with aliases, include policies and a list of where each name appears.
-- **The agent.** Plans you approve or edit, draft previews you apply or discard, and a checkpoint for each turn you can restore. It runs on a preset for a major provider or any OpenAI-compatible endpoint you add, or on the built-in demo provider with no key. Native tool calling is used where the model supports it, and the Chat, Drafting and Background roles can each run on their own profile, model and thinking level.
+- **The agent.** Plans you approve or edit, draft previews you apply or discard, and a checkpoint for each turn you can restore. Native tool calling is used where the model supports it.
+- **Providers.** Bring your own key. Presets for 25 providers, among them Anthropic, OpenAI, Google Gemini, xAI, Mistral, DeepSeek, OpenRouter, Groq and Together, fill in the address and authentication; any other OpenAI-compatible endpoint can be added by hand, and a built-in demo provider needs no key. Three wire formats are spoken: OpenAI Chat Completions, OpenAI Responses and Anthropic Messages. The Chat, Drafting and Background roles can each run on their own profile, model and thinking level.
 - **Findings.** A quick consistency scan against the codex and your scene declarations, and a model review that runs only after you approve its plan.
 - **Export** to Word, EPUB, Markdown and plain text, for the whole manuscript or a part, with saved recipes.
 - **Screen and media.** Screenplay scenes in Fountain (with Final Draft import and export), branching dialogue in Ink, storyboards with shot cards, and video prompt packs for several video models.
+- **Non-UTF-8 files.** A document whose file is not UTF-8 opens into a review: Caotang detects the likely encoding, previews the text, and converts the file only when you choose to, keeping the original bytes as a backup.
 - **Filters and goals.** Saved binder filters, project goals with deadline pacing, weekly and monthly goals that reset on the day you choose, a sprint timer and a writing history.
 - **MCP.** Connect external Model Context Protocol servers to the agent, under per-call approval. Caotang also ships its own MCP server, so other AI tools can read a project folder and, if you allow it, change it with confirmation.
 
-The [user guide](USER-GUIDE.md) describes all of it, and its last section lists what is not in this build yet.
+The app is live at [caotang.app/app](https://caotang.app/app/), with a landing page at [caotang.app](https://caotang.app/). The [user guide](USER-GUIDE.md) describes all of it, and its last section lists what is not in this build yet.
 
 ## Next
 
-The providers milestone — preset catalogue, three wire adapters, native tool calling, task roles, and the non-UTF-8 open flow — is on the `feat/providers` branch and lands before the repository goes public.
+No milestone is in progress right now. The next one is chosen from the list below. Smaller work between milestones closes the known limits in the [changelog](../CHANGELOG.md), such as checking Final Draft files against Final Draft itself.
 
 ## Later
 
