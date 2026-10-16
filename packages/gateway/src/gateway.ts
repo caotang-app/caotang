@@ -18,7 +18,7 @@
 import { systemClock, type Clock } from './clock.js';
 import { hostOf, originOf } from './base-url.js';
 import { type ProfileStore } from './profiles.js';
-import { ProfileError, ProviderError, providerMessages } from './errors.js';
+import { EgressDeniedError, ProfileError, ProviderError, providerMessages } from './errors.js';
 import type { KeyStore } from './keys/key-store.js';
 import { UsageLedger } from './ledger.js';
 import { createMockProvider, type MockProvider } from './mock/mock-provider.js';
@@ -37,14 +37,19 @@ import {
 } from './transport.js';
 import { DEFAULT_MAX_OUTPUT_TOKENS } from './profiles.js';
 import { usageFor } from './tokens.js';
-import { chatBody, parseModels, wireMessages, type WireMessage } from './wire.js';
+import { adapterFor } from './adapters/index.js';
+import { modelRowFor, presetFor, resolveRoute } from './presets/index.js';
+import type { AdapterContext, CallSecrets, ProviderAdapter } from './adapters/types.js';
 import type {
   ChatChunk,
   ChatRequest,
+  ModelCaps,
   ModelInfo,
   ModelLimits,
   ProfileView,
   ProviderGateway,
+  RoleResolver,
+  ThinkingLevel,
   Usage,
   UsageAttribution,
 } from './types.js';
@@ -61,6 +66,13 @@ export interface Gateway extends ProviderGateway {
    * profile at all it is the defaults, since there is then no request to limit.
    */
   modelLimits(profileId?: string, model?: string): ModelLimits;
+  /**
+   * The capability row for a model on a profile's route: whether it takes native
+   * tools, images, a JSON-schema response format, and which thinking levels the UI
+   * may offer (provider-gateway §5). Absent fields mean "not supported". The preset
+   * registry answers; with no preset it is the generic profile's conservative empty row.
+   */
+  modelCaps(profileId?: string, model?: string): ModelCaps;
   /**
    * §5: asks the endpoint once whether it accepts `response_format: json_object`, and
    * caches the answer on the profile. The settings screen calls this at save time. Until
@@ -85,6 +97,11 @@ export interface GatewayOptions {
   requestLog?: RequestLog;
   /** the mock used for mock profiles; defaults to the shipped script library */
   mock?: MockProvider;
+  /**
+   * §6's task-role routing. A request that names a `role` and no `profileId` resolves through this; a request
+   * that names neither keeps the active-profile rule. Absent means no routing: roles ride the ledger only.
+   */
+  roles?: RoleResolver;
 }
 
 const ZERO: Usage = { promptTokens: 0, completionTokens: 0 };
@@ -105,11 +122,11 @@ export function createGateway(options: GatewayOptions): Gateway {
     timeouts: { ...DEFAULT_TIMEOUTS, ...options.timeouts },
     retry: { ...DEFAULT_RETRY, ...options.retry },
     log: requestLog,
-    // The egress guard compares against the *active* profile, read at send time, so a
-    // switch of profile takes effect on the next request and not the one after.
-    activeOrigin: () => {
-      const active = profiles.active();
-      return active !== undefined && active.kind === 'openai-compatible' ? originOf(active.baseUrl) : undefined;
+    // The egress pin is the profile a request resolved to, read live from the store, so
+    // a key can only ever reach the origin it was entered for — never another profile's.
+    profileOrigin: (profileId) => {
+      const profile = profiles.get(profileId);
+      return profile !== undefined && profile.kind === 'endpoint' ? originOf(profile.baseUrl) : undefined;
     },
   };
 
@@ -125,71 +142,125 @@ export function createGateway(options: GatewayOptions): Gateway {
     return active;
   };
 
-  /** Decrypts the key for one call. Only reached after the egress check has passed. */
-  const keyFor = async (profile: ProfileView): Promise<string | undefined> => {
-    if (profile.kind === 'mock' || !profile.hasKey) return undefined;
-    const key = await keys.reveal(profile.id);
-    if (key === undefined) throw new ProfileError('key-unreadable', providerMessages.missingKey(profile.name));
-    return key;
+  /**
+   * Opens the sealed payload for one call: the API key and any custom headers, plus
+   * every value the transport must redact. Only reached after the egress check has
+   * passed, so a refused request never touches key material.
+   */
+  const secretsFor = async (profile: ProfileView): Promise<{ secrets: CallSecrets; redact: string[] }> => {
+    if (profile.kind === 'mock') return { secrets: {}, redact: [] };
+    const payload = await keys.revealPayload(profile.id);
+    if (payload === undefined) {
+      if (profile.hasKey) throw new ProfileError('key-unreadable', providerMessages.missingKey(profile.name));
+      return { secrets: {}, redact: [] };
+    }
+    const apiKey = payload.apiKey === '' ? undefined : payload.apiKey;
+    if (apiKey === undefined && profile.hasKey) {
+      throw new ProfileError('key-unreadable', providerMessages.missingKey(profile.name));
+    }
+    const headers = Object.entries(payload.customHeaders ?? {}).map(([name, value]) => ({ name, value }));
+    const redact = [apiKey, ...headers.map((h) => h.value)].filter((v): v is string => v !== undefined && v !== '');
+    return {
+      secrets: { ...(apiKey === undefined ? {} : { apiKey }), ...(headers.length === 0 ? {} : { headers }) },
+      redact,
+    };
+  };
+
+  /**
+   * The route a (profile, model) pair speaks: the preset's adapter, overridden by the
+   * preset's per-model route map (OpenCode), with the model's capability row. A
+   * profile with no preset resolves to the generic OpenAI-Chat route.
+   */
+  const routeOf = (profile: ProfileView, model: string): { adapter: ProviderAdapter; ctx: AdapterContext } => {
+    const spec = resolveRoute({ preset: profile.preset, baseUrl: profile.baseUrl }, model);
+    return {
+      adapter: adapterFor(spec.adapter),
+      ctx: { baseUrl: profile.baseUrl, model, quirks: spec.quirks, caps: spec.caps },
+    };
   };
 
   const chatSpec = (
     profile: ProfileView,
     req: ChatRequest,
-    model: string,
-    messages: readonly WireMessage[],
+    route: { adapter: ProviderAdapter; ctx: AdapterContext },
     jsonObject: boolean,
-    apiKey: string | undefined,
+    revealed: { secrets: CallSecrets; redact: string[] },
   ): CallSpec => {
-    const body = chatBody({
-      model,
-      messages,
+    const { adapter, ctx } = route;
+    const body = adapter.buildBody({
+      req,
+      ctx,
       temperature: req.temperature ?? profile.temperature ?? 0.7,
       maxTokens: req.maxOutputTokens ?? profile.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
-      stop: req.stop,
       jsonObject,
     });
+    const path = adapter.completePath(ctx.model);
     return {
       profileId: profile.id,
-      model,
+      model: ctx.model,
       host: hostOf(profile.baseUrl),
       baseUrl: profile.baseUrl,
-      path: '/chat/completions',
-      url: `${profile.baseUrl}/chat/completions`,
+      path,
+      url: `${profile.baseUrl}${path}`,
       method: 'POST',
       accept: 'text/event-stream',
       body: JSON.stringify(body),
-      apiKey,
-      promptTokens: usageFor(messages, '').promptTokens,
+      headers: adapter.headers(ctx, revealed.secrets, 'complete'),
+      secrets: revealed.redact,
+      parser: adapter.createStreamParser(ctx),
+      promptTokens: usageFor(req.messages, '').promptTokens,
     };
   };
 
   async function* complete(req: ChatRequest, signal?: AbortSignal): AsyncGenerator<ChatChunk, void, undefined> {
-    const profile = targetOf(req.profileId);
-    const model = req.model ?? profile.defaultModel;
+    // §6: a request that names a role and no profile resolves through the injected router. The answer is the
+    // profile it sends through, and the model and thinking level become the defaults the request's own fields
+    // still beat. A resolver with no answer leaves the named-or-active rule in place, as a roleless request.
+    let routed: { profileId: string; model?: string; thinking?: ThinkingLevel } | undefined;
+    if (req.role !== undefined && req.profileId === undefined && options.roles !== undefined) {
+      routed = options.roles.resolve(req.role);
+      // The role-referenced set is the egress allow-list for a routed request: a role may only ever send
+      // through a profile the resolver names for it. This refusal lands before any profile lookup or key reveal.
+      if (routed !== undefined && !options.roles.allowed(req.role).includes(routed.profileId)) {
+        throw new EgressDeniedError(`Refused a request under the "${req.role}" role: it resolved to a profile that role may not use.`);
+      }
+    }
+    const profile = targetOf(routed?.profileId ?? req.profileId);
+    const model = req.model ?? routed?.model ?? profile.defaultModel;
+    const sent: ChatRequest =
+      req.thinking === undefined && routed?.thinking !== undefined ? { ...req, thinking: routed.thinking } : req;
     const startedAt = clock.now();
     const stats: StreamStats = { attempts: 0, usage: undefined };
 
     try {
       if (profile.kind === 'mock') {
         stats.attempts = 1;
-        for await (const chunk of mock.complete(req, signal)) {
+        for await (const chunk of mock.complete(sent, signal)) {
           if (chunk.usage !== undefined) stats.usage = chunk.usage;
           yield chunk;
         }
         return;
       }
 
-      assertEgress(deps, `${profile.baseUrl}/chat/completions`);
-      const messages = wireMessages(req);
+      const route = routeOf(profile, model);
+      // The §5 probe answer governs, and a capability row that names jsonObject false
+      // can refuse it — but a row that says nothing leaves the probe to decide.
       const jsonObject =
-        req.responseFormat !== undefined && req.responseFormat !== 'text' && profile.responseFormat?.supportsJsonObject === true;
-      const apiKey = await keyFor(profile);
-      const spec = { ...chatSpec(profile, req, model, messages, jsonObject, apiKey), signal };
+        sent.responseFormat !== undefined &&
+        sent.responseFormat !== 'text' &&
+        profile.responseFormat?.supportsJsonObject === true &&
+        route.ctx.caps.jsonObject !== false;
+      assertEgress(deps, `${profile.baseUrl}${route.adapter.completePath(model)}`, profile.id);
+      const revealed = await secretsFor(profile);
+      const spec = { ...chatSpec(profile, sent, route, jsonObject, revealed), signal };
       yield* streamChat(deps, spec, stats);
     } finally {
       if (stats.attempts > 0) {
-        ledger.record({ profileId: profile.id, model, turnId: req.turnId, at: startedAt }, stats.usage ?? ZERO, stats.attempts);
+        ledger.record(
+          { profileId: profile.id, model, turnId: req.turnId, role: req.role, at: startedAt },
+          stats.usage ?? ZERO,
+          stats.attempts,
+        );
       }
     }
   }
@@ -205,22 +276,41 @@ export function createGateway(options: GatewayOptions): Gateway {
       return models;
     }
 
-    const url = `${profile.baseUrl}/models`;
-    assertEgress(deps, url);
-    const apiKey = await keyFor(profile);
+    const { adapter, ctx } = routeOf(profile, profile.defaultModel);
+    // A preset with no listing route (Cohere's compatibility layer) answers from its
+    // table; an adapter may also return null for a route without one.
+    const preset = presetFor(profile.preset);
+    const modelsPath = preset?.noModelsRoute === true ? null : adapter.modelsPath(ctx);
+    if (modelsPath === null) {
+      // The route has no listing endpoint: the preset's table is the catalogue.
+      const models: ModelInfo[] = (preset?.models ?? [])
+        .filter((row) => !row.pattern.includes('*'))
+        .map((row) => ({
+          id: row.pattern,
+          ...(row.contextWindow === undefined ? {} : { contextWindow: row.contextWindow }),
+          ...(row.maxOutputTokens === undefined ? {} : { maxOutputTokens: row.maxOutputTokens }),
+          ...(row.pricePer1k === undefined ? {} : { pricePer1k: { ...row.pricePer1k } }),
+        }));
+      reported.set(profile.id, models);
+      return models;
+    }
+    const url = `${profile.baseUrl}${modelsPath}`;
+    assertEgress(deps, url, profile.id);
+    const revealed = await secretsFor(profile);
     const json = await requestJson(deps, {
       profileId: profile.id,
       model: profile.defaultModel,
       host: hostOf(profile.baseUrl),
       baseUrl: profile.baseUrl,
-      path: '/models',
+      path: modelsPath,
       url,
       method: 'GET',
       accept: 'application/json',
-      apiKey,
+      headers: adapter.headers(ctx, revealed.secrets, 'models'),
+      secrets: revealed.redact,
       promptTokens: 0,
     });
-    const models = parseModels(json);
+    const models = adapter.parseModels(json);
     if (models === undefined) {
       throw new ProviderError('protocol', providerMessages.protocol(hostOf(profile.baseUrl), 'the model list had no data array'));
     }
@@ -233,9 +323,13 @@ export function createGateway(options: GatewayOptions): Gateway {
     if (profile === undefined) return { maxOutputTokens: DEFAULT_MAX_OUTPUT_TOKENS };
     const modelId = model ?? profile.defaultModel;
     const info = reported.get(profile.id)?.find((item) => item.id === modelId);
-    const price = profile.pricePer1k ?? info?.pricePer1k;
+    // The preset's capability row fills what the live listing did not report.
+    const preset = presetFor(profile.preset);
+    const row = preset === undefined ? undefined : modelRowFor(preset, modelId);
+    const price = profile.pricePer1k ?? info?.pricePer1k ?? row?.pricePer1k;
+    const contextWindow = info?.contextWindow ?? row?.contextWindow;
     return {
-      ...(info?.contextWindow === undefined ? {} : { contextWindow: info.contextWindow }),
+      ...(contextWindow === undefined ? {} : { contextWindow }),
       maxOutputTokens: profile.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
       ...(price === undefined ? {} : { pricePer1k: { prompt: price.prompt, completion: price.completion } }),
     };
@@ -248,14 +342,22 @@ export function createGateway(options: GatewayOptions): Gateway {
       return true;
     }
 
-    const url = `${profile.baseUrl}/chat/completions`;
-    assertEgress(deps, url);
-    const apiKey = await keyFor(profile);
-    const messages: WireMessage[] = [{ role: 'user', content: PROBE_PROMPT }];
+    // `response_format` is a Chat Completions concept: only an openai-chat route can
+    // carry it, so other routes answer false without spending a request.
+    const route = routeOf(profile, profile.defaultModel);
+    if (route.adapter.id !== 'openai-chat') {
+      profiles.recordProbe(profile.id, { supportsJsonObject: false, probedAt: clock.now() });
+      return false;
+    }
+
+    const path = route.adapter.completePath(profile.defaultModel);
+    const url = `${profile.baseUrl}${path}`;
+    assertEgress(deps, url, profile.id);
+    const revealed = await secretsFor(profile);
     const body = JSON.stringify({
       model: profile.defaultModel,
-      messages,
-      max_tokens: 16,
+      messages: [{ role: 'user', content: PROBE_PROMPT }],
+      [route.ctx.quirks.maxTokensField ?? 'max_tokens']: 16,
       stream: false,
       response_format: { type: 'json_object' },
     });
@@ -264,21 +366,32 @@ export function createGateway(options: GatewayOptions): Gateway {
       model: profile.defaultModel,
       host: hostOf(profile.baseUrl),
       baseUrl: profile.baseUrl,
-      path: '/chat/completions',
+      path,
       url,
       method: 'POST',
       accept: 'application/json',
       body,
-      apiKey,
-      promptTokens: usageFor(messages, '').promptTokens,
+      headers: route.adapter.headers(route.ctx, revealed.secrets, 'models'),
+      secrets: revealed.redact,
+      promptTokens: usageFor([{ role: 'user', content: PROBE_PROMPT }], '').promptTokens,
     });
     profiles.recordProbe(profile.id, { supportsJsonObject: supported, probedAt: clock.now() });
     ledger.record({ profileId: profile.id, model: profile.defaultModel, at: clock.now() }, ZERO, 1);
     return supported;
   }
 
+  function modelCaps(profileId?: string, model?: string): ModelCaps {
+    const profile = profileId === undefined ? profiles.active() : profiles.get(profileId);
+    if (profile === undefined || profile.kind === 'mock') return {};
+    return routeOf(profile, model ?? profile.defaultModel).ctx.caps;
+  }
+
   function accountTokens(usage: Usage, by: UsageAttribution): void {
-    ledger.record({ profileId: by.profileId, model: by.model, turnId: by.turnId, at: by.at ?? clock.now() }, usage, 1);
+    ledger.record(
+      { profileId: by.profileId, model: by.model, turnId: by.turnId, role: by.role, at: by.at ?? clock.now() },
+      usage,
+      1,
+    );
   }
 
   return {
@@ -289,6 +402,7 @@ export function createGateway(options: GatewayOptions): Gateway {
     completeOnce: (req, signal) => collectOnce(complete(req, signal), signal),
     listModels,
     modelLimits,
+    modelCaps,
     accountTokens,
     probeResponseFormat,
   };

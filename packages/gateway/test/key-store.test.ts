@@ -15,7 +15,7 @@ import {
 } from '../src/index.js';
 import { KEY } from './helpers.js';
 
-const bytesOf = (text: string): Uint8Array => new TextEncoder().encode(text);
+const bytesOf = (text: string): Uint8Array<ArrayBuffer> => new TextEncoder().encode(text);
 
 /** True when `needle`'s bytes appear contiguously inside `haystack`. */
 function containsBytes(haystack: Uint8Array, needle: Uint8Array): boolean {
@@ -64,8 +64,19 @@ describe('AES-GCM key store on WebCrypto', () => {
     expect(entry).toBeDefined();
     expect(containsBytes(entry!.ciphertext, bytesOf(KEY))).toBe(false);
     expect(containsBytes(entry!.ciphertext, bytesOf('CAOTANG'))).toBe(false);
-    expect(entry!.ciphertext.length).toBe(bytesOf(KEY).length + 16); // + the GCM tag
+    // v2 plaintext is the JSON envelope {"v":2,"apiKey":"…"} plus the 16-byte GCM tag.
+    const envelope = bytesOf(JSON.stringify({ v: 2, apiKey: KEY }));
+    expect(entry!.ciphertext.length).toBe(envelope.length + 16);
     expect(entry!.iv.length).toBe(12);
+  });
+
+  it('keeps custom header values out of the ciphertext too', async () => {
+    const port = createMemoryVaultPort();
+    const store = createKeyStore(port);
+    await store.putPayload('prv_DDDDDDDDDD', { apiKey: KEY, customHeaders: { 'x-proxy-secret': 'hunter2-value' } });
+    const entry = await port.getEntry('prv_DDDDDDDDDD');
+    expect(containsBytes(entry!.ciphertext, bytesOf('hunter2-value'))).toBe(false);
+    expect(containsBytes(entry!.ciphertext, bytesOf('x-proxy-secret'))).toBe(false);
   });
 
   it('seals the same key differently each time, because every seal takes a fresh IV', async () => {
@@ -128,6 +139,47 @@ describe('AES-GCM key store on WebCrypto', () => {
     await Promise.all([tabA.put('prv_PPPPPPPPPP', 'sk-tab-a-key-111111'), tabB.put('prv_QQQQQQQQQQ', 'sk-tab-b-key-222222')]);
     expect(await tabB.reveal('prv_PPPPPPPPPP')).toBe('sk-tab-a-key-111111');
     expect(await tabA.reveal('prv_QQQQQQQQQQ')).toBe('sk-tab-b-key-222222');
+  });
+
+  it('round-trips a v2 payload: the key and its sealed custom headers', async () => {
+    const store = createKeyStore(createMemoryVaultPort());
+    await store.putPayload('prv_TTTTTTTTTT', { apiKey: KEY, customHeaders: { 'x-team': 'blue-42' } });
+    expect(await store.revealPayload('prv_TTTTTTTTTT')).toEqual({ apiKey: KEY, customHeaders: { 'x-team': 'blue-42' } });
+    // The string seam reads the key half, unchanged — the shape MCP's token store relies on.
+    expect(await store.reveal('prv_TTTTTTTTTT')).toBe(KEY);
+  });
+
+  it('opens a v1 entry transparently and lazily rewrites it as v2 under a fresh IV', async () => {
+    const port = createMemoryVaultPort();
+    const store = createKeyStore(port);
+    // Plant a genuine v1 entry: the bare key bytes, sealed the way the pre-payload store sealed them.
+    await store.put('prv_V111111111', KEY); // establishes the wrapping key
+    const wrapping = (await port.getWrappingKey())!;
+    const iv = globalThis.crypto.getRandomValues(new Uint8Array(12));
+    const sealed = await globalThis.crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv, additionalData: new TextEncoder().encode('caotang:provider-key:prv_V111111111') },
+      wrapping,
+      bytesOf('sk-legacy-key-000001'),
+    );
+    await port.putEntry('prv_V111111111', { iv, ciphertext: new Uint8Array(sealed) });
+    const v1Entry = await port.getEntry('prv_V111111111');
+
+    // The reveal answers the key, and rewrites the entry as a v2 envelope.
+    expect(await store.reveal('prv_V111111111')).toBe('sk-legacy-key-000001');
+    const migrated = await port.getEntry('prv_V111111111');
+    expect(Buffer.from(migrated!.iv).equals(Buffer.from(v1Entry!.iv))).toBe(false);
+    const opened = await globalThis.crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: migrated!.iv, additionalData: new TextEncoder().encode('caotang:provider-key:prv_V111111111') },
+      wrapping,
+      migrated!.ciphertext,
+    );
+    expect(JSON.parse(new TextDecoder().decode(opened))).toEqual({ v: 2, apiKey: 'sk-legacy-key-000001' });
+  });
+
+  it('reads a v1 MCP token unchanged: put a bare string, reveal gives the string back', async () => {
+    const store = createKeyStore(createMemoryVaultPort());
+    await store.put('mcp:test-ref', 'mcp-token-value-1');
+    expect(await store.reveal('mcp:test-ref')).toBe('mcp-token-value-1');
   });
 
   it('never writes the key through console output', async () => {

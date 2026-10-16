@@ -260,7 +260,7 @@ test('a demo turn runs on the built-in demo profile, and never reaches an endpoi
       },
     })
   ).service;
-  const endpoint = await providers.addProfile({ name: 'Endpoint', kind: 'openai-compatible', baseUrl: 'http://127.0.0.1:5999/v1', defaultModel: 'test-model' });
+  const endpoint = await providers.addProfile({ name: 'Endpoint', kind: 'endpoint', baseUrl: 'https://127.0.0.1:5999/v1', defaultModel: 'test-model' });
   await providers.activate(endpoint.view.id);
   expect(providers.active()?.id).toBe(endpoint.view.id);
   requests = 0;

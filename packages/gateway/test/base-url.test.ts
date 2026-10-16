@@ -25,9 +25,6 @@ describe('normalizeBaseUrl — accepted shapes', () => {
     ['  https://api.openai.com/v1//  ', 'https://api.openai.com/v1'],
     ['https://api.openai.com/', 'https://api.openai.com'],
     ['https://api.openai.com', 'https://api.openai.com'],
-    ['http://localhost:1234/v1', 'http://localhost:1234/v1'],
-    ['http://127.0.0.1:11434/v1/', 'http://127.0.0.1:11434/v1'],
-    ['http://[::1]:1234/v1', 'http://[::1]:1234/v1'],
     ['https://API.OpenAI.com:443/v1', 'https://api.openai.com/v1'],
     // Google's documented OpenAI-compatible base carries a version but does not end in one.
     ['https://generativelanguage.googleapis.com/v1beta/openai/', 'https://generativelanguage.googleapis.com/v1beta/openai'],
@@ -54,8 +51,12 @@ describe('normalizeBaseUrl — refused shapes', () => {
     expect(rejects('https://api.example.com/api').message).toMatch(/pathless or carry a version/);
   });
 
-  it('refuses plain http to a remote host, so a key is never sent in clear text', () => {
+  it('refuses plain http anywhere — the endpoint contract is HTTPS-only, with no loopback exemption', () => {
     expect(rejects('http://example.com/v1').message).toMatch(/https/);
+    for (const loopback of ['http://localhost:1234/v1', 'http://127.0.0.1:11434/v1/', 'http://[::1]:1234/v1']) {
+      expect(() => normalizeBaseUrl(loopback)).toThrow(ProfileError);
+      expect(rejects(loopback).message).toMatch(/https/);
+    }
   });
 
   it('refuses plain http to a public host whose name merely starts with 127., since only a 127.x.x.x address is loopback', () => {

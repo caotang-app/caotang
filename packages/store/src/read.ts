@@ -36,6 +36,7 @@ import {
   isBodyFileName,
   isBodyType,
 } from './paths.js';
+import { encodingName, guessEncoding, type EncodingGuess, type EncodingIssue } from './encoding.js';
 import { parseDocumentFile } from './document-file.js';
 import { parseCodexFile, codexFile } from './codex-file.js';
 import type { FrontMatterError } from './document-file.js';
@@ -105,6 +106,14 @@ export interface LoadResult {
   orphans: string[];
   /** codex.md §3: orphan `codex/*.md` with no manifest entry. Same treatment. */
   orphanCodex: string[];
+  /**
+   * Every file the load found whose bytes are not UTF-8 text, each with a
+   * best guess at what they are (encoding.ts). A `notices` entry says the same
+   * thing in prose; this is the structured copy a caller acts on — a preview or
+   * convert step reads the path and the guess rather than re-deriving them.
+   * Empty when every file the load touched decoded cleanly.
+   */
+  encodingIssues: EncodingIssue[];
 }
 
 export interface ReadOptions {
@@ -171,21 +180,50 @@ const MAX_KEYWORD_CHARS = 64;
 const MAX_SYNOPSIS = 2000;
 
 /**
- * A file's text, or `undefined` when its bytes are not UTF-8.
+ * A file's bytes and their text, the text `undefined` when the bytes are not
+ * UTF-8.
  *
  * The bytes are read and decoded here, strictly, rather than through `fs.read`,
  * because a backend may decode leniently. A lenient decode would hand the loader
  * replacement characters, and the next save would write those over the file's
  * original bytes. The callers below treat `undefined` as "hold this file as it is":
  * the state has no text for it, so the file is kept on disk and never rewritten.
+ *
+ * `bytes` rides along so a caller whose text came back `undefined` can still say
+ * what the file plausibly is (`encodingIssues`) without a second read.
  */
-async function readUtf8(fs: ArtifactFs, path: string): Promise<string | undefined> {
+async function readUtf8(fs: ArtifactFs, path: string): Promise<{ text: string | undefined; bytes: Uint8Array }> {
   const bytes = await fs.readBytes(path);
   try {
-    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    return { text: new TextDecoder('utf-8', { fatal: true }).decode(bytes), bytes };
   } catch {
-    return undefined;
+    return { text: undefined, bytes };
   }
+}
+
+/**
+ * Record a file whose bytes are not UTF-8 on the load's encoding report, and
+ * return the entry so the notice that accompanies it can name the same guess.
+ */
+function recordEncodingIssue(
+  issues: EncodingIssue[],
+  path: string,
+  kind: EncodingIssue['kind'],
+  bytes: Uint8Array,
+): EncodingIssue {
+  const issue: EncodingIssue = { path, kind, size: bytes.length, encoding: guessEncoding(bytes) };
+  issues.push(issue);
+  return issue;
+}
+
+/**
+ * The parenthetical a `not UTF-8` notice carries: the guess when there is one,
+ * or an honest "we cannot tell" — a wrong confident name is worse than none.
+ */
+function encodingDetail(guess: EncodingGuess): string {
+  return guess === 'unknown'
+    ? 'its bytes are binary, or an encoding Caotang does not recognize'
+    : `its bytes look like ${encodingName(guess)}`;
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -347,6 +385,7 @@ export async function readProject(fs: ArtifactFs, options: ReadOptions = {}): Pr
   // next save actually drops.
   notices.push(...unknownFieldNotices(manifest as unknown as Record<string, unknown>));
 
+  const encodingIssues: EncodingIssue[] = [];
   for (const node of manifest.tree) {
     if (!isBodyType(node.type)) continue;
     // The file the folder holds for this node: its kind's own name, or the `.md` a save wrote before the kind had one
@@ -354,16 +393,18 @@ export async function readProject(fs: ArtifactFs, options: ReadOptions = {}): Pr
     const names = bodyNamesOf(node);
     const docName = names.find((name) => docFiles.includes(name)) ?? names[0] ?? '';
     const docPath = `${DOCS_DIR}/${docName}`;
-    const raw = await readUtf8(fs, docPath);
+    const docRead = await readUtf8(fs, docPath);
+    const raw = docRead.text;
     if (raw === undefined) {
       // The state holds text only, and this body is not text. The node is kept with no
       // body record, the file stays on disk untouched, and the writer will not save
       // over it (write.ts). Nothing here decodes the bytes lossily, so nothing that
       // reads the project can put replacement characters into the file.
       state.declinedDocFiles.add(docName);
+      const issue = recordEncodingIssue(encodingIssues, docPath, 'document', docRead.bytes);
       notices.push({
         path: docPath,
-        message: `the document “${node.title}” is not UTF-8 text, so it is held: it opens empty, its file is left as it is, and saving will not overwrite it`,
+        message: `the document “${node.title}” is not UTF-8 text (${encodingDetail(issue.encoding)}), so it is held: it opens empty, its file is left as it is, and saving will not overwrite it`,
         say: `Caotang cannot read the text of “${node.title}”, so it opens empty. Its file is left as it is, and saving will not overwrite it.`,
       });
       continue;
@@ -420,8 +461,8 @@ export async function readProject(fs: ArtifactFs, options: ReadOptions = {}): Pr
   // lose both real links. `dropDanglingCodexIds` is the only implementation of
   // that rule and it has to sit here, after both imports.
   placeRecoveredFolder(state);
-  await importOrphanDocuments(fs, state, report.orphans, notices, options.now ?? new Date());
-  const orphanCodex = await importOrphanCodex(fs, state, notices);
+  await importOrphanDocuments(fs, state, report.orphans, notices, options.now ?? new Date(), encodingIssues);
+  const orphanCodex = await importOrphanCodex(fs, state, notices, encodingIssues);
   dropDanglingCodexIds(state, notices);
 
   // §2's "loader recomputes on open if absent", and it runs **here** for a
@@ -431,7 +472,7 @@ export async function readProject(fs: ArtifactFs, options: ReadOptions = {}): Pr
   // adopted. This is the first point at which `state.documents` is complete.
   rebuildDerived(state, { now: options.now });
 
-  return { state, report, notices, orphans: report.orphans, orphanCodex };
+  return { state, report, notices, orphans: report.orphans, orphanCodex, encodingIssues };
 }
 
 /**
@@ -532,6 +573,7 @@ export async function importOrphanDocuments(
   orphans: readonly string[],
   notices: LoadNotice[],
   now: Date,
+  encodingIssues: EncodingIssue[] = [],
 ): Promise<string[]> {
   if (orphans.length === 0) return [];
 
@@ -546,18 +588,22 @@ export async function importOrphanDocuments(
     const path = `${DOCS_DIR}/${name}`;
     state.declinedDocFiles.add(name);
     // Kept as text for an export when it is text. Bytes that are not UTF-8 have no
-    // text to keep, so they stay on disk only (state.ts `declinedText`).
-    const text = await readUtf8(fs, path);
+    // text to keep, so they stay on disk only (state.ts `declinedText`) — and are
+    // named on the encoding report, the same as a declined body.
+    const held = await readUtf8(fs, path);
+    const text = held.text;
     if (text !== undefined) state.declinedText.set(path, text);
     const holder = takenNodes.get(bodyStemOf(name));
     const reason =
       holder !== undefined && isBodyType(holder.type)
         ? 'not imported: the node already has a body under the name its kind uses — importing this file too would give it two bodies; left untouched'
         : 'not imported: the file is named for a node that is not a document (a folder) — importing it would give the tree two nodes with one id; left untouched';
-    notices.push({
-      path,
-      message: reason + (text === undefined ? '; its text is not UTF-8, so it is not carried into an export' : ''),
-    });
+    let nonUtf8 = '';
+    if (text === undefined) {
+      const issue = recordEncodingIssue(encodingIssues, path, 'document', held.bytes);
+      nonUtf8 = `; its text is not UTF-8 (${encodingDetail(issue.encoding)}), so it is not carried into an export`;
+    }
+    notices.push({ path, message: reason + nonUtf8 });
   }
 
   const candidates = orphans.filter((name) => !shadowed.includes(name));
@@ -590,7 +636,8 @@ export async function importOrphanDocuments(
     // A body that is not UTF-8 is imported as a held node, the way readProject holds a
     // manuscript body: it is in the tree, it has no text in the state, and nothing
     // rewrites its file.
-    const raw = await readUtf8(fs, path);
+    const orphanRead = await readUtf8(fs, path);
+    const raw = orphanRead.text;
     const stamp = now.toISOString();
     let title = id;
     let status: string | null = null;
@@ -659,10 +706,12 @@ export async function importOrphanDocuments(
     });
     if (raw === undefined) {
       state.declinedDocFiles.add(name);
+      const issue = recordEncodingIssue(encodingIssues, path, 'document', orphanRead.bytes);
       notices.push({
         path,
         message:
-          `imported as a Recovered document under the ${RECOVERED_TITLE} folder (§2 step 4), but its body is not UTF-8 text: ` +
+          `imported as a Recovered document under the ${RECOVERED_TITLE} folder (§2 step 4), but its body is not UTF-8 text ` +
+          `(${encodingDetail(issue.encoding)}): ` +
           'the document is held and opens empty; the file is left untouched on disk, and saving will not overwrite it',
         say:
           `“${title}” was in the project’s folder but not in the project, so it is added under ${RECOVERED_TITLE}. ` +
@@ -697,6 +746,7 @@ export async function importOrphanCodex(
   fs: ArtifactFs,
   state: ProjectState,
   notices: LoadNotice[],
+  encodingIssues: EncodingIssue[] = [],
 ): Promise<string[]> {
   const present = (await fs.listFiles(CODEX_DIR)).filter((name) => name.endsWith('.md'));
   if (present.length === 0) return [];
@@ -719,16 +769,19 @@ export async function importOrphanCodex(
       continue;
     }
 
-    const raw = await readUtf8(fs, path);
+    const codexRead = await readUtf8(fs, path);
+    const raw = codexRead.text;
     if (raw === undefined) {
       // Not UTF-8, so the codec cannot read it and the state cannot hold it. It is
       // declined rather than imported, and kept: the next save will not remove it,
       // for the reason the parse-failure branch below gives.
       state.declinedCodexFiles.add(name);
+      const issue = recordEncodingIssue(encodingIssues, path, 'codex', codexRead.bytes);
       notices.push({
         path,
         message:
-          'not UTF-8 text, so the entry is not imported; the file is kept untouched and the next save will not remove it',
+          `not UTF-8 text (${encodingDetail(issue.encoding)}), so the entry is not imported; ` +
+          'the file is kept untouched and the next save will not remove it',
       });
       continue;
     }

@@ -13,8 +13,14 @@
  *    but not the keys a ledger row needs (`profileId`, `model`).
  */
 
-/** §2 — `openai-compatible` is the real transport; `mock` is the no-key fixture (baseUrl `mock://caotang`). */
-export type ProfileKind = 'openai-compatible' | 'mock';
+/**
+ * §2 — `endpoint` is a real HTTPS transport target (its preset names the route);
+ * `mock` is the no-key fixture (baseUrl `mock://caotang`). `'openai-compatible'` was
+ * the pre-preset name for `endpoint`; persisted records are migrated on read.
+ */
+export type ProfileKind = 'endpoint' | 'mock';
+/** The retired kind name, still found in persisted records written before presets. */
+export type LegacyProfileKind = 'openai-compatible';
 
 /**
  * §2's data shape. The spec stores `apiKey` via §7, and that is how this file reads
@@ -28,7 +34,11 @@ export interface ProviderProfile {
   name: string;
   /** the transport this profile speaks */
   kind: ProfileKind;
-  /** stored WITHOUT trailing slash; `/chat/completions` appended at call time */
+  /** the preset id this profile was created from; a hand-rolled endpoint stores 'generic' */
+  preset?: string;
+  /** the preset's extra fields the base URL was derived from (workspace, region) */
+  fields?: Readonly<Record<string, string>>;
+  /** stored WITHOUT trailing slash; the endpoint path appended at call time */
   baseUrl: string;
   /** stored via §7 (AES-GCM, non-extractable). Never persisted in plaintext. */
   apiKey: string;
@@ -61,12 +71,18 @@ export interface ProfileView extends Omit<ProviderProfile, 'apiKey'> {
 export interface NewProfile {
   name: string;
   kind: ProfileKind;
-  /** required for `openai-compatible`; `mock` defaults to `mock://caotang` */
+  /** the preset this profile is created under; `endpoint` profiles default to `generic` */
+  preset?: string;
+  /** the preset's base URL when omitted; required when the preset has none (`generic`) */
   baseUrl?: string;
-  /** required for `openai-compatible` unless the base is loopback; ignored for `mock` */
+  /** required for `endpoint` unless the preset marks keys optional; ignored for `mock` */
   apiKey?: string;
-  /** required for `openai-compatible`; `mock` defaults to `mock/echo-1` */
+  /** the preset's default model when omitted */
   defaultModel?: string;
+  /** the preset's extra fields a templated base URL is built from (workspace id, region) */
+  fields?: Readonly<Record<string, string>>;
+  /** extra request headers, sealed with the key; `generic` profiles only. Values never appear on a view. */
+  customHeaders?: Readonly<Record<string, string>>;
   temperature?: number;
   maxOutputTokens?: number;
   pricePer1k?: { prompt: number; completion: number };
@@ -78,8 +94,12 @@ export interface NewProfile {
 export interface ProfilePatch {
   name?: string;
   baseUrl?: string;
-  /** replaces the stored key; an empty string clears it (loopback endpoints only) */
+  /** replaces the stored key; an empty string clears it (key-optional presets only) */
   apiKey?: string;
+  /** replaces the preset fields; a templated base URL is rebuilt from them when `baseUrl` is not given */
+  fields?: Readonly<Record<string, string>>;
+  /** replaces the sealed custom headers (`generic` only); `null` clears them, absent keeps them */
+  customHeaders?: Readonly<Record<string, string>> | null;
   defaultModel?: string;
   temperature?: number;
   maxOutputTokens?: number;
@@ -89,9 +109,57 @@ export interface ProfilePatch {
 
 export type ChatRole = 'system' | 'user' | 'assistant' | 'tool';
 
+/** The finish reasons a caller sees. 'tool_calls' means the reply is a request to run tools, not an answer. */
+export type FinishReason = 'stop' | 'length' | 'error' | 'tool_calls';
+
+/** The normalised thinking levels. A model's capability row says which of these it can be sent. */
+export type ThinkingLevel = 'off' | 'low' | 'medium' | 'high' | 'max';
+
+/** The task roles requests are attributed to — provider-gateway §6 records usage per role. */
+export type TaskRole = 'chat' | 'drafting' | 'background';
+
+/** A tool the model may call, declared in each route's own wire shape by the adapter. */
+export interface ToolDef {
+  /** The name the model calls it by: the harness name for natives, the qualified name for external tools. */
+  name: string;
+  description: string;
+  /** The parameters' JSON Schema, passed to the wire verbatim. */
+  parameters: unknown;
+}
+
+/** A tool call the model asked for, normalised. A tool result answers one call by its `id`. */
+export interface ToolCall {
+  /** The provider-assigned call id. Result messages are keyed by it. */
+  id: string;
+  name: string;
+  /** The arguments as one JSON string, exactly as the wire sent them. */
+  argumentsJson: string;
+}
+
+/**
+ * One reasoning block the model produced, opaque to everything above the adapter. The
+ * adapter replays it verbatim on tool turns: `raw` carries whatever the route needs
+ * back — Anthropic's signed thinking block, a Responses reasoning item, a chat route's
+ * `reasoning_content` string. Nothing outside the adapter inspects `raw`.
+ */
+export interface ReasoningBlock {
+  /** The display text, when the route exposes any (a summary, or the thinking itself). */
+  text: string;
+  /** The provider's own structure for this block. Stored and replayed; never interpreted. */
+  raw?: unknown;
+}
+
 export interface ChatMessage {
   role: ChatRole;
   content: string;
+  /** assistant only: the calls it asked for. May accompany empty content on a tools-only reply. */
+  toolCalls?: readonly ToolCall[];
+  /** tool role only: the call this message answers. */
+  toolCallId?: string;
+  /** tool role only: the result is an error payload (`is_error` on the wire). */
+  isError?: boolean;
+  /** assistant only: reasoning blocks the adapter replays verbatim on tool turns. */
+  reasoning?: readonly ReasoningBlock[];
 }
 
 export interface Usage {
@@ -101,8 +169,14 @@ export interface Usage {
 
 export interface ChatChunk {
   delta?: string;
-  finishReason?: 'stop' | 'length' | 'error';
+  /** Reasoning/thinking text as it streams. Shown collapsed in the agent panel; replayed via terminal `reasoning`. */
+  reasoningDelta?: string;
+  finishReason?: FinishReason;
   usage?: Usage;
+  /** On the terminal chunk: the calls the model asked for this reply. */
+  toolCalls?: readonly ToolCall[];
+  /** On the terminal chunk: the reasoning blocks to replay verbatim on the next request. */
+  reasoning?: readonly ReasoningBlock[];
 }
 
 /**
@@ -143,10 +217,47 @@ export interface ChatRequest {
   stop?: string[];
   /** see §5 — schema-in-system-message, plus json_object only after the probe */
   responseFormat?: 'text' | { jsonSchemaHint: object };
-  /** default: active profile */
+  /**
+   * Tools the model may call this turn (native function calling). Absent or empty means
+   * the caller is in JSON-in-text mode: the schema hint above is the whole protocol.
+   */
+  tools?: readonly ToolDef[];
+  /** 'auto' lets the model choose; 'none' forbids calls. Default 'auto' when tools are present. */
+  toolChoice?: 'auto' | 'none';
+  /** The normalised thinking level for this call. The adapter maps it through the model's capability row. */
+  thinking?: ThinkingLevel;
+  /** default: the profile that resolved for the request's role, else the active profile */
   profileId?: string;
   /** the agent turn this request belongs to; keys the per-turn ledger row (§6) */
   turnId?: string;
+  /** the task role this request runs under; recorded on the ledger row (§6) */
+  role?: TaskRole;
+}
+
+/**
+ * A model's capabilities, from the preset's capability table (merged with whatever the
+ * live model list reported). Every field the table does not state is absent, and the
+ * caller treats absent as "not supported".
+ */
+export interface ModelCaps {
+  /** The route can carry native tool declarations for this model. */
+  readonly tools?: boolean;
+  /** The model accepts image input. */
+  readonly vision?: boolean;
+  /** `response_format: {type: 'json_schema'}` is accepted. */
+  readonly jsonSchema?: boolean;
+  /** `response_format: {type: 'json_object'}` is accepted. */
+  readonly jsonObject?: boolean;
+  /** The effort levels the model can be sent, in display order. Absent = no thinking control. */
+  readonly effortLevels?: readonly ThinkingLevel[];
+  /** Whether the route answers the thinking level off, low..max, or cannot turn thinking off. */
+  readonly effortStyle?: string;
+  /** How the model's reasoning is replayed on tool turns (the adapter reads this). */
+  readonly replayStyle?: string;
+  /** The route requires streaming when thinking is enabled. */
+  readonly streamRequired?: boolean;
+  /** Request fields this route rejects and the adapter must omit (e.g. 'temperature'). */
+  readonly denylist?: readonly string[];
 }
 
 /** Who a unit of usage is attributed to. `at` defaults to the gateway clock. */
@@ -154,7 +265,21 @@ export interface UsageAttribution {
   profileId: string;
   model: string;
   turnId?: string;
+  /** the task role the usage ran under, for per-role accounting (§6) */
+  role?: TaskRole;
   at?: number;
+}
+
+/**
+ * §6's task-role routing, injected by the app. A request that names a `role` and no `profileId` resolves through
+ * `resolve`: the answer is the profile it sends through, with the model and thinking level the request defaults to
+ * (its own fields win). `allowed` answers the role-referenced profile set: the profile `resolve` named must be in
+ * it, or the request is refused before any key is revealed. An absent resolver leaves the `profileId`-or-active
+ * rule unchanged.
+ */
+export interface RoleResolver {
+  resolve(role: TaskRole): { profileId: string; model?: string; thinking?: ThinkingLevel } | undefined;
+  allowed(role: TaskRole): readonly string[];
 }
 
 export interface ProviderGateway {

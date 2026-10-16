@@ -194,7 +194,13 @@ export class AgentController {
     const owner = this.turnsStarted;
     this.bump();
     try {
-      const profile: ProfileView | undefined = options.demo === true ? await this.providers.demoProfile() : this.providers.active();
+      // The demo intents run on the built-in demo profile, whichever profile is active (context-assembly §6).
+      // Every other turn runs under the 'chat' role (provider-gateway §6). The role's profile, model and thinking
+      // resolve once here and pin the session: a turn cannot change provider mid-flight, and the pinned id is what
+      // the loop's capability reads (modelCaps/modelLimits) must see.
+      const resolved = options.demo === true ? undefined : this.providers.resolveForRole?.('chat');
+      const profile: ProfileView | undefined =
+        options.demo === true ? await this.providers.demoProfile() : (resolved?.profile ?? this.providers.active());
       if (profile === undefined) {
         this.message = NO_PROVIDER;
         return null;
@@ -209,7 +215,10 @@ export class AgentController {
         context: createContextPort({ state: this.session.state, config: this.contextConfig }),
         decide: (pending) => this.decide(pending),
         emit: (event) => this.onEvent(event),
+        role: 'chat',
         profileId: profile.id,
+        ...(resolved?.model === undefined ? {} : { model: resolved.model }),
+        ...(resolved?.thinking === undefined ? {} : { thinking: resolved.thinking }),
       });
       return await start(agent);
     } catch (error) {

@@ -42,10 +42,15 @@ test('the words a shot covers are selected in the script, kept across a reload, 
   const script = page.getByRole('textbox', { name: 'Script text' });
   await expect(script).toHaveValue(SCENE_TEXT);
 
-  // Select the first words of the scene with the mouse: a click at the start of the text, then a shift-click along the line.
-  await script.click({ position: { x: 4, y: 4 } });
-  await script.click({ position: { x: 30, y: 4 }, modifiers: ['Shift'] });
-  await expect(page.getByText(/^\d+ characters selected\.$/)).toBeVisible();
+  // Select the first words of the scene programmatically, then let a keyup carry them to the picker:
+  // a mouse or keyboard selection's landing differs between runner OSes, while setSelectionRange is
+  // exact, and the picker's own `onKeyUp` sync reads the area's selection as a writer's keys would.
+  await script.evaluate((el: HTMLTextAreaElement) => {
+    el.focus();
+    el.setSelectionRange(0, 10);
+    el.dispatchEvent(new KeyboardEvent('keyup', { key: 'Shift', bubbles: true }));
+  });
+  await expect(page.getByText('10 characters selected.')).toBeVisible();
   await page.getByRole('button', { name: 'Cover the selected text' }).click();
 
   const covered = page.getByRole('list', { name: 'Covered script text' });

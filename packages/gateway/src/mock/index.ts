@@ -16,6 +16,7 @@ export {
 export {
   echo,
   toolJson,
+  nativeCall,
   stream,
   fail,
   estimateTokens,

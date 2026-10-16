@@ -69,6 +69,8 @@ export interface TurnView {
   readonly report: TurnReport | null;
   /** The tail of the text the model is writing right now. */
   readonly streamed: string;
+  /** The reasoning the model has streamed this turn, in full — the collapsed "Thinking" block's text. */
+  readonly reasoning: string;
   readonly context: ContextView | null;
 }
 
@@ -94,6 +96,7 @@ export function newTurnView(
     checkpoint: null,
     report: null,
     streamed: '',
+    reasoning: '',
     context: null,
   };
 }
@@ -109,6 +112,8 @@ export function reduceTurn(turn: TurnView, event: AgentEvent): TurnView {
       return { ...turn, phase: event.phase };
     case 'model.delta':
       return { ...turn, streamed: `${turn.streamed}${event.delta}`.slice(-STREAM_TAIL_CHARS) };
+    case 'model.reasoning':
+      return { ...turn, reasoning: `${turn.reasoning}${event.delta}` };
     case 'context':
       return { ...turn, context: { layers: event.layers, dropped: event.dropped } };
     case 'card': {

@@ -38,11 +38,14 @@ import {
   type ProfileView,
   type RequestLogEntry,
   RequestLog,
+  type TaskRole,
+  type ThinkingLevel,
   UsageLedger,
 } from '@caotang/gateway';
 import { DEMO_REFUSAL, createMockProvider, demoScripts, echo, plannerScript, type MockProvider } from '@caotang/gateway/mock';
 
 import { APP_KEYS, type AppDb } from './app-db.js';
+import { normalizeSettings, type RoleSettings } from './settings.js';
 
 /** The name the first-run profile carries. It answers the three demo intents and nothing else. */
 export const DEMO_PROFILE_NAME = 'Demo (no key)';
@@ -56,6 +59,13 @@ export const DEMO_FALLBACK_REPLY = DEMO_REFUSAL;
 const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 /** The request-log entries kept across reloads: the log's own cap (provider-gateway §4). */
 const REQUEST_LOG_KEEP = 50;
+
+/**
+ * A profile as the app database may hold it: the current view, or a record written
+ * before presets, whose kind is `openai-compatible` and whose `preset` is absent.
+ * The key is never on it — the vault holds the sealed payload.
+ */
+type PersistedProfile = Omit<ProfileView, 'kind'> & { kind: ProfileView['kind'] | 'openai-compatible' };
 
 /** The provider's mock: the demo intents, a fixed answer for anything else from the planner, and the echo fallback. */
 export function appMockProvider(): MockProvider {
@@ -84,6 +94,38 @@ export interface SaveOutcome {
   readonly probeError?: string;
 }
 
+/**
+ * What a task role's calls run on (provider-gateway §6): the profile it sends through, and the model and thinking
+ * level a request under it defaults to — the role's own when it names one, else the profile's.
+ */
+export interface RoleResolution {
+  readonly profile: ProfileView;
+  readonly model: string;
+  readonly thinking?: ThinkingLevel;
+}
+
+/**
+ * The chain a role resolves by: its own `RoleRef` when the named profile still exists, else 'chat', and 'chat'
+ * resolves to the active profile. A role pinned to a profile that is gone falls back to following rather than
+ * failing — the settings tolerate the stale id. Undefined only when no profile exists at all.
+ */
+function resolveRole(profiles: ProfileStore, roles: RoleSettings | undefined, role: TaskRole): RoleResolution | undefined {
+  const ref = roles?.[role] === 'follow' ? undefined : roles?.[role];
+  if (ref !== undefined) {
+    const profile = profiles.get(ref.profileId);
+    if (profile !== undefined) {
+      return {
+        profile,
+        model: ref.model ?? profile.defaultModel,
+        ...(ref.thinking === undefined ? {} : { thinking: ref.thinking }),
+      };
+    }
+  }
+  if (role !== 'chat') return resolveRole(profiles, roles, 'chat');
+  const active = profiles.active();
+  return active === undefined ? undefined : { profile: active, model: active.defaultModel };
+}
+
 export interface ProviderOpenOptions {
   readonly db: AppDb | null;
   /** The browser's `indexedDB` for the vault, or `null` for an in-memory vault (no keys survive a reload then). */
@@ -100,6 +142,12 @@ export class ProviderService {
   readonly ledger: UsageLedger;
   readonly requests: RequestLog;
   private readonly db: AppDb | null;
+  /**
+   * The task-role routing in force, in one cell the gateway's resolver reads at request time (provider-gateway
+   * §6). Restored from the settings record at open and kept through {@link roleSettings}; a service that never
+   * hears one has every role following.
+   */
+  private readonly roleState: { current: RoleSettings | undefined };
 
   private constructor(parts: {
     profiles: ProfileStore;
@@ -108,6 +156,7 @@ export class ProviderService {
     ledger: UsageLedger;
     requests: RequestLog;
     db: AppDb | null;
+    roleState: { current: RoleSettings | undefined };
   }) {
     this.profiles = parts.profiles;
     this.keys = parts.keys;
@@ -115,6 +164,40 @@ export class ProviderService {
     this.ledger = parts.ledger;
     this.requests = parts.requests;
     this.db = parts.db;
+    this.roleState = parts.roleState;
+  }
+
+  /**
+   * The routing record as the settings slice holds it — absent or `'follow'` roles resolve through 'chat'. Set by
+   * whoever holds the settings record (the Providers section, or a test); the gateway reads it at request time.
+   * The method is the same write as the setter, named for call sites a property assignment cannot reach: a JSX
+   * handler may not mutate an object it was handed.
+   */
+  get roleSettings(): RoleSettings | undefined {
+    return this.roleState.current;
+  }
+  set roleSettings(roles: RoleSettings | undefined) {
+    this.roleState.current = roles;
+  }
+  applyRoleSettings(roles: RoleSettings | undefined): void {
+    this.roleState.current = roles;
+  }
+
+  /**
+   * What a task role's calls run on (provider-gateway §6): its own profile, model and thinking level when the role
+   * names one that still exists, else whatever 'chat' resolves to — and 'chat' resolves to the active profile.
+   * Undefined only when no profile exists at all.
+   */
+  resolveForRole(role: TaskRole): RoleResolution | undefined {
+    return resolveRole(this.profiles, this.roleState.current, role);
+  }
+
+  /**
+   * Whether `profileId` is one a request under `role` may send through: the profile the role resolves to, so a
+   * following role allows what 'chat' — and under 'chat', the active profile — resolves to (provider-gateway §6, P9).
+   */
+  roleAllows(role: TaskRole, profileId: string): boolean {
+    return resolveRole(this.profiles, this.roleState.current, role)?.profile.id === profileId;
   }
 
   /**
@@ -142,6 +225,9 @@ export class ProviderService {
     const profiles = createProfileStore({ keys, randomBytes });
     const ledger = new UsageLedger(options.clock);
     const requests = new RequestLog();
+    // The role routing lives in this one cell: the service owns it, and the gateway's resolver reads it at request
+    // time, so a settings change applies to the next call without the gateway being built again.
+    const roleState: { current: RoleSettings | undefined } = { current: undefined };
     const gateway = createGateway({
       profiles,
       keys,
@@ -150,13 +236,38 @@ export class ProviderService {
       ledger,
       requestLog: requests,
       mock: options.mock ?? appMockProvider(),
+      // §6's resolver seam, over the shared cell: `resolve` is `resolveForRole` in the gateway's shape, and
+      // `allowed` is the role-referenced set — the one profile the role resolves to.
+      roles: {
+        resolve: (role) => {
+          const resolved = resolveRole(profiles, roleState.current, role);
+          return resolved === undefined
+            ? undefined
+            : {
+                profileId: resolved.profile.id,
+                model: resolved.model,
+                ...(resolved.thinking === undefined ? {} : { thinking: resolved.thinking }),
+              };
+        },
+        allowed: (role) => {
+          const resolved = resolveRole(profiles, roleState.current, role);
+          return resolved === undefined ? [] : [resolved.profile.id];
+        },
+      },
     });
-    const service = new ProviderService({ profiles, keys, gateway, ledger, requests, db: options.db });
+    const service = new ProviderService({ profiles, keys, gateway, ledger, requests, db: options.db, roleState });
 
     if (options.db !== null) {
       await service.restore(options.db, notices, (id) => {
         pinned = id === null ? null : bytesForId(id);
       });
+      // The routing rides the settings record, so it is read back at open; a record that cannot be read leaves
+      // every role following, and a failed read is the store's notice, not this service's.
+      try {
+        roleState.current = normalizeSettings(await options.db.get<unknown>(APP_KEYS.settings)).provider.roles;
+      } catch {
+        roleState.current = undefined;
+      }
     }
     if (profiles.list().length === 0) {
       await profiles.create({ name: DEMO_PROFILE_NAME, kind: 'mock', isActive: true });
@@ -168,22 +279,29 @@ export class ProviderService {
   /** Reads the stored profiles, usage and log back into the services. Each part is independent: one failing keeps the rest. */
   private async restore(db: AppDb, notices: string[], pin: (id: string | null) => void): Promise<void> {
     try {
-      const stored = (await db.get<ProfileView[]>(APP_KEYS.profiles)) ?? [];
+      const stored = (await db.get<PersistedProfile[]>(APP_KEYS.profiles)) ?? [];
       let activeId: string | null = null;
       for (const record of stored) {
         try {
-          const apiKey = record.kind === 'openai-compatible' && record.hasKey ? await this.keys.reveal(record.id) : undefined;
-          if (record.kind === 'openai-compatible' && record.hasKey && apiKey === undefined) {
+          // Records written before presets say 'openai-compatible'; that kind is now 'endpoint',
+          // and a record with no preset id runs under 'generic' (the hand-rolled route).
+          const kind: ProfileView['kind'] = (record.kind as string) === 'openai-compatible' ? 'endpoint' : (record.kind as ProfileView['kind']);
+          // The sealed payload holds the key and any custom headers; both come back together.
+          const payload = kind === 'endpoint' ? await this.keys.revealPayload(record.id) : undefined;
+          if (kind === 'endpoint' && record.hasKey && (payload === undefined || payload.apiKey === '')) {
             notices.push(`The key for “${record.name}” is no longer in this browser, so the profile was not restored. Add it again in Settings.`);
             continue;
           }
           pin(record.id);
           const view = await this.profiles.create({
             name: record.name,
-            kind: record.kind,
+            kind,
             baseUrl: record.baseUrl,
             defaultModel: record.defaultModel,
-            ...(apiKey === undefined ? {} : { apiKey }),
+            ...(record.preset === undefined ? {} : { preset: record.preset }),
+            ...(record.fields === undefined ? {} : { fields: record.fields }),
+            ...(payload === undefined || payload.apiKey === '' ? {} : { apiKey: payload.apiKey }),
+            ...(payload?.customHeaders === undefined ? {} : { customHeaders: payload.customHeaders }),
             ...(record.temperature === undefined ? {} : { temperature: record.temperature }),
             ...(record.maxOutputTokens === undefined ? {} : { maxOutputTokens: record.maxOutputTokens }),
             ...(record.pricePer1k === undefined ? {} : { pricePer1k: record.pricePer1k }),
@@ -270,8 +388,8 @@ export class ProviderService {
    */
   async addProfile(input: NewProfile): Promise<SaveOutcome> {
     const view = await this.profiles.create(input);
-    const probe = view.kind === 'openai-compatible' ? await this.probeModels(view.id) : { models: undefined, error: undefined };
-    if (view.kind === 'openai-compatible' && probe.error === undefined) await this.probeFormat(view.id);
+    const probe = view.kind === 'endpoint' ? await this.probeModels(view.id) : { models: undefined, error: undefined };
+    if (view.kind === 'endpoint' && probe.error === undefined) await this.probeFormat(view.id);
     await this.persist();
     return {
       view: this.profiles.get(view.id) ?? view,
@@ -285,10 +403,10 @@ export class ProviderService {
     const before = this.profiles.get(id);
     const view = await this.profiles.update(id, patch);
     const probe =
-      view.kind === 'openai-compatible' && before !== undefined && (before.baseUrl !== view.baseUrl || patch.apiKey !== undefined || before.defaultModel !== view.defaultModel)
+      view.kind === 'endpoint' && before !== undefined && (before.baseUrl !== view.baseUrl || patch.apiKey !== undefined || before.defaultModel !== view.defaultModel)
         ? await this.probeModels(id)
         : { models: undefined, error: undefined };
-    if (view.kind === 'openai-compatible' && probe.models !== undefined) await this.probeFormat(id);
+    if (view.kind === 'endpoint' && probe.models !== undefined) await this.probeFormat(id);
     await this.persist();
     return {
       view: this.profiles.get(id) ?? view,
@@ -307,7 +425,7 @@ export class ProviderService {
     this.profiles.activate(id);
     const view = this.profiles.get(id);
     let note: string | undefined;
-    if (view !== undefined && view.kind === 'openai-compatible') {
+    if (view !== undefined && view.kind === 'endpoint') {
       if (view.responseFormat !== undefined) {
         note = formatNote(view.responseFormat.supportsJsonObject);
       } else {

@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { EgressDeniedError, localDayKey, ProviderError } from '../src/index.js';
+import { localDayKey, ProviderError } from '../src/index.js';
 import { createMockProvider, MOCK_MODELS } from '../src/mock/index.js';
 import { addEndpoint, collect, delta, finish, harness, KEY, ScriptedFetch, sseResponse, userMessage } from './helpers.js';
 
@@ -91,14 +91,16 @@ describe('the response_format probe (§5)', () => {
     expect(h.profiles.get(profile.id)?.responseFormat).toBeUndefined();
   });
 
-  it('probes only the active endpoint, because the egress guard applies to the probe too', async () => {
-    const net = new ScriptedFetch();
+  it('probes the profile it is pointed at, pinned to that profile’s origin and key, whatever is active', async () => {
+    const net = new ScriptedFetch().push(() => jsonResponse(200, { choices: [{ message: { content: '{"ok":true}' } }] }));
     const h = harness({ net });
     await addEndpoint(h, { name: 'active' });
     const other = await addEndpoint(h, { name: 'other', baseUrl: 'https://b.example/v1', apiKey: 'sk-other-key-123456' });
 
-    await expect(h.gateway.probeResponseFormat(other.id)).rejects.toBeInstanceOf(EgressDeniedError);
-    expect(net.calls).toHaveLength(0);
+    expect(await h.gateway.probeResponseFormat(other.id)).toBe(true);
+    expect(net.calls).toHaveLength(1);
+    expect(net.calls[0]?.url).toBe('https://b.example/v1/chat/completions');
+    expect(net.headerOf(0, 'authorization')).toBe('Bearer sk-other-key-123456');
   });
 
   it('reports the mock as supporting the format without any network', async () => {
@@ -156,11 +158,13 @@ describe('listModels (§3)', () => {
     expect(h.net.calls).toHaveLength(0);
   });
 
-  it('refuses to list a non-active endpoint, which is the egress guard applied to a read', async () => {
-    const h = harness({ net: new ScriptedFetch() });
+  it('lists a non-active profile’s models on its own endpoint, pinned by the egress guard', async () => {
+    const h = harness({ net: new ScriptedFetch().push(() => jsonResponse(200, { data: [{ id: 'm' }] })) });
     await addEndpoint(h, { name: 'active' });
     const other = await addEndpoint(h, { name: 'other', baseUrl: 'https://b.example/v1', apiKey: 'sk-other-key-123456' });
-    await expect(h.gateway.listModels(other.id)).rejects.toBeInstanceOf(EgressDeniedError);
+    expect(await h.gateway.listModels(other.id)).toEqual([{ id: 'm' }]);
+    expect(h.net.calls[0]?.url).toBe('https://b.example/v1/models');
+    expect(h.net.headerOf(0, 'authorization')).toBe('Bearer sk-other-key-123456');
   });
 });
 
@@ -169,7 +173,7 @@ describe('the mock provider keeps its own ledger (accountTokens hook)', () => {
     const mock = createMockProvider();
     mock.accountTokens({ promptTokens: 4, completionTokens: 2 }, { profileId: 'mock', model: 'mock/echo-1' });
     expect(mock.ledger.dayRows()).toEqual([
-      { date: localDayKey(0), profileId: 'mock', model: 'mock/echo-1', promptTokens: 4, completionTokens: 2, requests: 1 },
+      { date: localDayKey(0), profileId: 'mock', model: 'mock/echo-1', role: 'chat', promptTokens: 4, completionTokens: 2, requests: 1 },
     ]);
   });
 });

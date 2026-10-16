@@ -177,7 +177,7 @@ export function harness(options: HarnessOptions = {}): Harness {
 export async function addEndpoint(h: Harness, overrides: Partial<NewProfile> = {}) {
   return h.profiles.create({
     name: 'Test endpoint',
-    kind: 'openai-compatible',
+    kind: 'endpoint',
     baseUrl: 'https://a.example/v1',
     apiKey: KEY,
     defaultModel: 'model-x',

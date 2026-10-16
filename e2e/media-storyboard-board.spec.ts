@@ -60,7 +60,7 @@ test('the board header gives the animatic total, and how many shots are left out
 
 test('an empty storyboard beside one scene offers to derive that scene, and the offer sends its request to the agent', async ({ page }) => {
   // The request goes to the agent, so the endpoint is the fake one (endpoint.ts), and no network is used.
-  await fakeEndpoint(page, () => JSON.stringify({ reply: 'Done.' }));
+  await fakeEndpoint(page, planThenAnswer({ reply: 'Done.' }));
   await useFakeEndpoint(page);
   await createProject(page, PROJECT);
   await makeUnder(page, 'Manuscript', 'New screenplay scene here');

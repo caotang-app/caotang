@@ -6,30 +6,42 @@
  * the `\r` and the `\n` of one ending. A trailing `\r` is therefore held back until the
  * next chunk says whether a `\n` follows, instead of being counted as two line ends.
  *
- * Only `data:` fields are kept. Comments (lines beginning with `:`, which providers use
- * as keep-alives), `event:` and `id:` carry nothing the gateway uses. An event is the
- * `data:` lines between blank lines, joined with `\n` as the spec requires.
+ * Each event is delivered as an `{event, data}` pair: Anthropic and OpenAI Responses
+ * name their events (`message_start`, `response.completed`, …) and the adapter needs
+ * the name, so unlike a generic SSE consumer this parser keeps it. Comments (lines
+ * beginning with `:`, which providers use as keep-alives) and `id:` carry nothing the
+ * gateway uses. An event is the fields between blank lines, with its `data:` lines
+ * joined with `\n` as the spec requires.
  */
 
+export interface SseEvent {
+  /** The `event:` name, when the stream declared one. */
+  readonly event?: string;
+  /** The event's `data:` lines, joined with `\n`. */
+  readonly data: string;
+}
+
 export interface SseParser {
-  /** Feeds decoded text and returns the payload of every event it completed. */
-  push(text: string): string[];
+  /** Feeds decoded text and returns every event it completed. */
+  push(text: string): SseEvent[];
   /** Ends the stream and returns any event still open. A truncated final event is kept, so the caller reports it as malformed rather than losing it silently. */
-  end(): string[];
+  end(): SseEvent[];
 }
 
 export function createSseParser(): SseParser {
   let pending = '';
   let dataLines: string[] = [];
-  let completed: string[] = [];
+  let eventName: string | undefined;
+  let completed: SseEvent[] = [];
 
   const field = (line: string): void => {
     if (line === '') {
       if (dataLines.length > 0) {
-        const payload = dataLines.join('\n');
+        const data = dataLines.join('\n');
         // An event with no payload is a keep-alive in practice, not a message.
-        if (payload !== '') completed.push(payload);
+        if (data !== '') completed.push(eventName === undefined ? { data } : { event: eventName, data });
         dataLines = [];
+        eventName = undefined;
       }
       return;
     }
@@ -39,9 +51,10 @@ export function createSseParser(): SseParser {
     let value = colon === -1 ? '' : line.slice(colon + 1);
     if (value.startsWith(' ')) value = value.slice(1);
     if (name === 'data') dataLines.push(value);
+    else if (name === 'event') eventName = value;
   };
 
-  const drain = (): string[] => {
+  const drain = (): SseEvent[] => {
     const out = completed;
     completed = [];
     return out;
@@ -74,9 +87,10 @@ export function createSseParser(): SseParser {
         pending = '';
       }
       if (dataLines.length > 0) {
-        const payload = dataLines.join('\n');
-        if (payload !== '') completed.push(payload);
+        const data = dataLines.join('\n');
+        if (data !== '') completed.push(eventName === undefined ? { data } : { event: eventName, data });
         dataLines = [];
+        eventName = undefined;
       }
       return drain();
     },

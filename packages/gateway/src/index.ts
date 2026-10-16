@@ -9,6 +9,7 @@
 export type {
   ProviderProfile,
   ProfileKind,
+  LegacyProfileKind,
   ProfileView,
   NewProfile,
   ProfilePatch,
@@ -18,6 +19,13 @@ export type {
   ChatMessage,
   ChatChunk,
   ChatRole,
+  FinishReason,
+  ThinkingLevel,
+  TaskRole,
+  ToolDef,
+  ToolCall,
+  ReasoningBlock,
+  ModelCaps,
   Usage,
   ModelInfo,
   ModelLimits,
@@ -46,8 +54,20 @@ export {
 export { normalizeBaseUrl, MOCK_BASE_URL, isLoopbackBase } from './base-url.js';
 
 export {
+  PRESETS,
+  presetFor,
+  modelRowFor,
+  resolveRoute,
+  type PresetDef,
+  type PresetField,
+  type ModelRow,
+  type CorsStatus,
+} from './presets/index.js';
+
+export {
   createKeyStore,
   type KeyStore,
+  type KeyPayload,
   type KeyStoreOptions,
 } from './keys/key-store.js';
 export { createMemoryVaultPort, type KeyVaultPort, type SealedEntry } from './keys/vault.js';
@@ -55,6 +75,20 @@ export { createIndexedDbVaultPort, type IndexedDbVaultOptions } from './keys/ind
 
 export { createGateway, type Gateway, type GatewayOptions } from './gateway.js';
 export type { FetchLike } from './transport.js';
+export { adapterFor } from './adapters/index.js';
+export type {
+  AdapterId,
+  AdapterContext,
+  BodyInput,
+  CallSecrets,
+  EffortStyle,
+  ProviderAdapter,
+  QuirkFlags,
+  ReplayStyle,
+  RouteSpec,
+  StreamParser,
+  StreamPiece,
+} from './adapters/types.js';
 
 export {
   UsageLedger,

@@ -2,15 +2,19 @@
  * Mock script library — [provider-gateway.md §8](docs/architecture/provider-gateway.md).
  *
  * Contract, verbatim from the spec:
- *  - Deterministic: same script + same request = same response bytes. No clock, no
- *    randomness (temperature ignored).
- *  - Scriptable: `echo`, `toolJson`, `stream(words)`, `fail(mode)` ship by default.
+ *  - Deterministic: same script + same request + same position in the provider's call
+ *    sequence = same response bytes. No clock, no randomness (temperature ignored).
+ *    `nativeCall` ids count the provider's `complete()` calls, which is itself
+ *    deterministic — replay a sequence and the same ids come out.
+ *  - Scriptable: `echo`, `toolJson`, `stream(words)`, `fail(mode)` ship by default;
+ *    `nativeCall(name, args)` scripts a native function-call reply for requests that
+ *    carry `tools`, and `MockResponse.toolCalls`/`reasoning` let any script do the same.
  *  - Usage accounting: fake token counts = `ceil(chars/4)` so ledger assertions
  *    work unchanged.
  */
 
 import type { ProviderErrorKind } from '../errors.js';
-import type { ChatChunk, ChatRequest, ModelInfo } from '../types.js';
+import type { ChatChunk, ChatRequest, FinishReason, ModelInfo, ToolCall } from '../types.js';
 
 // The token rule lives in one module so the mock and the real gateway agree on it.
 // Re-exported here so the `./mock` subpath keeps the names the desktop app and the tests use.
@@ -34,15 +38,31 @@ export interface MockError {
 
 export interface MockResponse {
   content: string;
-  finishReason?: 'stop' | 'length' | 'error';
+  finishReason?: FinishReason;
   /** raises a `ProviderError` of this kind before any output, instead of answering */
   error?: MockError;
+  /**
+   * Native-mode calls the reply asks for. When present the reply is a request to run
+   * tools, not an answer: the terminal chunk carries them with finishReason
+   * 'tool_calls' (which is the reason to declare, when one is declared).
+   */
+  toolCalls?: readonly ToolCall[];
+  /**
+   * Reasoning text the reply produced. With `toolCalls` it rides the terminal chunk as
+   * a replayable block (`raw` = `{type:'mock-reasoning', text}`); without them it
+   * streams as one `reasoningDelta` chunk before the terminal.
+   */
+  reasoning?: string;
 }
 
 /** Picks the response for a request. First match wins — order is the script's order. */
 export interface MockScript {
   match: (req: ChatRequest) => boolean;
-  respond: (req: ChatRequest) => MockResponse | AsyncIterable<ChatChunk>;
+  /**
+   * `callIndex` is the request's 1-based position in the provider's `complete()`
+   * sequence — how `nativeCall` numbers its `call_mock_<n>` ids.
+   */
+  respond: (req: ChatRequest, callIndex?: number) => MockResponse | AsyncIterable<ChatChunk>;
 }
 
 /** Yield control without advancing wall-clock time, so consumers' async logic runs. */
@@ -81,6 +101,23 @@ export const toolJson: MockScript = {
     };
   },
 };
+
+/**
+ * `nativeCall(name, args)` — a native-mode reply: the model asks for the tool `name`
+ * with `args` and says nothing else. Matches any request that carries `tools`, which
+ * is what marks the caller as native-mode. The call id is `call_mock_<n>` where `n` is
+ * the request's index in the provider's call sequence.
+ */
+export function nativeCall(name: string, args: unknown): MockScript {
+  return {
+    match: (req) => req.tools !== undefined && req.tools.length > 0,
+    respond: (_req, callIndex) => ({
+      content: '',
+      toolCalls: [{ id: `call_mock_${callIndex ?? 1}`, name, argumentsJson: JSON.stringify(args) }],
+      finishReason: 'tool_calls',
+    }),
+  };
+}
 
 /** `stream(words)` — chunks a string into word-sized deltas, exercising async consumers. */
 export function stream(text: string): MockScript {

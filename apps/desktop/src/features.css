@@ -1,5 +1,5 @@
 /*
- * The rules for the surfaces this workstream adds: MCP & tools, the findings tab, the scene declarations and the codex section
+ * The rules for the surfaces this file adds: MCP & tools, the findings tab, the scene declarations and the codex section
  * of the inspector, the binder's filter bar and footer. They use the shell's tokens (styles.css), so a theme change reaches them
  * with the rest of the app. Two state colours are added here, because the shell has none: a healthy or verified green, and
  * the warm amber the review uses. Both are redefined for dark mode.

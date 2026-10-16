@@ -14,7 +14,7 @@
  * that changes the map, so no reader can observe a state with none or two active.
  *
  * **Persistence.** Profiles are held in memory. The non-secret part is small and belongs
- * to the settings workstream to persist; the secret part is already in IndexedDB via the
+ * to app settings, which persists it; the secret part is already in IndexedDB via the
  * key store. That split is deliberate: the thing that must survive a reload safely is the
  * thing that is sealed.
  */
@@ -25,9 +25,10 @@
  */
 export const DEFAULT_MAX_OUTPUT_TOKENS = 4_096;
 
-import { isLoopbackBase, MOCK_BASE_URL, normalizeBaseUrl, originOf } from './base-url.js';
+import { MOCK_BASE_URL, normalizeBaseUrl, originOf } from './base-url.js';
 import { ProfileError } from './errors.js';
 import type { KeyStore } from './keys/key-store.js';
+import { presetFor, type PresetDef } from './presets/index.js';
 import type { NewProfile, ProfileKind, ProfilePatch, ProfileView, ResponseFormatProbe } from './types.js';
 
 export interface ProfileStore {
@@ -73,11 +74,15 @@ export function mintProfileId(randomBytes: (n: number) => Uint8Array<ArrayBuffer
   return `prv_${body}`;
 }
 
-/** What a profile record holds. Deliberately has no key field. */
+/** What a profile record holds. Deliberately has no key field — keys and custom header values are sealed in the vault. */
 interface StoredProfile {
   id: string;
   name: string;
   kind: ProfileKind;
+  /** the preset the profile was created under; every endpoint profile has one ('generic' for hand-rolled) */
+  preset?: string;
+  /** the preset's extra fields the base URL was built from */
+  fields?: Record<string, string>;
   baseUrl: string;
   defaultModel: string;
   temperature?: number;
@@ -93,6 +98,8 @@ interface CheckedFields {
   name: string;
   baseUrl: string;
   defaultModel: string;
+  fields?: Record<string, string>;
+  customHeaders?: Record<string, string>;
   temperature?: number;
   maxOutputTokens?: number;
   pricePer1k?: { prompt: number; completion: number };
@@ -100,11 +107,52 @@ interface CheckedFields {
 
 interface RawFields {
   name?: string;
+  preset?: string;
   baseUrl?: string;
   defaultModel?: string;
+  fields?: Readonly<Record<string, string>>;
+  customHeaders?: Readonly<Record<string, string>> | null;
   temperature?: number;
   maxOutputTokens?: number;
   pricePer1k?: { prompt: number; completion: number };
+}
+
+/** RFC 9110 token — what a request header name may be. */
+const HEADER_NAME = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
+const MAX_CUSTOM_HEADERS = 16;
+const MAX_HEADER_VALUE = 1_024;
+
+/**
+ * A generic profile's extra headers. Names must be header names and values printable —
+ * a newline would let a header smuggle another header. `null` clears the set.
+ * Only the generic preset takes them: a named preset's route is fixed, and headers
+ * beyond its quirks are not part of what it documents.
+ */
+function checkHeaders(kind: ProfileKind, preset: PresetDef | undefined, raw: Readonly<Record<string, string>> | null | undefined): Record<string, string> | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  if (kind === 'mock' || (preset !== undefined && preset.id !== 'generic')) {
+    throw new ProfileError('invalid', 'Custom headers are only available on a generic OpenAI-compatible endpoint.', 'customHeaders');
+  }
+  const entries = Object.entries(raw);
+  if (entries.length > MAX_CUSTOM_HEADERS) {
+    throw new ProfileError('invalid', `At most ${MAX_CUSTOM_HEADERS} custom headers can be set.`, 'customHeaders');
+  }
+  const headers: Record<string, string> = {};
+  for (const [rawName, rawValue] of entries) {
+    const name = rawName.trim().toLowerCase();
+    if (!HEADER_NAME.test(name)) throw new ProfileError('invalid', `"${rawName}" is not a valid header name.`, 'customHeaders');
+    const value = rawValue.trim();
+    if (value === '') throw new ProfileError('invalid', `The ${name} header is empty.`, 'customHeaders');
+    const hasControl = [...value].some((ch) => {
+      const code = ch.charCodeAt(0);
+      return code < 0x20 || code === 0x7f;
+    });
+    if (value.length > MAX_HEADER_VALUE || hasControl) {
+      throw new ProfileError('invalid', `The ${name} header contains characters a request header cannot carry.`, 'customHeaders');
+    }
+    headers[name] = value;
+  }
+  return headers;
 }
 
 function checkFields(kind: ProfileKind, raw: RawFields): CheckedFields {
@@ -114,6 +162,8 @@ function checkFields(kind: ProfileKind, raw: RawFields): CheckedFields {
 
   let baseUrl: string;
   let defaultModel: string;
+  let preset: PresetDef | undefined;
+  let fields: Record<string, string> | undefined;
   if (kind === 'mock') {
     const given = (raw.baseUrl ?? '').trim();
     if (given !== '' && given !== MOCK_BASE_URL) {
@@ -122,14 +172,36 @@ function checkFields(kind: ProfileKind, raw: RawFields): CheckedFields {
     baseUrl = MOCK_BASE_URL;
     defaultModel = (raw.defaultModel ?? '').trim() || MOCK_DEFAULT_MODEL;
   } else {
-    baseUrl = normalizeBaseUrl(raw.baseUrl ?? '');
-    defaultModel = (raw.defaultModel ?? '').trim();
+    preset = presetFor(raw.preset ?? 'generic');
+    if (preset === undefined) {
+      throw new ProfileError('invalid', `"${raw.preset ?? ''}" is not one of the provider presets.`, 'preset');
+    }
+    // The extra fields a preset declares; unknown keys in `fields` are ignored.
+    if (preset.fields !== undefined || raw.fields !== undefined) {
+      fields = {};
+      for (const field of preset.fields ?? []) {
+        const value = (raw.fields?.[field.key] ?? field.defaultValue ?? '').trim();
+        if (field.required && value === '') {
+          throw new ProfileError('invalid', `Enter the ${field.label.toLowerCase()} for this provider.`, `fields.${field.key}`);
+        }
+        if (value !== '') fields[field.key] = value;
+      }
+      if (Object.keys(fields).length === 0) fields = undefined;
+    }
+    // The base URL: the save's own when given, else the preset's (templated from fields).
+    const candidate = (raw.baseUrl ?? '').trim() !== '' ? raw.baseUrl : (preset.baseUrlFor?.(fields ?? {}) ?? preset.baseUrl);
+    baseUrl = normalizeBaseUrl(candidate ?? '');
+    defaultModel = (raw.defaultModel ?? '').trim() || preset.defaultModel;
     if (defaultModel === '') {
       throw new ProfileError('invalid', 'Enter the model name, for example openai/gpt-4.1-mini.', 'defaultModel');
     }
   }
 
   const checked: CheckedFields = { name, baseUrl, defaultModel };
+  if (fields !== undefined) checked.fields = fields;
+  const headers = checkHeaders(kind, preset, raw.customHeaders);
+  if (headers !== undefined) checked.customHeaders = headers;
+
   if (raw.temperature !== undefined) {
     if (!Number.isFinite(raw.temperature) || raw.temperature < 0 || raw.temperature > 2) {
       throw new ProfileError('invalid', 'Temperature must be a number from 0 to 2.', 'temperature');
@@ -153,23 +225,23 @@ function checkFields(kind: ProfileKind, raw: RawFields): CheckedFields {
 }
 
 /**
- * Validates a key for an `openai-compatible` profile. Whitespace is refused because a key
+ * Validates a key for an `endpoint` profile. Whitespace is refused because a key
  * pasted with a line break makes every request fail with a confusing 401.
  */
-function checkKey(raw: string, baseUrl: string): string {
+function checkKey(raw: string, keyOptional: boolean): string {
   const key = raw.trim();
   if (/\s/.test(key)) throw new ProfileError('invalid', 'The API key contains a space or a line break. Paste it again.', 'apiKey');
-  requireKeyFor(key !== '', baseUrl);
+  requireKeyFor(key !== '', keyOptional);
   return key;
 }
 
 /**
- * An endpoint needs a key unless its base is loopback, where LM Studio and Ollama ignore
- * the header. Checked against the base a save will store, so no save can leave a remote
- * endpoint without one.
+ * An endpoint needs a key unless its preset documents keyless calls (`keyOptional`,
+ * per the registry: OpenCode's free models, a hand-rolled generic endpoint). There is
+ * no other exemption — HTTPS is required either way.
  */
-function requireKeyFor(hasKey: boolean, baseUrl: string): void {
-  if (!hasKey && !isLoopbackBase(baseUrl)) throw new ProfileError('invalid', 'Enter the API key for this endpoint.', 'apiKey');
+function requireKeyFor(hasKey: boolean, keyOptional: boolean): void {
+  if (!hasKey && !keyOptional) throw new ProfileError('invalid', 'Enter the API key for this endpoint.', 'apiKey');
 }
 
 function toView(rec: StoredProfile): ProfileView {
@@ -177,6 +249,8 @@ function toView(rec: StoredProfile): ProfileView {
     id: rec.id,
     name: rec.name,
     kind: rec.kind,
+    ...(rec.preset === undefined ? {} : { preset: rec.preset }),
+    ...(rec.fields === undefined ? {} : { fields: { ...rec.fields } }),
     baseUrl: rec.baseUrl,
     defaultModel: rec.defaultModel,
     isActive: rec.isActive,
@@ -208,29 +282,55 @@ export function createProfileStore(options: ProfileStoreOptions): ProfileStore {
 
   return {
     async create(input) {
-      const fields = checkFields(input.kind, input);
-      const key = input.kind === 'openai-compatible' ? checkKey(input.apiKey ?? '', fields.baseUrl) : '';
+      // The retired kind name still arrives in data written before presets; it is the endpoint kind.
+      const kind: ProfileKind = (input.kind as string) === 'openai-compatible' ? 'endpoint' : input.kind;
+      const preset = kind === 'endpoint' ? presetFor(input.preset ?? 'generic') : undefined;
+      const fields = checkFields(kind, input);
+      const key = kind === 'endpoint' ? checkKey(input.apiKey ?? '', preset?.keyOptional === true) : '';
       const id = freshId();
       // The key is sealed before the record exists, so a failed seal leaves no profile
-      // that claims a key it does not have.
-      if (key !== '') await keys.put(id, key);
+      // that claims a key it does not have. Custom headers ride inside the same payload —
+      // they are secrets, and the vault is where secrets live.
+      if (key !== '' || fields.customHeaders !== undefined) {
+        await keys.putPayload(id, { apiKey: key, ...(fields.customHeaders === undefined ? {} : { customHeaders: fields.customHeaders }) });
+      }
 
       // Re-read the active state after the await: another create may have landed meanwhile.
       const anyActive = [...records.values()].some((r) => r.isActive);
       const activate = input.isActive === true || !anyActive;
       if (activate) for (const r of records.values()) r.isActive = false;
-      records.set(id, { id, kind: input.kind, ...fields, isActive: activate, hasKey: key !== '' });
+      records.set(id, {
+        id,
+        kind,
+        ...(preset === undefined ? {} : { preset: preset.id }),
+        ...(fields.fields === undefined ? {} : { fields: fields.fields }),
+        name: fields.name,
+        baseUrl: fields.baseUrl,
+        defaultModel: fields.defaultModel,
+        ...(fields.temperature === undefined ? {} : { temperature: fields.temperature }),
+        ...(fields.maxOutputTokens === undefined ? {} : { maxOutputTokens: fields.maxOutputTokens }),
+        ...(fields.pricePer1k === undefined ? {} : { pricePer1k: fields.pricePer1k }),
+        isActive: activate,
+        hasKey: key !== '',
+      });
       return toView(requireRecord(id));
     },
 
     async update(id, patch) {
       const rec = requireRecord(id);
+      const preset = rec.kind === 'endpoint' ? presetFor(rec.preset ?? 'generic') : undefined;
       // `null` clears the saved price; an absent price keeps it (ProfilePatch).
       const price = patch.pricePer1k === null ? undefined : (patch.pricePer1k ?? rec.pricePer1k);
+      const mergedFields = patch.fields === undefined ? rec.fields : { ...(rec.fields ?? {}), ...patch.fields };
       const fields = checkFields(rec.kind, {
         name: patch.name ?? rec.name,
-        baseUrl: patch.baseUrl ?? rec.baseUrl,
+        preset: rec.preset,
+        // A fields patch on a templated preset rebuilds the base URL from the new fields.
+        baseUrl: patch.baseUrl ?? (patch.fields !== undefined && preset?.baseUrlFor !== undefined ? '' : rec.baseUrl),
         defaultModel: patch.defaultModel ?? rec.defaultModel,
+        fields: mergedFields,
+        // `null` clears the headers; an absent field keeps what is sealed.
+        customHeaders: patch.customHeaders === null ? undefined : patch.customHeaders,
         temperature: patch.temperature ?? rec.temperature,
         maxOutputTokens: patch.maxOutputTokens ?? rec.maxOutputTokens,
         pricePer1k: price,
@@ -238,22 +338,48 @@ export function createProfileStore(options: ProfileStoreOptions): ProfileStore {
 
       let hasKey = rec.hasKey;
       let keyChanged = false;
-      if (rec.kind === 'openai-compatible') {
-        if (patch.apiKey !== undefined) {
-          const key = checkKey(patch.apiKey, fields.baseUrl);
-          if (key === '') await keys.remove(id);
-          else await keys.put(id, key);
+      if (rec.kind === 'endpoint') {
+        const keyOptional = preset?.keyOptional === true;
+        // A secret belongs to the origin it was entered for. Keeping it across an origin change would
+        // send it to an origin the user has not entered it for, so the save is refused before anything
+        // is written, and the stored secret stays where it was. This holds for the key and for custom
+        // headers alike, whichever of them the patch re-enters.
+        const originMoved = originOf(fields.baseUrl) !== originOf(rec.baseUrl);
+        if (patch.apiKey !== undefined || patch.customHeaders !== undefined) {
+          // The payload holds key and headers together, so either edit opens it once and
+          // re-seals both — a key change cannot drop the headers, and a header change
+          // cannot drop the key.
+          const existing = await keys.revealPayload(id);
+          const key = patch.apiKey !== undefined ? checkKey(patch.apiKey, keyOptional) : (existing?.apiKey ?? '');
+          const headers =
+            patch.customHeaders === null
+              ? undefined
+              : patch.customHeaders !== undefined
+                ? fields.customHeaders
+                : existing?.customHeaders;
+          if (originMoved) {
+            if (patch.apiKey === undefined && (existing?.apiKey ?? '') !== '') {
+              throw new ProfileError('invalid', 'Enter the API key again for the new endpoint.', 'apiKey');
+            }
+            if (patch.customHeaders === undefined && existing?.customHeaders !== undefined && Object.keys(existing.customHeaders).length > 0) {
+              throw new ProfileError('invalid', 'Enter the extra headers again for the new endpoint.', 'customHeaders');
+            }
+          }
+          if (key === '' && (headers === undefined || Object.keys(headers).length === 0)) await keys.remove(id);
+          else await keys.putPayload(id, { apiKey: key, ...(headers === undefined ? {} : { customHeaders: headers }) });
           hasKey = key !== '';
           keyChanged = true;
         } else {
-          // A key belongs to the origin it was entered for. Keeping it across an origin change
-          // would send it to an origin the user has not entered it for, so the save is refused
-          // before anything is written, and the stored key stays where it was.
-          const originMoved = originOf(fields.baseUrl) !== originOf(rec.baseUrl);
           if (originMoved && rec.hasKey) {
             throw new ProfileError('invalid', 'Enter the API key again for the new endpoint.', 'apiKey');
           }
-          requireKeyFor(rec.hasKey, fields.baseUrl);
+          if (originMoved) {
+            const existing = await keys.revealPayload(id);
+            if (existing?.customHeaders !== undefined && Object.keys(existing.customHeaders).length > 0) {
+              throw new ProfileError('invalid', 'Enter the extra headers again for the new endpoint.', 'customHeaders');
+            }
+          }
+          requireKeyFor(rec.hasKey, keyOptional);
         }
       }
 
@@ -261,9 +387,11 @@ export function createProfileStore(options: ProfileStoreOptions): ProfileStore {
       if (records.get(id) !== rec) throw new ProfileError('not-found', `No provider profile has the id ${id}.`);
 
       const endpointChanged = fields.baseUrl !== rec.baseUrl || fields.defaultModel !== rec.defaultModel;
-      Object.assign(rec, fields, { hasKey });
+      const { customHeaders: _sealed, ...stored } = fields;
+      Object.assign(rec, stored, { hasKey });
       // `Object.assign` cannot clear a key it was not given, so a cleared price is removed from the record here.
       if (fields.pricePer1k === undefined) delete rec.pricePer1k;
+      if (fields.fields === undefined) delete rec.fields;
       // §5's probe is about one endpoint and one model with one key. Any of those
       // changing makes the cached answer a guess, so it goes.
       if (endpointChanged || keyChanged) rec.responseFormat = undefined;
@@ -272,7 +400,8 @@ export function createProfileStore(options: ProfileStoreOptions): ProfileStore {
 
     async remove(id) {
       const rec = requireRecord(id);
-      if (rec.hasKey) await keys.remove(id);
+      // A headers-only payload has no key, so `hasKey` alone would leave it behind.
+      if (rec.kind === 'endpoint') await keys.remove(id);
       // Record removal and promotion happen in one synchronous step, so the invariant
       // never has a gap.
       records.delete(id);

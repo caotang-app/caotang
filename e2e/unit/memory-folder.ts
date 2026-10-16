@@ -79,7 +79,13 @@ function fileHandle(name: string, node: Extract<Entry, { kind: 'file' }>): FileH
     async getFile() {
       return {
         text: async () => new TextDecoder().decode(node.bytes),
-        arrayBuffer: async () => node.bytes.slice().buffer,
+        // A File's buffer is exactly its bytes: copy, so a view over a larger pooled
+        // buffer (a Node Buffer's 8 KB pool, say) never leaks past the file's end.
+        arrayBuffer: async () => {
+          const copy = new Uint8Array(node.bytes.byteLength);
+          copy.set(node.bytes);
+          return copy.buffer;
+        },
       };
     },
     async createWritable() {

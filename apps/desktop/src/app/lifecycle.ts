@@ -64,6 +64,7 @@ import {
   writeProject,
   writeSessionsFile,
   type ArtifactFs,
+  type EncodingIssue,
   type FolderDrift,
   type ProjectFileChange,
   type LoadNotice,
@@ -82,6 +83,7 @@ import { newId } from '@caotang/ids';
 import type { McpClient } from '@caotang/mcp-client';
 
 import { attachCoherence } from './coherence-io.js';
+import { applyEncodingDecisions, encodingResultLines, type EncodingDecision } from './encoding-review.js';
 import { folderArtifactFs, type DirectoryHandleLike } from './fs-access.js';
 import {
   copiedFromOf,
@@ -270,10 +272,49 @@ export interface PendingRecovery {
   readonly digests: ReadonlyMap<string, string>;
 }
 
+/**
+ * An open that found files whose bytes are not UTF-8 text (`LoadResult.encodingIssues`), held until
+ * the writer answers for each one (`completeEncodingReview`): preview and convert it, or leave it
+ * byte-for-byte. Nothing has been written for the files when the pending is handed out — except the
+ * recovery write a `recovery` resume already committed, which `cancelNote` then says.
+ *
+ * The pending carries the filesystem the files live on — the folder's own, the unpacked bundle in
+ * memory, or the recovery's target — so the dialog's previews read it and a convert writes back into
+ * it before the project is adopted.
+ */
+export interface PendingEncoding {
+  /** What the open is called: the folder's name, or the bundle's file name. */
+  readonly name: string;
+  /** Each file the load reported, with the guess its bytes gave. */
+  readonly issues: readonly EncodingIssue[];
+  /** Where the files live and a conversion writes: the folder, the unpacked bundle, or the recovered target. */
+  readonly fs: ArtifactFs;
+  /** How the open continues once the writer has answered. */
+  readonly resume: EncodingResume;
+  /** What cancelling should tell the writer happened already: a recovery's write, or '' when nothing ran. */
+  readonly cancelNote: string;
+}
+
+/** What `completeEncodingReview` needs to continue the open the writer paused. */
+export type EncodingResume =
+  /** A folder open: routing, baseline and session are all decided after the answers, from a fresh read. */
+  | { readonly kind: 'folder'; readonly root: DirectoryHandleLike }
+  /** A bundle import: the unpacked bundle's sessions, images and findings file, carried into the adopt. */
+  | {
+      readonly kind: 'bundle';
+      readonly sessions: readonly SessionRecord[];
+      readonly assets: Readonly<Record<string, Uint8Array>>;
+      readonly coherence: string | undefined;
+    }
+  /** An accepted recovery: the write already ran, so the answers are applied and the result adopted. */
+  | { readonly kind: 'recovery'; readonly sessions: readonly SessionRecord[]; readonly folder: DirectoryHandleLike | null };
+
 /** What opening a folder or a bundle gives back: the project, open, or a recovery the writer must accept first. */
 export type OpenOutcome =
   | { readonly kind: 'opened'; readonly opened: Opened }
   | { readonly kind: 'recover'; readonly recovery: PendingRecovery }
+  /** A folder or bundle holding files that are not UTF-8 text: the writer answers for each before the open finishes. */
+  | { readonly kind: 'encoding'; readonly encoding: PendingEncoding }
   /** A folder whose project this browser keeps in a different version: the writer chooses which to keep (`answerFolderDiffers`). */
   | { readonly kind: 'differs'; readonly differs: FolderDiffers };
 
@@ -804,6 +845,20 @@ export async function importBundle(store: RuntimeStore, bytes: Uint8Array, name:
     return { kind: 'recover', recovery: await recoveryFor(name, unpacked.fs, unpacked.sessions, null, new Map()) };
   }
   const coherence = (await unpacked.fs.exists(COHERENCE_FILE)) ? await unpacked.fs.read(COHERENCE_FILE) : undefined;
+  // A bundle's non-UTF-8 files pause the import the same way a folder's do: the answers are applied to the
+  // unpacked copy in memory, before the project is adopted — so the working copy is made from the converted text.
+  if (loaded.encodingIssues.length > 0) {
+    return {
+      kind: 'encoding',
+      encoding: {
+        name,
+        issues: loaded.encodingIssues,
+        fs: unpacked.fs,
+        resume: { kind: 'bundle', sessions: unpacked.sessions, assets: unpacked.assets, coherence },
+        cancelNote: '',
+      },
+    };
+  }
   return {
     kind: 'opened',
     opened: await adopt(
@@ -828,7 +883,7 @@ export async function openFolder(store: RuntimeStore, root: DirectoryHandleLike)
   const onDisk = await readManifestText(fs);
   // The folder's document and codex files are digested before anything is read, so a change made while the project is read is one the
   // first save sees, not one this session is taken to have loaded.
-  let digests = await projectFileDigests(fs);
+  const digests = await projectFileDigests(fs);
   let loaded: LoadResult;
   try {
     loaded = await readProject(fs);
@@ -836,11 +891,37 @@ export async function openFolder(store: RuntimeStore, root: DirectoryHandleLike)
     if (!isUnreadableManifest(error)) throw error;
     return { kind: 'recover', recovery: await recoveryFor(root.name, fs, await folderSessionsOf(fs), root, digests) };
   }
+  // Files whose bytes are not UTF-8 pause the open for the writer's answer before any routing: a convert changes the bytes a
+  // baseline and a book are measured on, so it is asked about first (`completeEncodingReview` finishes the open after).
+  if (loaded.encodingIssues.length > 0) {
+    return {
+      kind: 'encoding',
+      encoding: { name: root.name, issues: loaded.encodingIssues, fs, resume: { kind: 'folder', root }, cancelNote: '' },
+    };
+  }
+  return finishFolderOpen(store, root, fs, loaded, onDisk, digests, []);
+}
+
+/**
+ * The rest of a folder open, once the folder's load is settled — called directly by `openFolder`, and by
+ * `completeEncodingReview` after the writer's answers converted what they would. `extraNotices` says what the
+ * pause did (each converted or refused file) ahead of the load's own notices; `onDisk` and `digests` are read
+ * fresh after any conversion, so the baseline the session holds is the folder as it stands.
+ */
+async function finishFolderOpen(
+  store: RuntimeStore,
+  root: DirectoryHandleLike,
+  fs: ArtifactFs,
+  loaded: LoadResult,
+  onDisk: string | null,
+  digests: ReadonlyMap<string, string>,
+  extraNotices: readonly string[],
+): Promise<OpenOutcome> {
   // An identity the open made (epub-metadata.md: the identifier, the language) is written back to the folder before the
   // session starts, so the next open reads the same values and the book keeps its identifier. The project opens even when
   // that write is skipped or fails; the reason is a notice, because the next open would then make another identifier. A
   // folder another program holds (the MCP server's lock) is not written to here: the writer has not been asked.
-  const notices = noticesOf(loaded.notices);
+  const notices = [...extraNotices, ...noticesOf(loaded.notices)];
   const droppedFields = droppedFieldsOf(loaded.notices);
   // The folder's session log (project-format §4) is the history a copy opened from it starts with (adopt), or the one a stored copy carries on.
   const folderLog = await folderSessionsOf(fs);
@@ -981,7 +1062,10 @@ export async function answerFolderDiffers(store: RuntimeStore, differs: FolderDi
 async function restoreBrowserCopy(store: RuntimeStore, projectId: string, bytes: Uint8Array, records: KeptFolderRecords): Promise<void> {
   if ((await listProjectIds(store)).includes(projectId)) await removeProject(store, projectId);
   const restored = await importBundle(store, bytes, 'this browser’s copy');
-  if (restored.kind === 'opened') await restored.opened.session.close();
+  // A bundle this browser itself exported should never pause on encodings — a declined file rides the bundle as the
+  // UTF-8 text the load kept for it. If one ever does, leaving every file is the safe answer: nothing is converted.
+  const settled = restored.kind === 'encoding' ? await completeEncodingReview(store, restored.encoding, []) : restored;
+  if (settled.kind === 'opened') await settled.opened.session.close();
   // The removal forgot the records the project kept beside it: they are kept again as they were, so the projects list still offers the
   // folder, a save to it is checked against the folder copy last seen there, and a separate copy is still refused in its original's folder.
   if (records.folder !== null) await rememberFolder(projectId, records.folder);
@@ -1008,9 +1092,10 @@ export interface RecoveryAnswers {
  */
 export type RecoveryRefusal = 'locked' | 'changed' | 'files';
 
-/** The result of accepting a recovery: opened, or refused for one reason the writer must answer first (or reopen the folder for). */
+/** The result of accepting a recovery: opened, paused on the recovered files' encodings, or refused for one reason the writer must answer first (or reopen the folder for). */
 export type RecoveryOutcome =
   | { readonly kind: 'opened'; readonly opened: Opened }
+  | { readonly kind: 'encoding'; readonly encoding: PendingEncoding }
   | {
       readonly kind: 'refused';
       readonly reason: RecoveryRefusal;
@@ -1052,6 +1137,20 @@ export async function completeRecovery(
     offer = withPreservedManifest(offer, onDisk);
   }
   await commitRecovery(recovery.fs, offer, { now: new Date() });
+  // Files whose bytes are not UTF-8 pause for the writer's answer here too — after the recovery write, which the
+  // pending's cancel names. The answers are applied to the recovered copy and the result adopted, as a bundle's are.
+  if (offer.encodingIssues.length > 0) {
+    return {
+      kind: 'encoding',
+      encoding: {
+        name: recovery.name,
+        issues: offer.encodingIssues,
+        fs: recovery.fs,
+        resume: { kind: 'recovery', sessions: recovery.sessions, folder: recovery.folder },
+        cancelNote: 'The recovery was written, and the project’s files are as it left them. The project was not opened.',
+      },
+    };
+  }
   // The recovery's own notes say which copy was used, and the dialog has already said it, so they are not repeated as field notices.
   const opened = await adopt(store, offer.state, recovery.sessions, [], [], recovery.folder);
   if (recovery.folder !== null) {
@@ -1069,6 +1168,67 @@ function withPreservedManifest(offer: RecoveryOffer, onDisk: string | null): Rec
   if (offer.corruptManifest === undefined) return offer;
   if (onDisk === null) return { ...offer, corruptManifest: undefined };
   return { ...offer, corruptManifest: { path: offer.corruptManifest.path, contents: onDisk } };
+}
+
+/**
+ * Continues an open that paused on non-UTF-8 files, once the writer has answered (`PendingEncoding`). Each file the
+ * writer converted is backed up and rewritten in place first (`applyEncodingDecisions`); then the project is read
+ * again — a converted file is plain text now and is imported by the same loader that held it — and the open finishes
+ * the way it would have: a folder routes and attaches as `openFolder` does, a bundle is adopted, an accepted recovery
+ * adopts its recovered copy. The lines the application of the answers produced are said ahead of the load's own
+ * notices, so a file that could not be converted is named rather than silently held.
+ */
+export async function completeEncodingReview(
+  store: RuntimeStore,
+  pending: PendingEncoding,
+  decisions: readonly EncodingDecision[],
+): Promise<OpenOutcome> {
+  const result = await applyEncodingDecisions(pending.fs, pending.issues, decisions);
+  let loaded: LoadResult;
+  try {
+    loaded = await readProject(pending.fs);
+  } catch (error) {
+    if (!isUnreadableManifest(error)) throw error;
+    // A manifest that can no longer be read — another program touched the folder while the dialog was open — is
+    // offered its recovery again, as the open that read it would have offered.
+    const resume = pending.resume;
+    const folder = resume.kind === 'folder' ? resume.root : resume.kind === 'recovery' ? resume.folder : null;
+    const sessions =
+      resume.kind === 'folder' ? await folderSessionsOf(pending.fs) : resume.sessions;
+    return {
+      kind: 'recover',
+      recovery: await recoveryFor(pending.name, pending.fs, sessions, folder, folder === null ? new Map() : await projectFileDigests(pending.fs)),
+    };
+  }
+  const lines = encodingResultLines(result, loaded.state);
+  const resume = pending.resume;
+  switch (resume.kind) {
+    case 'bundle':
+      return {
+        kind: 'opened',
+        opened: await adopt(
+          store,
+          loaded.state,
+          resume.sessions,
+          [...lines, ...noticesOf(loaded.notices)],
+          droppedFieldsOf(loaded.notices),
+          null,
+          resume.assets,
+          resume.coherence,
+        ),
+      };
+    case 'recovery': {
+      // As the accepted recovery itself would open it: the conversion lines are the whole report, since the recovery
+      // dialog already said which copy was used.
+      const opened = await adopt(store, loaded.state, resume.sessions, lines, [], resume.folder);
+      if (resume.folder !== null) {
+        holdFolderCopy(opened.session, resume.folder, (await readManifestText(pending.fs)) ?? '', await projectFileDigests(pending.fs));
+      }
+      return { kind: 'opened', opened };
+    }
+    case 'folder':
+      return finishFolderOpen(store, resume.root, pending.fs, loaded, await readManifestText(pending.fs), await projectFileDigests(pending.fs), lines);
+  }
 }
 
 /** What the writer has said about a folder save the checks asked about (see `folderSaveVerdict`). */

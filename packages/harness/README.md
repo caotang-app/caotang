@@ -11,32 +11,44 @@ The agent: the tool registry (agent-harness.md §3) and the interaction loop bui
 
 ## Decision: the tool-call wire protocol
 
-**Tool calls travel as JSON inside the reply's content, not as native function calls.**
+**The planner speaks one of two wires, picked per turn by the model's capabilities: native tool calls
+when the gateway's `modelCaps` reports `tools` for the request's profile and model, the JSON-in-text
+envelope otherwise.** The turn's steps, cards and ladder are the same either way; the wire only
+changes how calls and results travel (`src/agent/protocol.ts`, `src/agent/loop.ts`).
 
-The reply is exactly one of two JSON objects (`src/agent/protocol.ts`):
+On the JSON wire the reply is exactly one of two objects in the content:
 
 ```json
 {"steps": [{"tool": "scene.draft", "params": {...}, "expect": "..."}]}
 {"reply": "..."}
 ```
 
-Why this shape, and not native tool calling:
+On the native wire the request declares the tools (`plannerToolDefs`: the registry's callable tools,
+then the external tools the turn has loaded), the reply's `toolCalls` are the plan's steps in order,
+its text is the card's rationale — it fills each step's `expect`, which the wire does not carry — and
+every call is answered by a `tool`-role message keyed by its id. A call that never ran is reported
+not run, so the model always hears back about all of them.
 
-1. **The gateway has no tool fields to use.** `ChatRequest` carries messages, a model, sampling settings
-   and `responseFormat`. It has no `tools` and no `tool_calls`, and adding them means changing the
-   OpenAI-compatible client and probing every endpoint for support.
-2. **The spec's own structured path is `responseFormat`.** provider-gateway §5 says the harness needs JSON
-   for plans; the gateway states the schema in a system message and sends `response_format` only where a
-   probe says the endpoint accepts it. The harness sends `REPLY_SCHEMA_HINT` that way.
+Why this shape:
+
+1. **The wire follows the model, it is never assumed.** `modelCaps` answers what the profile's route
+   can do; a gateway or profile that reports nothing gets the JSON envelope, which every endpoint
+   serves. The declarations are rebuilt for each request, so a tool `tool.search` loads mid-turn is
+   declared on the next one.
+2. **The spec's structured path is `responseFormat`, and only the JSON wire sends it.** provider-gateway
+   §5 says the harness needs JSON for plans; the gateway states the schema in a system message and
+   sends `response_format` only where a probe says the endpoint accepts it. The native wire states the
+   same rules worded for calls, in the same system message (`plannerSystemNative`).
 3. **The check is the registry's own.** A step's shape is checked with `planParams`, and its params with the
-   tool's closed-set schema (`checkParams`). The same declaration produces the schema the planner is shown,
-   so a key the schema lists is a key the validator accepts, and no other.
+   tool's closed-set schema (`checkParams`). The same declaration produces the schema the planner is shown
+   and the one declared on the wire, so a key the schema lists is a key the validator accepts, and no other.
 4. **A model cannot write what only the loop may stage.** Generated prose, synopses and findings are
    *proposals*: the loop drafts them with a separate model call and the card shows them. A step's params
-   never carry a proposal. `parseReply` checks the reply against the plan schema, and the external caller's
-   calls have any proposal removed before a port sees them (`runtime.ts`).
+   never carry a proposal, whichever wire brought the step, and the external caller's calls have any
+   proposal removed before a port sees them (`runtime.ts`).
 5. **A malformed reply is answered in words.** A non-JSON reply, a refused step or a retry all go back to the
-   model as a message naming the shape it should have had. The turn does not fail on a bad reply.
+   model as a message naming the shape it should have had. A call whose arguments do not parse is refused
+   by its call id, the same way. The turn does not fail on a bad reply.
 
 The planner's system message is built from the registry: only tools that are callable and wired are listed,
 each with its risk, description and schema, and `agent.plan` never appears (it is the protocol, not a tool).
@@ -49,7 +61,7 @@ The two system prefixes (`PLANNER_SYSTEM_PREFIX`, `DRAFT_SYSTEM_PREFIX`) are dup
 |---|---|
 | `src/runtime.ts` | `createHarness`: the call path, the tool gate, the port path, plan execution, external callers |
 | `src/plan.ts` | Plans: preflight, execution from a step (`from`), the shared `AskBack` envelope (four codes) |
-| `src/agent/protocol.ts` | The reply shapes, the planner's system message, the model-facing messages |
+| `src/agent/protocol.ts` | The two wire protocols, the reply shapes, the tool declarations, the planner's system messages, the model-facing messages |
 | `src/agent/context.ts` | `ContextPort` and a minimal assembler (L1, L2, L5), with drop reasons, layer budgets and the prompt preview (`previewOf`) |
 | `src/agent/inputs.ts` | The budgeted inputs of `synopsis.fill` (25,000 characters a document) and `continuity.scan` (the last 1,000 characters) |
 | `src/agent/drafting.ts` | Generation for the three model-backed tools, streamed through the gateway, with each finish reason read |

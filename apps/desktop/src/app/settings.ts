@@ -13,6 +13,7 @@
  */
 
 import { DETERMINISTIC_CHECK_IDS, MAX_FINDINGS_CAP, MAX_FINDINGS_DEFAULT, type DeterministicCheckId } from '@caotang/coherence';
+import type { ThinkingLevel } from '@caotang/gateway';
 import type { ContextConfig } from '@caotang/harness';
 import { DEFAULT_RETENTION, resolveRetentionConfig, type RetentionConfig } from '@caotang/store';
 import { EMPTY_MCP_SETTINGS, loadMcpSettings, type McpSettings } from '@caotang/mcp-client';
@@ -72,10 +73,41 @@ export interface ContextSettings {
   readonly layerBudgets: Readonly<Partial<Record<ContextLayerId, number>>>;
 }
 
+/** The thinking levels a role may pin, as the gateway's normalised set (provider-gateway §3). */
+const THINKING_LEVELS: readonly ThinkingLevel[] = ['off', 'low', 'medium', 'high', 'max'];
+
+/**
+ * One role's own assignment (provider-gateway §6): the profile it sends through, and the model and thinking level its
+ * requests default to. A `profileId` that names no current profile is tolerated here — resolution (providers.ts
+ * `resolveForRole`) treats it as "follow" when the named profile is gone.
+ */
+export interface RoleRef {
+  readonly profileId: string;
+  readonly model?: string;
+  readonly thinking?: ThinkingLevel;
+}
+
+/**
+ * The task-role routing: which profile a role's calls run on. `chat` is the root: a request under it resolves to
+ * its `RoleRef`, else to the active profile. `drafting` and `background` may hold `'follow'` — which is also what
+ * an absent entry means — and then resolve through `chat`.
+ */
+export interface RoleSettings {
+  readonly chat?: RoleRef;
+  readonly drafting?: RoleRef | 'follow';
+  readonly background?: RoleRef | 'follow';
+}
+
 export interface AppSettings {
   readonly provider: {
     /** The active profile's id, mirrored from the profile store. `null` when no profile exists yet. */
     readonly activeProfileId: string | null;
+    /**
+     * The task-role routing (provider-gateway §6). Absent reads as every role following — which is also what a
+     * record written before roles existed carries, so no fixup is needed: the previous active profile was already
+     * what 'chat' resolves to, and drafting and background follow it.
+     */
+    readonly roles?: RoleSettings;
   };
   readonly editor: {
     /** The autosave debounce in milliseconds, clamped to 100–5000. */
@@ -120,7 +152,11 @@ export const DEFAULT_SETTINGS: AppSettings = Object.freeze({
 
 /** A patch: any field may be given, and the rest keep their values. A `dailyTargetWords` of 0 clears the target. */
 export interface SettingsPatch {
-  readonly provider?: { readonly activeProfileId?: string | null };
+  /**
+   * `roles` replaces the whole routing record: a role set to `'follow'` follows 'chat' again, and `null` (or an
+   * empty record) clears every assignment, so each role follows the chat/active choice.
+   */
+  readonly provider?: { readonly activeProfileId?: string | null; readonly roles?: RoleSettings | null };
   readonly editor?: { readonly autosaveDebounceMs?: number; readonly focusModeHideRails?: boolean };
   readonly session?: { readonly dailyTargetWords?: number };
   readonly retention?: Partial<RetentionConfig>;
@@ -175,6 +211,45 @@ export function targetOf(value: unknown): number | undefined {
 }
 
 /**
+ * One role entry as it loads: `'follow'` is valid only where the role may follow (drafting and background — 'chat'
+ * has no one to follow but the active profile), and a `RoleRef` keeps the fields it recognises. A malformed entry
+ * is dropped to absent, which is what following reads as.
+ */
+function normalizeRoleRef(value: unknown, followAllowed: boolean): RoleRef | 'follow' | undefined {
+  if (value === 'follow') return followAllowed ? 'follow' : undefined;
+  if (!isRecord(value)) return undefined;
+  const profileId = value['profileId'];
+  if (typeof profileId !== 'string' || profileId.length === 0) return undefined;
+  const model = value['model'];
+  const thinking = value['thinking'];
+  return {
+    profileId,
+    ...(typeof model === 'string' && model.length > 0 ? { model } : {}),
+    ...(typeof thinking === 'string' && (THINKING_LEVELS as readonly string[]).includes(thinking)
+      ? { thinking: thinking as ThinkingLevel }
+      : {}),
+  };
+}
+
+/**
+ * The `provider.roles` record as it loads: unknown keys are ignored, a malformed entry is dropped, and a role left
+ * absent — or set to `'follow'` — follows the chat/active choice. An entry's `profileId` is kept even when no
+ * profile matches it, since resolution tolerates a missing profile. An empty record normalises to absent.
+ */
+export function normalizeRoleSettings(value: unknown): RoleSettings | undefined {
+  if (!isRecord(value)) return undefined;
+  // A mutable shape while it fills; the record that is returned is the schema's `RoleSettings`.
+  const roles: { chat?: RoleRef; drafting?: RoleRef | 'follow'; background?: RoleRef | 'follow' } = {};
+  const chat = normalizeRoleRef(value['chat'], false);
+  if (typeof chat === 'object') roles.chat = chat;
+  for (const role of ['drafting', 'background'] as const) {
+    const ref = normalizeRoleRef(value[role], true);
+    if (ref !== undefined) roles[role] = ref;
+  }
+  return roles.chat === undefined && roles.drafting === undefined && roles.background === undefined ? undefined : roles;
+}
+
+/**
  * Settings as they load from storage or are patched in: unknown keys are ignored, a wrong type or an out-of-range number
  * takes its default, and nothing throws. The result is always a complete `AppSettings`.
  */
@@ -191,10 +266,12 @@ export function normalizeSettings(raw: unknown): AppSettings {
   const days = clampInteger(retention['checkpointDays'], 1, CHECKPOINT_DAYS_MAX, DEFAULT_RETENTION.checkpointDays);
   const target = targetOf(session['dailyTargetWords']);
   const coherence = isRecord(source['coherence']) ? source['coherence'] : {};
+  const roles = normalizeRoleSettings(provider['roles']);
 
   return {
     provider: {
       activeProfileId: typeof provider['activeProfileId'] === 'string' ? provider['activeProfileId'] : null,
+      ...(roles === undefined ? {} : { roles }),
     },
     editor: {
       autosaveDebounceMs: clampInteger(editor['autosaveDebounceMs'], DEBOUNCE_MIN_MS, DEBOUNCE_MAX_MS, DEFAULT_DEBOUNCE_MS),

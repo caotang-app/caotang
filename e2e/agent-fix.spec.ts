@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { fakeEndpoint, useFakeEndpoint } from './endpoint.js';
+import { fakeEndpoint, planThenAnswer, useFakeEndpoint } from './endpoint.js';
 import { binderRow, binderTitle, bodyOf, createProject, firstChapter, idOf, traceNames, waitForSaved } from './support.js';
 
 /**
@@ -135,7 +135,7 @@ test('a finding on dialogue offers no Fix with agent, because the agent drafts s
 });
 
 test('a screenplay scene’s fix card can be approved, because its draft is read in the card', async ({ page }) => {
-  await fakeEndpoint(page, (request) => (request.system.startsWith('You are drafting prose') ? 'MARA' : JSON.stringify({ reply: 'Done.' })));
+  await fakeEndpoint(page, planThenAnswer({ reply: 'Done.' }, 'Done.', 'MARA'));
   await useFakeEndpoint(page);
   await createProject(page, 'Lamp Book');
   // The media entries are on chapters, so the node goes into the manuscript's first chapter.

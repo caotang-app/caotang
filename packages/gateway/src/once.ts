@@ -6,6 +6,9 @@
  * normal assistant message would hand the harness a truncated answer it would accept
  * as complete. A caller abort throws the standard `AbortError` instead, which is what a
  * caller that aborted expects to see.
+ *
+ * The message carries the terminal chunk's `toolCalls` and `reasoning` with it, so a
+ * native-mode caller gets the same reply a streaming caller assembled.
  */
 
 import { abortError, ProviderError } from './errors.js';
@@ -14,9 +17,12 @@ import type { ChatChunk, ChatMessage } from './types.js';
 export async function collectOnce(source: AsyncIterable<ChatChunk>, signal?: AbortSignal): Promise<ChatMessage> {
   let content = '';
   let finish: ChatChunk['finishReason'];
+  let collected: Pick<ChatMessage, 'toolCalls' | 'reasoning'> = {};
   for await (const chunk of source) {
     if (chunk.delta) content += chunk.delta;
     if (chunk.finishReason !== undefined) finish = chunk.finishReason;
+    if (chunk.toolCalls !== undefined) collected = { ...collected, toolCalls: chunk.toolCalls };
+    if (chunk.reasoning !== undefined) collected = { ...collected, reasoning: chunk.reasoning };
   }
 
   if (finish === 'error') {
@@ -27,5 +33,5 @@ export async function collectOnce(source: AsyncIterable<ChatChunk>, signal?: Abo
       { detail: content.slice(0, 300) },
     );
   }
-  return { role: 'assistant', content };
+  return { role: 'assistant', content, ...collected };
 }
