@@ -215,6 +215,50 @@ describe('wrapText', () => {
   });
 });
 
+describe('wrapText and measureText with CJK text', () => {
+  // At 10 points a wide character is one em, 10 units, so a 60-unit line holds 6 of them.
+  it('counts a wide character as one em, and a narrow one as 0.55 em', () => {
+    expect(measureText('草堂', 10)).toBe(20);
+    expect(measureText('ひら', 10)).toBe(20);
+    expect(measureText('한국', 10)).toBe(20);
+    expect(measureText('ab', 10)).toBeCloseTo(11, 9);
+    expect(measureText('a草', 10)).toBeCloseTo(15.5, 9);
+  });
+
+  it('breaks between CJK characters, which have no spaces between words', () => {
+    expect(wrapText('草堂的早晨很安静茶馆还没开门', 60, 10, 3)).toEqual(['草堂的早晨很', '安静茶馆还没', '开门']);
+    expect(wrapText('ひらがなとカタカナです', 60, 10, 2)).toEqual(['ひらがなとカ', 'タカナです']);
+  });
+
+  it('wraps Korean on its spaces, as it is written', () => {
+    expect(wrapText('한국어 문장을 씁니다', 60, 10, 3)).toEqual(['한국어', '문장을', '씁니다']);
+    // A Hangul word longer than the line is still broken, so nothing overflows.
+    expect(wrapText('가나다라마바사아', 60, 10, 2)).toEqual(['가나다라마바', '사아']);
+  });
+
+  it('keeps a closing mark on the line before it, and an opening mark with the text after it', () => {
+    // 。would start the second line; it stays with 很, and 很 moves down with it.
+    expect(wrapText('草堂的早晨很。安静', 60, 10, 2)).toEqual(['草堂的早晨', '很。安静']);
+    // 「 would end the first line; it moves down with 茶.
+    expect(wrapText('他走进了一「茶馆」', 60, 10, 2)).toEqual(['他走进了一', '「茶馆」']);
+  });
+
+  it('wraps mixed text, breaking at spaces and between CJK characters, and keeps every line within the width', () => {
+    const lines = wrapText('Mei 走进茶馆, orders 龙井 tea and waits for the ferry', 60, 10, 6);
+    for (const line of lines) expect(measureText(line, 10)).toBeLessThanOrEqual(60 + 1e-9);
+    expect(lines[0]).toBe('Mei 走进茶');
+    // The comma stays with 馆: it does not start a line.
+    expect(lines[1]?.startsWith('馆,')).toBe(true);
+    expect(lines.join(' ').replace(/\s+/g, '')).toBe('Mei走进茶馆,orders龙井teaandwaitsfortheferry');
+  });
+
+  it('cuts CJK text past the last line with an ellipsis inside the width', () => {
+    const lines = wrapText('山'.repeat(30), 60, 10, 2);
+    expect(lines).toEqual(['山山山山山山', '山山山山山…']);
+    for (const line of lines) expect(measureText(line, 10)).toBeLessThanOrEqual(60 + 1e-9);
+  });
+});
+
 describe('fillTemplate: the exporter’s placeholder rule', () => {
   it('fills the names it has, and leaves a name it does not have as written, so a typo shows', () => {
     expect(fillTemplate('{project} — {storyboard} — {date} {nope}', { project: 'P', storyboard: 'S', date: '2026-10-08' })).toBe(

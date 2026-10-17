@@ -48,6 +48,8 @@ export { flatten, documentLabel, type FlattenOptions, type FlattenResult } from 
 export { CONTACT_SHEET_HEADER, renderMedia, type MediaFile, type MediaOutput, type MediaRequest } from './media.js';
 // The storyboard contact sheet's PDF emitter (storyboard.md §6), over pdf-lib, loaded lazily.
 export { PDF_MIME, containIn, drawContactSheet, fitToWidth, type ContactSheetPdf, type ContactSheetPdfInput } from './render-contact-sheet.js';
+// Its fallback font for text outside Latin script. The Node loader is the subpath `@caotang/exporter/cjk-font-node`.
+export { CJK_FONT_FILE, CJK_FONT_NAME, sfntFromWoff, type FontLoader } from './cjk-font.js';
 // The coherence report's renderers (the one-source compile's Review row). The compile reaches them through `renderMedia`.
 export {
   COHERENCE_JSON_MIME,

@@ -21,6 +21,7 @@
 import { ApplyRefusal, DEFAULT_RECIPE_NAME, type CommandError } from '@caotang/bus';
 import { ArtifactNotFoundError, identifierUrn, type ArtifactFs, type ProjectState } from '@caotang/store';
 import type { AssetRecord } from '@caotang/video-prompt-pack';
+import type { FontLoader } from './cjk-font.js';
 import { createEmitter, splitRendered, type ByteArtifacts, type Emitter, type EmitFailure, type RenderedContents } from './emit.js';
 import {
   ExportUnavailableError,
@@ -86,6 +87,12 @@ export interface ExporterOptions {
    * writer's import put it, the project folder or this page's memory. Without it, the cover is read from `artifacts`.
    */
   readonly readAsset?: (path: string) => Promise<Uint8Array | null>;
+  /**
+   * Reads the PDF fallback font (Noto Sans CJK SC, ./cjk-font.ts) for contact-sheet text outside Latin script. The app fetches
+   * it from its own origin; Node reads it from `@caotang/font-noto-cjk` (`@caotang/exporter/cjk-font-node`). It is called only
+   * when a contact sheet holds such text. Without it, that text is drawn as `?`, and the compile log says so.
+   */
+  readonly loadFallbackFont?: FontLoader;
 }
 
 /** A bus export command as a caller dispatches it: its name, and the params the bus validated for it. */
@@ -320,6 +327,7 @@ export function createExporter(options: ExporterOptions): ExporterService {
       // The contact sheet reads its pictures' bytes when its file renders, from the same store the cover is read from.
       readAsset,
       ...(request.options.pageSize === undefined ? {} : { pageSize: request.options.pageSize }),
+      ...(options.loadFallbackFont === undefined ? {} : { loadFallbackFont: options.loadFallbackFont }),
       at: request.at,
     });
     const notes = [...output.notes];

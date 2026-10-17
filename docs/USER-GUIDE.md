@@ -160,6 +160,8 @@ Choose **New storyboard here** from a folder's menu. A storyboard holds shots, a
 
 **Contact sheet.** To print a storyboard, choose **Compile…** and **Storyboard contact sheet (.pdf)**, with **Only “…”** for one storyboard or **The whole manuscript** for every shot. The PDF lays the shots out as cards in board order, 15 to an A4 page or 12 to a US Letter page. Each card shows the picture, the shot number, the camera details and duration, and the first two lines of the action. Each page's header gives the project, the storyboard, the date, the page number, the number of shots and the animatic total. A shot with no picture shows its caption. **Paper size** in the recipe's settings chooses A4 or US Letter.
 
+Chinese, Japanese and Korean text prints in the Noto Sans CJK font. Lines break between Chinese and Japanese characters, and at spaces in Korean. Caotang loads the font only when a sheet holds such text, and the PDF carries only the characters it uses. Greek and Cyrillic print in the same font.
+
 **The prompt pack.** The **Prompt pack** tab lists each shot's prompt for one **Target model**, the references it sends, and the codex entries those references came from. Each check links back to its field, and **Fix on the board** opens the field. Export the pack as a **JSON pack**, a **Markdown pack** (with a Consistency block for each shot that names a codex entry, listing the entries that sent references and those that sent none) or a **CSV shot list**. Export is held while a row is an error, so no file is written from a prompt the model would refuse. Caotang never sends anything to a video service. You paste the prompts into your own tool.
 
 ## The codex
@@ -330,7 +332,7 @@ With writes allowed, an outside tool can also compile the manuscript, one item, 
 ## What is not in this build yet
 
 - **Exports.** There is no PDF of a screenplay, and no spreadsheet export.
-- **Contact sheet pictures and letters.** The contact sheet does not draw WebP pictures; their cards show the caption. Letters outside the Latin alphabet, such as Chinese, print as `?`. The compile log says when either happens.
+- **Contact sheet pictures and characters.** The contact sheet does not draw WebP pictures; their cards show the caption. Characters that neither of its fonts has, such as emoji, Arabic and Hindi, print as `?`. The compile log names them. Chinese, Japanese and Korean text has no bold, and Han characters take their Simplified Chinese forms.
 - **Final Draft files.** Import and export of `.fdx` files have not been checked against files that Final Draft wrote or opened. The scene numbers and page headers that Caotang writes are not yet confirmed to show in Final Draft.
 - **Word contents.** How Word and LibreOffice handle the contents field in a `.docx` file has not been tested.
 - **The Source tab.** Only Enter and Tab have a meaning on the Source tab. There is no element menu. The Pages view is a read-only preview.

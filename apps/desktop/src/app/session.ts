@@ -102,6 +102,7 @@ import { dropDanglingImages, shotCommandPort } from '@caotang/storyboard';
 import { createAgentPorts, createHarness, type Harness } from '@caotang/harness';
 import type { McpClient } from '@caotang/mcp-client';
 
+import { loadCjkFontOverHttp } from './cjk-font.js';
 import { CodexMentions } from './codex-model.js';
 import { ExportStore } from './exports.js';
 import { ProjectAssets, coverFileHeld } from './project-assets.js';
@@ -1169,6 +1170,8 @@ function exporterFor(
     metadata: (state) => exportMetadataOf(state.manifest.project),
     readAsset: (path) => assets.readBytes(path),
     assets: images,
+    // The contact sheet's font for text outside Latin script, fetched from this origin only when a sheet needs it.
+    loadFallbackFont: loadCjkFontOverHttp,
   });
 }
 

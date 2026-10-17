@@ -56,6 +56,7 @@ import {
 } from './coherence-report.js';
 import type { RenderedContents } from './emit.js';
 import { flatten, type FlattenResult } from './flatten.js';
+import type { FontLoader } from './cjk-font.js';
 import { PDF_MIME, drawContactSheet } from './render-contact-sheet.js';
 import { fileStem, suffixName } from './template.js';
 import type { FlatBlock, MediaFormat } from './types.js';
@@ -100,6 +101,8 @@ export interface MediaRequest {
   readonly pageSize?: PageSize;
   /** The moment the compile ran, in ms. The contact sheet's PDF dates are set from it. Absent is now. */
   readonly at?: number;
+  /** Reads the contact sheet's fallback font for text outside Latin script (./cjk-font.ts). Only `contact-sheet-pdf` reads it. */
+  readonly loadFallbackFont?: FontLoader;
 }
 
 /**
@@ -514,6 +517,7 @@ function contactSheetOutput(request: MediaRequest): MediaOutput {
             },
             title,
             ...(request.author.trim() === '' ? {} : { author: request.author }),
+            ...(request.loadFallbackFont === undefined ? {} : { loadFallbackFont: request.loadFallbackFont }),
             at,
           }),
       },

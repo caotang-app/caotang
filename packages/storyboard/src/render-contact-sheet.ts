@@ -21,8 +21,15 @@
  * board header's three numbers).
  *
  * Text width is estimated, not measured. Helvetica averages about half an em per character, and the
- * layout uses {@link SHEET_LAYOUT}`.charWidthEm` of 0.55 so a wrapped line stays inside its card. An
- * estimate that errs wide is the safe error here: it wraps early rather than overflow.
+ * layout uses {@link SHEET_LAYOUT}`.charWidthEm` of 0.55 so a wrapped line stays inside its card. A wide
+ * character (Chinese, Japanese kana, Korean Hangul, full-width forms) counts one em
+ * ({@link SHEET_LAYOUT}`.wideCharWidthEm`), the width the PDF's CJK font gives it. An estimate that errs wide
+ * is the safe error here: it wraps early rather than overflow, and the emitter cuts with the real font.
+ *
+ * Lines break at spaces, and between two Chinese or Japanese characters, since those scripts put no spaces
+ * between words. Korean is written with spaces, so a Hangul word breaks at its spaces, as Latin does. A closing
+ * mark (。、，」 and the like) stays on the line before it, and an opening mark (「（ and the like) on the line
+ * after it.
  */
 
 import { nodeById, type ArtifactFs, type ProjectState } from '@caotang/store';
@@ -62,31 +69,114 @@ export const SHEET_LAYOUT = {
   /** The header's second line: the shot count and the animatic total. */
   summaryFontSize: 8,
   charWidthEm: 0.55,
+  /** The width of a wide (East Asian) character, in em: the advance the PDF's CJK font gives it. */
+  wideCharWidthEm: 1,
   chipHeight: 12,
 } as const;
 
 export const ELLIPSIS = '…';
 
+/**
+ * Whether a character is wide: drawn one em across, as East Asian scripts are. The ranges are the Wide and Fullwidth
+ * blocks of Unicode's East Asian Width property, by block: Hangul Jamo, the CJK radicals to Yi (with kana, bopomofo and
+ * the unified ideographs), Hangul syllables, the compatibility ideographs, the vertical and small forms, the full-width
+ * forms, and the supplementary ideographic planes.
+ */
+export function isWide(char: string): boolean {
+  const code = char.codePointAt(0) ?? 0;
+  return (
+    (code >= 0x1100 && code <= 0x115f) ||
+    (code >= 0x2e80 && code <= 0xa4cf && code !== 0x303f) ||
+    (code >= 0xa960 && code <= 0xa97f) ||
+    (code >= 0xac00 && code <= 0xd7a3) ||
+    (code >= 0xf900 && code <= 0xfaff) ||
+    (code >= 0xfe10 && code <= 0xfe19) ||
+    (code >= 0xfe30 && code <= 0xfe6f) ||
+    (code >= 0xff00 && code <= 0xff60) ||
+    (code >= 0xffe0 && code <= 0xffe6) ||
+    (code >= 0x20000 && code <= 0x3fffd)
+  );
+}
+
+/** Marks that must not start a line: closing brackets and quotes, and the comma, full stop and other marks after a word. */
+const NO_LINE_START = new Set([...'、。，．：；！？）」』】〕〉》〗〙〛｝］〟’”・ー々ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ…‥']);
+/** Narrow marks that must not start a line when they follow a wide character: `走进茶馆, orders` keeps the comma with 馆. */
+const NARROW_NO_LINE_START = new Set([...',.;:!?)]}%']);
+/** Marks that must not end a line: opening brackets and quotes. */
+const NO_LINE_END = new Set([...'（「『【〔〈《〖〘〚｛［〝‘“']);
+
 /** Estimated width of a run of text at a font size. See the header on why this is an estimate. */
 export function measureText(text: string, fontSize: number): number {
-  return [...text].length * fontSize * SHEET_LAYOUT.charWidthEm;
+  let ems = 0;
+  for (const char of text) ems += isWide(char) ? SHEET_LAYOUT.wideCharWidthEm : SHEET_LAYOUT.charWidthEm;
+  return ems * fontSize;
 }
 
-function charsPerLine(maxWidth: number, fontSize: number): number {
-  return Math.max(1, Math.floor(maxWidth / (fontSize * SHEET_LAYOUT.charWidthEm)));
+/** A wrapped line may be this much wider than its box, for floating-point error, and still fit. */
+const FIT_EPSILON = 1e-6;
+
+function fits(text: string, maxWidth: number, fontSize: number): boolean {
+  return measureText(text, fontSize) <= maxWidth + FIT_EPSILON;
 }
 
-function cutTo(text: string, length: number): string {
-  return [...text].slice(0, length).join('');
+/** Hangul: wide, but a Korean word breaks at its spaces, not between its syllables. */
+function isHangul(char: string): boolean {
+  const code = char.codePointAt(0) ?? 0;
+  return (code >= 0x1100 && code <= 0x11ff) || (code >= 0x3130 && code <= 0x318f) || (code >= 0xa960 && code <= 0xa97f) || (code >= 0xac00 && code <= 0xd7af);
 }
 
 /**
- * Wraps text to a width in at most `maxLines` lines. Words wrap on spaces, a word longer than a line
- * is broken, and text past the last line is cut with an ellipsis on that line, so a reader sees that
- * more follows. Deterministic: the same text, width and size always give the same lines.
+ * The pieces a word may break between. A run of other characters is one piece; each Chinese or Japanese character is a piece
+ * of its own, so a line may break between any two of them. A mark that must not start a line joins the piece before it, and
+ * one that must not end a line joins the piece after it.
+ */
+function piecesOf(word: string): string[] {
+  const raw: string[] = [];
+  let narrow = '';
+  for (const char of word) {
+    if ((isWide(char) && !isHangul(char)) || NO_LINE_START.has(char) || NO_LINE_END.has(char)) {
+      if (narrow !== '') raw.push(narrow);
+      narrow = '';
+      raw.push(char);
+    } else {
+      narrow += char;
+    }
+  }
+  if (narrow !== '') raw.push(narrow);
+
+  const pieces: string[] = [];
+  let carry = '';
+  for (const piece of raw) {
+    if (NO_LINE_END.has(piece)) {
+      carry += piece;
+    } else if ((NO_LINE_START.has(piece) || NARROW_NO_LINE_START.has([...piece][0] ?? '')) && pieces.length > 0 && carry === '') {
+      pieces[pieces.length - 1] += piece;
+    } else {
+      pieces.push(carry + piece);
+      carry = '';
+    }
+  }
+  if (carry !== '') {
+    if (pieces.length > 0) pieces[pieces.length - 1] += carry;
+    else pieces.push(carry);
+  }
+  return pieces;
+}
+
+/** The longest start of `text` that fits the width, at least one character, so a line always moves on. */
+function longestFit(text: string, maxWidth: number, fontSize: number): string {
+  const chars = [...text];
+  let keep = 1;
+  while (keep < chars.length && fits(chars.slice(0, keep + 1).join(''), maxWidth, fontSize)) keep += 1;
+  return chars.slice(0, keep).join('');
+}
+
+/**
+ * Wraps text to a width in at most `maxLines` lines. Words wrap on spaces and between wide characters (see the header), a
+ * piece longer than a line is broken, and text past the last line is cut with an ellipsis on that line, so a reader sees
+ * that more follows. Deterministic: the same text, width and size always give the same lines.
  */
 export function wrapText(text: string, maxWidth: number, fontSize: number, maxLines: number): string[] {
-  const capacity = charsPerLine(maxWidth, fontSize);
   const lines: string[] = [];
   let line = '';
   const flush = (): void => {
@@ -95,26 +185,30 @@ export function wrapText(text: string, maxWidth: number, fontSize: number, maxLi
   };
 
   for (const word of text.split(/\s+/).filter((part) => part !== '')) {
-    let rest = word;
-    while ([...rest].length > capacity) {
-      flush();
-      lines.push(cutTo(rest, capacity));
-      rest = [...rest].slice(capacity).join('');
-    }
-    const candidate = line === '' ? rest : `${line} ${rest}`;
-    if ([...candidate].length <= capacity) {
-      line = candidate;
-    } else {
-      flush();
-      line = rest;
+    let joiner = line === '' ? '' : ' ';
+    for (const piece of piecesOf(word)) {
+      let rest = piece;
+      if (fits(`${line}${joiner}${rest}`, maxWidth, fontSize)) {
+        line = `${line}${joiner}${rest}`;
+      } else {
+        flush();
+        while (!fits(rest, maxWidth, fontSize)) {
+          const head = longestFit(rest, maxWidth, fontSize);
+          lines.push(head);
+          rest = rest.slice(head.length);
+        }
+        line = rest;
+      }
+      joiner = '';
     }
   }
   flush();
 
   if (lines.length <= maxLines) return lines;
   const kept = lines.slice(0, maxLines);
-  const last = kept[maxLines - 1] ?? '';
-  kept[maxLines - 1] = `${cutTo(last, Math.max(0, capacity - 1))}${ELLIPSIS}`;
+  const chars = [...(kept[maxLines - 1] ?? '')];
+  while (chars.length > 0 && !fits(`${chars.join('')}${ELLIPSIS}`, maxWidth, fontSize)) chars.pop();
+  kept[maxLines - 1] = `${chars.join('')}${ELLIPSIS}`;
   return kept;
 }
 
