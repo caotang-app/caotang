@@ -253,6 +253,9 @@ function recipeOptions(o: NonNullable<ExportRecipe['options']>): string {
   if (typeof limit === 'number' && Number.isSafeInteger(limit) && limit >= 1 && limit <= CHAR_LIMIT_MAX) {
     pairs.push(['charLimit', String(limit)]);
   }
+  const numbers: unknown = o.sceneNumbers;
+  if (numbers === 'off' || numbers === 'left' || numbers === 'right' || numbers === 'both') pairs.push(['sceneNumbers', str(numbers)]);
+  if (typeof o.continued === 'boolean') pairs.push(['continued', String(o.continued)]);
   return pairs.length === 0 ? '{}' : oneLine(pairs);
 }
 

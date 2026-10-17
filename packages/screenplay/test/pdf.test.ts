@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   createPdfRenderer,
   importFountainScript,
+  layoutPdf,
+  loadCourierPrime,
   paginate,
   parseFountain,
   pdfString,
@@ -162,6 +164,37 @@ describe('createPdfRenderer', () => {
     const blocks = blocksOf(SCRIPT_ONE_ACT);
     const blob = await createPdfRenderer().emit(blocks, { title: 'T' });
     expect(blob.type).toBe('application/pdf');
-    expect(blob.size).toBe(renderPdf(blocks, { title: 'T' }).bytes.length);
+    expect(blob.size).toBe(renderPdf(blocks, { title: 'T' }, await loadCourierPrime()).bytes.length);
+  });
+
+  it('embeds Courier Prime in every file it emits', async () => {
+    const pdf = decode(new Uint8Array(await (await createPdfRenderer().emit(blocksOf(SCRIPT_ONE_ACT), { title: 'T' })).arrayBuffer()));
+    expect(pdf).toContain('/BaseFont /CourierPrime');
+    expect(pdf).toContain('/FontFile2 ');
+    expect(pdf).not.toContain('/BaseFont /Courier ');
+  });
+});
+
+describe('layoutPdf — what the fonts cannot print', () => {
+  it('says which characters print as a question mark, once each', () => {
+    const { notes } = layoutPdf(blocksOf(text('INT. 草堂 - DAY', '', 'She reads 草堂 aloud: ꙮ 🫩 ꙮ.')), { title: 'T' });
+    expect(notes).toEqual(['pdf: neither Courier Prime nor the CJK or emoji fallback font can print these 2 characters, so they are printed as "?": ꙮ 🫩']);
+  });
+
+  it('says nothing of the CJK characters the fallback font prints', () => {
+    const layout = layoutPdf(blocksOf(text('INT. 草堂 - DAY', '', 'She reads 草堂 aloud.')), { title: 'T' });
+    expect(layout.notes).toEqual([]);
+    expect(layout.fallbackCharacters).toEqual(['草', '堂']);
+  });
+
+  it('says nothing when every character prints', () => {
+    expect(layoutPdf(blocksOf(text('INT. CAFÉ - DAY', '', 'Crème brûlée — “twice”.')), { title: 'T' }).notes).toEqual([]);
+  });
+
+  it('counts the script pages apart from the title page', () => {
+    const blocks: FlatBlock[] = [{ kind: 'frontmatter', fmKind: 'titlepage' }, ...blocksOf(SCRIPT_ONE_ACT)];
+    const layout = layoutPdf(blocks, { title: 'T', author: 'A' });
+    expect(layout.pages[0]?.kind).toBe('title');
+    expect(layout.scriptPageCount).toBe(layout.pages.length - 1);
   });
 });

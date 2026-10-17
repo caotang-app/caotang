@@ -3,8 +3,8 @@
  *
  * The compile is `export.compile` (the whole manuscript) or `export.compileSelection` (the item the binder has selected),
  * dispatched through the bus, so it is in the activity log, its undo removes the file (exporter.md §5), and it is one row of
- * the compile log. A recipe supplies the options a compile reads: the title page, the contents, the author and, for the dialogue
- * table, the character limit. Those controls are saved to the recipe (`recipe.save`), so a change is undoable like any other, and
+ * the compile log. A recipe supplies the options a compile reads: the title page, the contents, the author, the character limit
+ * for the dialogue table, and the scene numbers and continuation marks for the screenplay PDF. Those controls are saved to the recipe (`recipe.save`), so a change is undoable like any other, and
  * the compile names the recipe, for the whole manuscript or for the one item.
  *
  * Every format the exporter ships is offered, the book formats first and the media formats after. A compile that writes more
@@ -21,7 +21,7 @@ import {
   type ExportRecipe,
 } from '@caotang/exporter';
 import { loadZipEngine } from '@caotang/store';
-import { CHAR_LIMIT_MAX } from '@caotang/bus';
+import { CHAR_LIMIT_MAX, SCENE_NUMBER_OPTIONS, type SceneNumbersOption } from '@caotang/bus';
 
 import { downloadBytes } from '../app/download.js';
 import { recipeChoicesOf } from '../app/recipe-choices.js';
@@ -59,6 +59,7 @@ const FORMAT_GROUPS: readonly { readonly name: string; readonly formats: readonl
     formats: [
       { format: 'fountain', label: 'Fountain (.fountain)', help: 'The screenplay as plain Fountain text, for Beat or Highland.' },
       { format: 'fdx', label: 'Final Draft (.fdx)', help: 'The screenplay in Final Draft’s XML.' },
+      { format: 'pdf', label: 'Screenplay PDF (.pdf)', help: 'The screenplay on US Letter pages in Courier Prime, ready to print.' },
       { format: 'ink-json', label: 'Ink story (.ink.json)', help: 'The dialogue compiled for a game engine that reads Ink. One file per story.' },
       { format: 'dialogue-csv', label: 'Dialogue table (.csv)', help: 'Each spoken line with its id, speaker and text, for translation or recording.' },
       { format: 'shot-list-csv', label: 'Shot list (.csv)', help: 'Each shot in order, with its size, angle, movement and duration.' },
@@ -81,6 +82,26 @@ interface ShownOptions {
   readonly author: string;
   /** The dialogue table's character limit; `undefined` is no limit (dialogue-narrative.md §4). */
   readonly charLimit: number | undefined;
+  /** The screenplay PDF's scene numbers (screenplay.md §5.3). Off unless the recipe sets them. */
+  readonly sceneNumbers: SceneNumbersOption;
+  /** `(MORE)` and `(CONT'D)` where the screenplay PDF splits a speech. On unless the recipe turns it off. */
+  readonly continued: boolean;
+}
+
+/** The scene-number choices, in the words the dialog shows. */
+const SCENE_NUMBER_LABELS: Readonly<Record<SceneNumbersOption, string>> = {
+  off: 'Off',
+  left: 'Left margin',
+  right: 'Right margin',
+  both: 'Both margins',
+};
+
+/** The screenplay PDF's options as recipe options. The defaults (off, on) are left out, so a recipe saved without them stays as it was. */
+function pdfOptionsOf(shown: ShownOptions): { sceneNumbers?: SceneNumbersOption; continued?: boolean } {
+  return {
+    ...(shown.sceneNumbers === 'off' ? {} : { sceneNumbers: shown.sceneNumbers }),
+    ...(shown.continued ? {} : { continued: false }),
+  };
 }
 
 function shownOptionsOf(recipe: ExportRecipe | undefined): ShownOptions {
@@ -89,6 +110,8 @@ function shownOptionsOf(recipe: ExportRecipe | undefined): ShownOptions {
     toc: recipe?.options?.toc ?? DEFAULT_TEMPLATE.toc,
     author: recipe?.options?.author ?? '',
     charLimit: recipe?.options?.charLimit,
+    sceneNumbers: recipe?.options?.sceneNumbers ?? 'off',
+    continued: recipe?.options?.continued ?? true,
   };
 }
 
@@ -142,6 +165,7 @@ export function ExportDialog({
         toc: next.toc,
         ...(author === '' ? {} : { author }),
         ...(next.charLimit === undefined ? {} : { charLimit: next.charLimit }),
+        ...pdfOptionsOf(next),
       },
     });
     if (outcome.ok) setNotice(null);
@@ -165,6 +189,7 @@ export function ExportDialog({
         toc: shown.toc,
         ...(author === '' ? {} : { author }),
         ...(shown.charLimit === undefined ? {} : { charLimit: shown.charLimit }),
+        ...pdfOptionsOf(shown),
       },
     });
     if (outcome.ok) {
@@ -344,6 +369,31 @@ export function ExportDialog({
               onInvalid={(text) => setNotice({ text, tone: 'error' })}
             />
           ) : null}
+          {format === 'pdf' ? (
+            <>
+              <label className="export-field">
+                <span className="export-option-label">Scene numbers</span>
+                <select
+                  value={shown.sceneNumbers}
+                  onChange={(event) => saveOptions({ ...shown, sceneNumbers: event.target.value as SceneNumbersOption })}
+                >
+                  {SCENE_NUMBER_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {SCENE_NUMBER_LABELS[option]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="export-option">
+                <input
+                  type="checkbox"
+                  checked={shown.continued}
+                  onChange={(event) => saveOptions({ ...shown, continued: event.target.checked })}
+                />
+                <span className="export-option-label">(MORE) and (CONT’D) where a speech crosses a page</span>
+              </label>
+            </>
+          ) : null}
         </fieldset>
 
         <div className="export-field export-save-new">
@@ -482,6 +532,7 @@ function holdsOf(digest: ExportCommandDigest): string {
   switch (digest.format) {
     case 'fountain':
     case 'fdx':
+    case 'pdf':
       return `${countPhrase(digest.sceneCount, 'scene')} in ${countPhrase(digest.chapterCount, 'section')}, ${countPhrase(digest.wordCount, 'word')}`;
     case 'ink-json':
       return countPhrase(digest.sceneCount, 'container');
