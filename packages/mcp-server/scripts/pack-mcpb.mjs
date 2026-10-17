@@ -12,9 +12,10 @@
  *
  * The steps, each of which stops the pack when it fails:
  *  1. Stage `dist/mcpb/`: `server/caotang-mcp.mjs` (the built bundle), `manifest.json`, `THIRD-PARTY-NOTICES.md` for this
- *     bundle's production dependencies (tools/third-party-notices.mjs), and the repository's LICENSE. The PDF fallback font
- *     (`@caotang/font-noto-cjk`) is staged as `server/fonts/NotoSansCJKsc-Regular.woff`, where the exporter's Node loader
- *     looks first (packages/exporter/src/cjk-font-node.ts).
+ *     bundle's production dependencies (tools/third-party-notices.mjs), and the repository's LICENSE. The PDF fallback fonts
+ *     (`@caotang/font-noto-cjk` and `@caotang/font-noto-emoji`) are staged in `server/fonts/`, as
+ *     `NotoSansCJKsc-Regular.woff` and `NotoEmoji-Regular.woff`, where the exporter's Node loaders look first
+ *     (packages/exporter/src/fallback-fonts-node.ts).
  *  2. Check the manifest against what the bundle is: the version, the entry point, the settings the arguments read, and the
  *     write switch. Writes are not put on the command line, because a bundle cannot pass a flag conditionally; the manifest
  *     sets `CAOTANG_MCP_ALLOW_WRITES` from the user's "Allow changes" setting instead.
@@ -25,7 +26,7 @@
 import { spawnSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const PACKAGE_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -36,8 +37,8 @@ export const BUNDLE_ENTRY = 'server/caotang-mcp.mjs';
 export const BUNDLE_MANIFEST = 'manifest.json';
 export const BUNDLE_NOTICES = 'THIRD-PARTY-NOTICES.md';
 export const BUNDLE_LICENSE = 'LICENSE';
-/** The PDF fallback font, beside the server bundle. */
-export const BUNDLE_FONT = 'server/fonts/NotoSansCJKsc-Regular.woff';
+/** The folder of the PDF fallback fonts, beside the server bundle. */
+export const BUNDLE_FONTS = 'server/fonts';
 
 /** The one switch a manifest must carry for writes: the setting it reads, and the variable it sets from it. */
 export const WRITE_SETTING = 'allow_writes';
@@ -103,7 +104,7 @@ export function manifestProblems(manifest, bundle) {
  * Writes the staged bundle folder. The bundle and the notices are copied in; the manifest is checked before it is copied,
  * so a wrong manifest never reaches the staging folder.
  *
- * @param {{ outDir: string; serverBundle: string; manifestPath: string; version: string; notices: string; license: string; font?: string }} input
+ * @param {{ outDir: string; serverBundle: string; manifestPath: string; version: string; notices: string; license: string; fonts?: readonly string[] }} input
  * @returns {{ staging: string; files: string[] }}
  */
 export function stageBundle(input) {
@@ -119,10 +120,11 @@ export function stageBundle(input) {
   writeFileSync(join(staging, BUNDLE_NOTICES), input.notices);
   copyFileSync(input.license, join(staging, BUNDLE_LICENSE));
   const files = [BUNDLE_ENTRY, BUNDLE_MANIFEST, BUNDLE_NOTICES, BUNDLE_LICENSE];
-  if (input.font !== undefined) {
-    mkdirSync(dirname(join(staging, BUNDLE_FONT)), { recursive: true });
-    copyFileSync(input.font, join(staging, BUNDLE_FONT));
-    files.push(BUNDLE_FONT);
+  for (const font of input.fonts ?? []) {
+    const staged = `${BUNDLE_FONTS}/${basename(font)}`;
+    mkdirSync(join(staging, BUNDLE_FONTS), { recursive: true });
+    copyFileSync(font, join(staging, staged));
+    files.push(staged);
   }
   return { staging, files };
 }
@@ -182,7 +184,10 @@ async function main() {
     version,
     notices,
     license: join(REPO_ROOT, 'LICENSE'),
-    font: createRequire(import.meta.url).resolve('@caotang/font-noto-cjk/NotoSansCJKsc-Regular.woff'),
+    fonts: [
+      createRequire(import.meta.url).resolve('@caotang/font-noto-cjk/NotoSansCJKsc-Regular.woff'),
+      createRequire(import.meta.url).resolve('@caotang/font-noto-emoji/NotoEmoji-Regular.woff'),
+    ],
   });
   process.stdout.write(`packed ${result.bundle}\n${result.info}`);
 }

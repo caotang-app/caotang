@@ -226,6 +226,9 @@ importers:
       '@caotang/font-noto-cjk':
         specifier: workspace:*
         version: link:../../vendor/noto-sans-cjk
+      '@caotang/font-noto-emoji':
+        specifier: workspace:*
+        version: link:../../vendor/noto-emoji
       '@caotang/furniture':
         specifier: workspace:*
         version: link:../../packages/furniture
@@ -510,6 +513,9 @@ importers:
       '@caotang/font-noto-cjk':
         specifier: workspace:*
         version: link:../../vendor/noto-sans-cjk
+      '@caotang/font-noto-emoji':
+        specifier: workspace:*
+        version: link:../../vendor/noto-emoji
       '@caotang/screenplay':
         specifier: workspace:*
         version: link:../screenplay
@@ -641,6 +647,9 @@ importers:
       '@caotang/font-noto-cjk':
         specifier: workspace:*
         version: link:../../vendor/noto-sans-cjk
+      '@caotang/font-noto-emoji':
+        specifier: workspace:*
+        version: link:../../vendor/noto-emoji
       '@caotang/harness':
         specifier: workspace:*
         version: link:../harness
@@ -701,6 +710,8 @@ importers:
       '@caotang/store':
         specifier: workspace:*
         version: link:../store
+
+  vendor/noto-emoji: {}
 
   vendor/noto-sans-cjk: {}
 

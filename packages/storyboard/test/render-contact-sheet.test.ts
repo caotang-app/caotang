@@ -15,6 +15,8 @@ import {
   addShotNode,
   fillTemplate,
   importImage,
+  emojiStyleOf,
+  graphemesOf,
   measureText,
   paginate,
   wrapText,
@@ -255,6 +257,44 @@ describe('wrapText and measureText with CJK text', () => {
   it('cuts CJK text past the last line with an ellipsis inside the width', () => {
     const lines = wrapText('山'.repeat(30), 60, 10, 2);
     expect(lines).toEqual(['山山山山山山', '山山山山山…']);
+    for (const line of lines) expect(measureText(line, 10)).toBeLessThanOrEqual(60 + 1e-9);
+  });
+});
+
+describe('emoji in the plan: one unit per grapheme cluster', () => {
+  // At 10 points an emoji is 1.3 em, 13 units, so a 60-unit line holds 4 of them.
+  const FAMILY = '👨‍👩‍👧‍👦';
+
+  it('says which clusters are emoji, by Unicode presentation', () => {
+    for (const emoji of ['🎬', FAMILY, '🧑🏽‍💻', '👍🏽', '🇩🇪', '1️⃣', '#️⃣', '🏴󠁧󠁢󠁳󠁣󠁴󠁿', '❤️', '🏳️‍🌈']) expect(emojiStyleOf(emoji), emoji).toBe('emoji');
+    // Default text presentation, or VS15: a text font is tried first.
+    for (const pictograph of ['☺', '✌', '❤', '☺︎', '🎬︎']) expect(emojiStyleOf(pictograph), pictograph).toBe('text');
+    // Digits, Latin-1's © and ®, letters and CJK are no emoji.
+    for (const text of ['1', '#', '©', '®', 'a', 'é', '草', '?']) expect(emojiStyleOf(text), text).toBeNull();
+  });
+
+  it('segments a text into grapheme clusters, so a sequence is one unit', () => {
+    expect(graphemesOf(`a${FAMILY}🇩🇪1️⃣e\u0301`)).toEqual(['a', FAMILY, '🇩🇪', '1️⃣', 'e\u0301']);
+  });
+
+  it('counts an emoji as 1.3 em however many code points it has', () => {
+    for (const emoji of ['🎬', FAMILY, '👍🏽', '🇩🇪', '1️⃣', '🏴󠁧󠁢󠁳󠁣󠁴󠁿']) expect(measureText(emoji, 10)).toBeCloseTo(13, 9);
+    expect(measureText(`ab${FAMILY}`, 10)).toBeCloseTo(24, 9);
+    // © stays a narrow Latin character.
+    expect(measureText('©', 10)).toBeCloseTo(5.5, 9);
+  });
+
+  it('breaks between emoji, never inside one, and keeps every line within the width', () => {
+    const lines = wrapText(FAMILY.repeat(10), 60, 10, 3);
+    expect(lines).toEqual([FAMILY.repeat(4), FAMILY.repeat(4), FAMILY.repeat(2)]);
+    expect(wrapText(`Go ${'🇩🇪'.repeat(6)}`, 60, 10, 3)).toEqual(['Go 🇩🇪🇩🇪🇩🇪', '🇩🇪🇩🇪🇩🇪']);
+    for (const line of wrapText(`Cut to ${FAMILY}${'👍🏽'.repeat(5)} then 1️⃣#️⃣`, 60, 10, 6)) expect(measureText(line, 10)).toBeLessThanOrEqual(60 + 1e-9);
+  });
+
+  it('cuts emoji past the last line with an ellipsis, dropping whole clusters', () => {
+    const lines = wrapText('🏴󠁧󠁢󠁳󠁣󠁴󠁿'.repeat(20), 60, 10, 2);
+    // Four flags and the ellipsis (4 × 13 + 5.5) still fit the 60-unit line.
+    expect(lines).toEqual(['🏴󠁧󠁢󠁳󠁣󠁴󠁿'.repeat(4), `${'🏴󠁧󠁢󠁳󠁣󠁴󠁿'.repeat(4)}…`]);
     for (const line of lines) expect(measureText(line, 10)).toBeLessThanOrEqual(60 + 1e-9);
   });
 });

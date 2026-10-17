@@ -20,8 +20,14 @@
  * fallback for the rest. The font is read through the input's `loadFallbackFont`, and only when a run needs it, so a
  * Latin-only sheet never reads it and its bytes do not change.
  *
- * A character neither font has (an emoji, Arabic, Devanagari) is drawn as `?`, and the compile log names each one. So is
- * every character outside WinAnsi when the fallback font cannot be read, and the log says why.
+ * Emoji are set in Noto Emoji (`./emoji-font.ts`), monochrome, the last fallback: a cluster in emoji presentation (🎬, ❤️,
+ * 👨‍👩‍👧, 🇩🇪, 1️⃣, 👍🏽) goes to it directly; a pictograph whose default is text (☺, ✌) tries Helvetica and Noto Sans CJK first.
+ * Each emoji is laid out through the font's ligatures as one grapheme cluster, so a sequence is measured, cut and drawn as one
+ * unit, and the ToUnicode map gives the exact sequence back when it is copied. The emoji font is read only when a sheet holds
+ * an emoji, through the input's `loadEmojiFont`.
+ *
+ * A character no font has (Arabic, Devanagari, an emoji newer than Emoji 15.1) is drawn as `?`, and the compile log names each
+ * one. So is every character a font would have drawn when that font cannot be read, and the log says why.
  *
  * ## Pictures
  *
@@ -30,9 +36,10 @@
  */
 
 import type * as PdfLib from 'pdf-lib';
-import { sniffImage, type PlacedCard, type PlacedText, type SheetPlan } from '@caotang/storyboard';
+import { emojiStyleOf, graphemesOf, sniffImage, type PlacedCard, type PlacedText, type SheetPlan } from '@caotang/storyboard';
 
 import { CJK_FONT_NAME, sfntFromWoff, type FontLoader } from './cjk-font.js';
+import { EMOJI_FONT_NAME, EmojiEmbedding, EmojiFace, type EmojiGlyph, type FontkitFont } from './emoji-font.js';
 
 export const PDF_MIME = 'application/pdf';
 
@@ -52,6 +59,11 @@ export interface ContactSheetPdfInput {
    * text. Without it, that text is drawn as `?` and the log says so.
    */
   readonly loadFallbackFont?: FontLoader;
+  /**
+   * Reads the emoji font (Noto Emoji, `./emoji-font.ts`). Called at most once, and only when the sheet holds an emoji. Without
+   * it, emoji are drawn as `?` and the log says so.
+   */
+  readonly loadEmojiFont?: FontLoader;
 }
 
 export interface ContactSheetPdf {
@@ -73,17 +85,20 @@ const FRAME_LINE: Shade = { r: 0.7, g: 0.7, b: 0.7 };
 const CHIP_FILL: Shade = { r: 0.15, g: 0.15, b: 0.15 };
 const PAPER: Shade = { r: 1, g: 1, b: 1 };
 
-/** One piece of a line, in one font. */
-interface TextRun {
+/** The fonts a piece of text can be set in: Helvetica (or Helvetica-Bold), Noto Sans CJK, Noto Emoji. */
+type Face = 'base' | 'cjk' | 'emoji';
+
+/** One grapheme cluster of a line, resolved to the font that draws it. An emoji carries the glyphs its layout gave. */
+interface Piece {
   readonly text: string;
-  readonly fallback: boolean;
+  readonly face: Face;
+  readonly glyphs?: readonly EmojiGlyph[];
 }
 
 /** The character clusters of a text: a letter with its combining marks, an emoji with its modifiers, as a reader sees one character. */
-function clustersOf(text: string): string[] {
-  const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
-  return [...segmenter.segment(text)].map((part) => part.segment);
-}
+const clustersOf = graphemesOf;
+
+const VS15 = 0xfe0e;
 
 /** Variation selectors and the zero-width joiner: dropped from a cluster when the fallback font has no glyph for them. */
 function isJoinerOrSelector(code: number): boolean {
@@ -121,7 +136,8 @@ export function containIn(
  * states is the page count the file has.
  */
 export async function drawContactSheet(input: ContactSheetPdfInput): Promise<ContactSheetPdf> {
-  const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib');
+  const lib = await import('pdf-lib');
+  const { PDFDocument, StandardFonts, rgb } = lib;
   const color = (c: Shade): PdfLib.RGB => rgb(c.r, c.g, c.b);
 
   const pdf = await PDFDocument.create({ updateMetadata: false });
@@ -130,6 +146,11 @@ export async function drawContactSheet(input: ContactSheetPdfInput): Promise<Con
   const notes: string[] = [];
   /** What WinAnsi encodes: the same set for Helvetica and Helvetica-Bold. */
   const builtIn = new Set(regular.getCharacterSet());
+
+  // The fonts are imported once, the first time a fallback font is needed.
+  let fontkitModule: Promise<{ default: { create(bytes: Uint8Array): unknown } }> | undefined;
+  const fontkitOnce = (): Promise<{ default: { create(bytes: Uint8Array): unknown } }> =>
+    (fontkitModule ??= import('@pdf-lib/fontkit') as unknown as Promise<{ default: { create(bytes: Uint8Array): unknown } }>);
 
   // The fallback font, embedded the first time a run needs it. `null` once it is known to be unavailable, with the reason.
   let fallback: { font: PdfLib.PDFFont; covers: Set<number> } | null | undefined;
@@ -142,8 +163,8 @@ export async function drawContactSheet(input: ContactSheetPdfInput): Promise<Con
       return fallback;
     }
     try {
-      const [bytes, fontkit] = await Promise.all([input.loadFallbackFont(), import('@pdf-lib/fontkit')]);
-      pdf.registerFontkit(fontkit.default);
+      const [bytes, fontkit] = await Promise.all([input.loadFallbackFont(), fontkitOnce()]);
+      pdf.registerFontkit(fontkit.default as Parameters<PdfLib.PDFDocument['registerFontkit']>[0]);
       const font = await pdf.embedFont(await sfntFromWoff(bytes), { subset: true });
       fallback = { font, covers: new Set(font.getCharacterSet()) };
     } catch (error) {
@@ -152,81 +173,145 @@ export async function drawContactSheet(input: ContactSheetPdfInput): Promise<Con
     return fallback;
   };
 
+  // The emoji font, read and laid out the first time a cluster needs it, and embedded by hand (./emoji-font.ts). `null` once it
+  // is known to be unavailable, with the reason.
+  let emoji: EmojiEmbedding | null | undefined;
+  let emojiError = '';
+  const emojiFont = async (): Promise<EmojiEmbedding | null> => {
+    if (emoji !== undefined) return emoji;
+    emoji = null;
+    if (input.loadEmojiFont === undefined) {
+      emojiError = 'this compile has no emoji font';
+      return emoji;
+    }
+    try {
+      const [bytes, fontkit] = await Promise.all([input.loadEmojiFont(), fontkitOnce()]);
+      const face = new EmojiFace(fontkit.default.create(await sfntFromWoff(bytes)) as FontkitFont);
+      emoji = new EmojiEmbedding(lib, pdf, face);
+    } catch (error) {
+      emojiError = `the emoji font could not be read (${error instanceof Error ? error.message : String(error)})`;
+    }
+    return emoji;
+  };
+  /** The glyphs that draw a cluster in the emoji font, or `null` when it cannot. */
+  const emojiGlyphs = async (cluster: string): Promise<readonly EmojiGlyph[] | null> => {
+    const loaded = await emojiFont();
+    return loaded === null ? null : loaded.face.glyphsOf(cluster);
+  };
+
   // Every character drawn as "?", once each, in the order first met, with how many times it was replaced.
   const missing = new Map<string, number>();
+  // Which fallback fonts a "?" would have needed: the log names the ones that could not be read.
+  const neededUnavailable = new Set<'cjk' | 'emoji'>();
 
   /**
-   * The text as runs, each in one font. A cluster WinAnsi encodes is set in Helvetica; any other is set in the fallback font
-   * when it has every character of the cluster, and is `?` otherwise, counted in {@link missing}. Control characters become
-   * spaces. The fallback font is loaded here, the first time a cluster needs it.
+   * The text as pieces, one per grapheme cluster, each resolved to its font (see the header). A cluster in emoji presentation
+   * is set in the emoji font. Any other cluster WinAnsi encodes is set in Helvetica; then in the CJK font when it has every
+   * character of the cluster; then, for a pictograph, in the emoji font; and is `?` otherwise, counted in {@link missing}.
+   * Control characters become spaces. Each fallback font is loaded here, the first time a cluster needs it.
    */
-  const runsOf = async (text: string): Promise<TextRun[]> => {
-    const runs: TextRun[] = [];
-    const push = (piece: string, inFallback: boolean): void => {
-      const last = runs[runs.length - 1];
-      if (last !== undefined && last.fallback === inFallback) runs[runs.length - 1] = { text: last.text + piece, fallback: inFallback };
-      else runs.push({ text: piece, fallback: inFallback });
-    };
+  const piecesOf = async (text: string): Promise<Piece[]> => {
+    const pieces: Piece[] = [];
     for (const cluster of clustersOf(text.normalize('NFC'))) {
       const codes = [...cluster].map((char) => char.codePointAt(0) ?? 0);
       if (codes.length === 1 && isControl(codes[0] ?? 0)) {
-        push(' ', false);
+        pieces.push({ text: ' ', face: 'base' });
         continue;
       }
-      if (codes.every((code) => builtIn.has(code))) {
-        push(cluster, false);
+      const style = emojiStyleOf(cluster);
+      if (style === 'emoji') {
+        const glyphs = await emojiGlyphs(cluster);
+        if (glyphs !== null) pieces.push({ text: cluster, face: 'emoji', glyphs });
+        else {
+          if (emoji === null) neededUnavailable.add('emoji');
+          missing.set(cluster, (missing.get(cluster) ?? 0) + 1);
+          pieces.push({ text: '?', face: 'base' });
+        }
+        continue;
+      }
+      // A pictograph asked for in text presentation (VS15) is drawn in a text font when one has it; the selector is not drawn.
+      const textCodes = style === 'text' ? codes.filter((code) => code !== VS15) : codes;
+      if (textCodes.length > 0 && textCodes.every((code) => builtIn.has(code))) {
+        pieces.push({ text: String.fromCodePoint(...textCodes), face: 'base' });
         continue;
       }
       const loaded = await fallbackFont();
       if (loaded !== null) {
-        const kept = codes.filter((code) => loaded.covers.has(code) || !isJoinerOrSelector(code));
+        const kept = textCodes.filter((code) => loaded.covers.has(code) || !isJoinerOrSelector(code));
         if (kept.length > 0 && kept.every((code) => loaded.covers.has(code))) {
-          push(String.fromCodePoint(...kept), true);
+          pieces.push({ text: String.fromCodePoint(...kept), face: 'cjk' });
           continue;
         }
+      } else {
+        neededUnavailable.add('cjk');
+      }
+      if (style === 'text') {
+        const glyphs = await emojiGlyphs(String.fromCodePoint(...textCodes));
+        if (glyphs !== null) {
+          pieces.push({ text: cluster, face: 'emoji', glyphs });
+          continue;
+        }
+        if (emoji === null) neededUnavailable.add('emoji');
       }
       missing.set(cluster, (missing.get(cluster) ?? 0) + 1);
-      push('?', false);
+      pieces.push({ text: '?', face: 'base' });
+    }
+    return pieces;
+  };
+
+  /** Pieces grouped into runs of one font each, in order: what one `Tj` draws. */
+  const runsOf = (pieces: readonly Piece[]): Piece[][] => {
+    const runs: Piece[][] = [];
+    for (const piece of pieces) {
+      const last = runs[runs.length - 1];
+      if (last !== undefined && last[0]?.face === piece.face) last.push(piece);
+      else runs.push([piece]);
     }
     return runs;
   };
 
-  /** The width of runs at a size, each run measured in its own font. */
-  const widthOf = (runs: readonly TextRun[], base: PdfLib.PDFFont, size: number): number =>
-    runs.reduce((sum, run) => sum + (run.fallback && fallback ? fallback.font : base).widthOfTextAtSize(run.text, size), 0);
+  /** The PDF font a text run is set in. */
+  const pdfFontOf = (face: Face, base: PdfLib.PDFFont): PdfLib.PDFFont => (face === 'cjk' && fallback ? fallback.font : base);
 
-  /**
-   * Runs cut, with an ellipsis, to the width the fonts measure: `fitToWidth` over the clusters of the runs, each cluster
-   * keeping the font it was resolved to. Runs that fit are returned as they are; an empty list when not one cluster fits.
-   */
-  const fitRuns = (runs: readonly TextRun[], base: PdfLib.PDFFont, size: number, maxWidth: number): TextRun[] => {
-    const clusters: TextRun[] = runs.flatMap((run) => clustersOf(run.text).map((text) => ({ text, fallback: run.fallback })));
-    const joined = (count: number, ellipsis: boolean): TextRun[] => {
-      let end = count;
-      if (ellipsis) while (end > 0 && /^\s+$/.test(clusters[end - 1]?.text ?? '')) end -= 1;
-      const out: TextRun[] = [];
-      const pieces = clusters.slice(0, end);
-      if (ellipsis) pieces.push({ text: '…', fallback: false });
-      for (const piece of pieces) {
-        const last = out[out.length - 1];
-        if (last !== undefined && last.fallback === piece.fallback) out[out.length - 1] = { text: last.text + piece.text, fallback: piece.fallback };
-        else out.push(piece);
-      }
-      return out;
-    };
-    if (widthOf(runs, base, size) <= maxWidth) return [...runs];
-    let keep = clusters.length;
-    while (keep > 0 && widthOf(joined(keep, true), base, size) > maxWidth) keep -= 1;
-    return keep === 0 ? [] : joined(keep, true);
+  /** The width of one run at a size, in its own font. */
+  const runWidth = (run: readonly Piece[], base: PdfLib.PDFFont, size: number): number => {
+    const face = run[0]?.face ?? 'base';
+    if (face === 'emoji') return emoji ? emoji.face.widthOf(run.flatMap((piece) => piece.glyphs ?? []), size) : 0;
+    return pdfFontOf(face, base).widthOfTextAtSize(run.map((piece) => piece.text).join(''), size);
   };
 
-  /** Draws runs from a baseline start, each in its own font, one after the other. */
-  const drawRuns = (page: PdfLib.PDFPage, runs: readonly TextRun[], x: number, y: number, size: number, base: PdfLib.PDFFont, ink: Shade): void => {
+  /** The width of pieces at a size, each run measured in its own font. */
+  const widthOf = (pieces: readonly Piece[], base: PdfLib.PDFFont, size: number): number =>
+    runsOf(pieces).reduce((sum, run) => sum + runWidth(run, base, size), 0);
+
+  /**
+   * Pieces cut, with an ellipsis, to the width the fonts measure: `fitToWidth` over the clusters, each keeping the font it was
+   * resolved to, so an emoji sequence is kept or dropped whole. Pieces that fit are returned as they are; an empty list when
+   * not one cluster fits.
+   */
+  const fitPieces = (pieces: readonly Piece[], base: PdfLib.PDFFont, size: number, maxWidth: number): Piece[] => {
+    if (widthOf(pieces, base, size) <= maxWidth) return [...pieces];
+    const cut = (count: number): Piece[] => {
+      let end = count;
+      while (end > 0 && /^\s+$/.test(pieces[end - 1]?.text ?? '')) end -= 1;
+      return [...pieces.slice(0, end), { text: '…', face: 'base' }];
+    };
+    let keep = pieces.length;
+    while (keep > 0 && widthOf(cut(keep), base, size) > maxWidth) keep -= 1;
+    return keep === 0 ? [] : cut(keep);
+  };
+
+  /** Draws pieces from a baseline start, each run in its own font, one after the other. */
+  const drawPieces = (page: PdfLib.PDFPage, pieces: readonly Piece[], x: number, y: number, size: number, base: PdfLib.PDFFont, ink: Shade): void => {
     let at = x;
-    for (const run of runs) {
-      const font = run.fallback && fallback ? fallback.font : base;
-      page.drawText(run.text, { x: at, y, size, font, color: color(ink) });
-      at += font.widthOfTextAtSize(run.text, size);
+    for (const run of runsOf(pieces)) {
+      const face = run[0]?.face ?? 'base';
+      if (face === 'emoji' && emoji) {
+        emoji.draw(page, run.flatMap((piece) => piece.glyphs ?? []), at, y, size, ink);
+      } else {
+        page.drawText(run.map((piece) => piece.text).join(''), { x: at, y, size, font: pdfFontOf(face, base), color: color(ink) });
+      }
+      at += runWidth(run, base, size);
     }
   };
 
@@ -269,9 +354,9 @@ export async function drawContactSheet(input: ContactSheetPdfInput): Promise<Con
   const flip = (y: number): number => pageHeight - y;
 
   const drawText = async (page: PdfLib.PDFPage, placed: PlacedText, font: PdfLib.PDFFont, maxWidth: number, ink: Shade = INK): Promise<void> => {
-    const runs = fitRuns(await runsOf(placed.text), font, placed.fontSize, maxWidth);
-    if (runs.length === 0) return;
-    drawRuns(page, runs, placed.x, flip(placed.y), placed.fontSize, font, ink);
+    const pieces = fitPieces(await piecesOf(placed.text), font, placed.fontSize, maxWidth);
+    if (pieces.length === 0) return;
+    drawPieces(page, pieces, placed.x, flip(placed.y), placed.fontSize, font, ink);
   };
 
   const drawCard = async (page: PdfLib.PDFPage, card: PlacedCard): Promise<void> => {
@@ -310,10 +395,10 @@ export async function drawContactSheet(input: ContactSheetPdfInput): Promise<Con
 
   for (const sheet of input.plan.pages) {
     const page = pdf.addPage([pageWidth, pageHeight]);
-    const label = await runsOf(sheet.pageLabel.text);
+    const label = await piecesOf(sheet.pageLabel.text);
     const labelWidth = widthOf(label, bold, sheet.pageLabel.fontSize);
     await drawText(page, sheet.title, bold, Math.max(0, contentWidth - labelWidth - 12));
-    drawRuns(page, label, pageWidth - margin - labelWidth, flip(sheet.pageLabel.y), sheet.pageLabel.fontSize, bold, MUTED);
+    drawPieces(page, label, pageWidth - margin - labelWidth, flip(sheet.pageLabel.y), sheet.pageLabel.fontSize, bold, MUTED);
     if (sheet.summary !== undefined) await drawText(page, sheet.summary, regular, contentWidth, MUTED);
     // A rule under the header, above the first row of cards.
     const ruleY = flip(margin + headerHeight - 6);
@@ -323,14 +408,21 @@ export async function drawContactSheet(input: ContactSheetPdfInput): Promise<Con
     for (const card of sheet.cards) await drawCard(page, card);
   }
 
+  if (emoji) await emoji.finish();
+
   if (fallback) notes.push(`contact sheet: text outside Latin script is set in ${CJK_FONT_NAME}, embedded with only the glyphs it uses`);
+  if (emoji?.used === true) notes.push(`contact sheet: emoji are set in ${EMOJI_FONT_NAME}, in monochrome, embedded with only the glyphs they use`);
   if (missing.size > 0) {
     const count = [...missing.values()].reduce((sum, n) => sum + n, 0);
     const named = [...missing.keys()]
       .map((cluster) => `${cluster} (${[...cluster].map((char) => `U+${(char.codePointAt(0) ?? 0).toString(16).toUpperCase().padStart(4, '0')}`).join(' ')})`)
       .join(', ');
-    const fonts = fallback === null ? `the PDF's built-in font cannot show, and ${fallbackError},` : `neither the PDF's built-in font nor ${CJK_FONT_NAME} can show`;
-    notes.push(`contact sheet: ${count} ${count === 1 ? 'character' : 'characters'} ${fonts} ${count === 1 ? 'was' : 'were'} drawn as "?": ${named}`);
+    // The fonts that were read and still had no glyph, and why each font a "?" needed could not be read.
+    const read = [...(fallback ? [CJK_FONT_NAME] : []), ...(emoji ? [EMOJI_FONT_NAME] : [])];
+    const reasons = [...(neededUnavailable.has('cjk') ? [fallbackError] : []), ...(neededUnavailable.has('emoji') ? [emojiError] : [])];
+    const fonts = read.length === 0 ? `the PDF's built-in font cannot show` : `neither the PDF's built-in font nor ${read.join(' nor ')} can show`;
+    const why = reasons.length === 0 ? '' : `, and ${reasons.join(', and ')},`;
+    notes.push(`contact sheet: ${count} ${count === 1 ? 'character' : 'characters'} ${fonts}${why} ${count === 1 ? 'was' : 'were'} drawn as "?": ${named}`);
   }
   return { contents: await pdf.save({ useObjectStreams: false }), notes };
 }

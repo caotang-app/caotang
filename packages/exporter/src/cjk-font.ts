@@ -6,7 +6,7 @@
  * kanji, Korean Hangul, Greek and Cyrillic.
  *
  * The exporter names no place to read it from. The host passes a {@link FontLoader}: the app fetches the file from its own
- * origin (Vite emits it as a separate asset), and Node reads it from the package (`./cjk-font-node.ts`). The emitter calls the
+ * origin (Vite emits it as a separate asset), and Node reads it from the package (`./fallback-fonts-node.ts`). The emitter calls the
  * loader only when a file holds a character Helvetica cannot encode, so a Latin-only export never reads the font.
  */
 

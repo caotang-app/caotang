@@ -9,12 +9,13 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./cjk-font-node": "./src/cjk-font-node.ts"
+    "./fallback-fonts-node": "./src/fallback-fonts-node.ts"
   },
   "dependencies": {
     "@caotang/bus": "workspace:*",
     "@caotang/dialogue": "workspace:*",
     "@caotang/font-noto-cjk": "workspace:*",
+    "@caotang/font-noto-emoji": "workspace:*",
     "@caotang/screenplay": "workspace:*",
     "@caotang/store": "workspace:*",
     "@caotang/storyboard": "workspace:*",

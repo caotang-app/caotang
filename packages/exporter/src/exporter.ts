@@ -89,10 +89,16 @@ export interface ExporterOptions {
   readonly readAsset?: (path: string) => Promise<Uint8Array | null>;
   /**
    * Reads the PDF fallback font (Noto Sans CJK SC, ./cjk-font.ts) for contact-sheet text outside Latin script. The app fetches
-   * it from its own origin; Node reads it from `@caotang/font-noto-cjk` (`@caotang/exporter/cjk-font-node`). It is called only
+   * it from its own origin; Node reads it from `@caotang/font-noto-cjk` (`@caotang/exporter/fallback-fonts-node`). It is called only
    * when a contact sheet holds such text. Without it, that text is drawn as `?`, and the compile log says so.
    */
   readonly loadFallbackFont?: FontLoader;
+  /**
+   * Reads the PDF emoji font (Noto Emoji, monochrome, ./emoji-font.ts) for contact-sheet emoji, the same way: the app from its
+   * own origin, Node from `@caotang/font-noto-emoji`. It is called only when a contact sheet holds an emoji. Without it, emoji
+   * are drawn as `?`, and the compile log says so.
+   */
+  readonly loadEmojiFont?: FontLoader;
 }
 
 /** A bus export command as a caller dispatches it: its name, and the params the bus validated for it. */
@@ -328,6 +334,7 @@ export function createExporter(options: ExporterOptions): ExporterService {
       readAsset,
       ...(request.options.pageSize === undefined ? {} : { pageSize: request.options.pageSize }),
       ...(options.loadFallbackFont === undefined ? {} : { loadFallbackFont: options.loadFallbackFont }),
+      ...(options.loadEmojiFont === undefined ? {} : { loadEmojiFont: options.loadEmojiFont }),
       at: request.at,
     });
     const notes = [...output.notes];

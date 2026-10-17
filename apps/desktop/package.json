@@ -19,6 +19,7 @@
     "@caotang/editor": "workspace:*",
     "@caotang/exporter": "workspace:*",
     "@caotang/font-noto-cjk": "workspace:*",
+    "@caotang/font-noto-emoji": "workspace:*",
     "@caotang/furniture": "workspace:*",
     "@caotang/gateway": "workspace:*",
     "@caotang/harness": "workspace:*",

@@ -8,7 +8,7 @@ import { join, resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { BUNDLE_ENTRY, manifestProblems, mcpbCliPath, packBundle, runMcpb, stageBundle } from '../scripts/pack-mcpb.mjs';
+import { BUNDLE_ENTRY, BUNDLE_FONTS, manifestProblems, mcpbCliPath, packBundle, runMcpb, stageBundle } from '../scripts/pack-mcpb.mjs';
 import { removeDir, tempDir } from './support.js';
 
 const PACKAGE_DIR = resolve(__dirname, '..');
@@ -155,6 +155,32 @@ describe('staging and packing', () => {
         }),
       ).toThrow('author.name is required');
       expect(existsSync(join(outDir, 'mcpb'))).toBe(false);
+    } finally {
+      removeDir(outDir);
+    }
+  });
+
+  it('stages the PDF fallback fonts in server/fonts/, each under its own name', () => {
+    const outDir = tempDir('pack-fonts');
+    try {
+      const serverBundle = join(outDir, 'caotang-mcp.mjs');
+      writeFileSync(serverBundle, '#!/usr/bin/env node\n');
+      const cjk = join(outDir, 'NotoSansCJKsc-Regular.woff');
+      const emoji = join(outDir, 'NotoEmoji-Regular.woff');
+      writeFileSync(cjk, 'cjk');
+      writeFileSync(emoji, 'emoji');
+      const { staging, files } = stageBundle({
+        outDir,
+        serverBundle,
+        manifestPath: MANIFEST_PATH,
+        version: '0.1.0',
+        notices: '# notices\n',
+        license: join(REPO_ROOT, 'LICENSE'),
+        fonts: [cjk, emoji],
+      });
+      expect(files).toContain(`${BUNDLE_FONTS}/NotoSansCJKsc-Regular.woff`);
+      expect(files).toContain(`${BUNDLE_FONTS}/NotoEmoji-Regular.woff`);
+      expect(readFileSync(join(staging, BUNDLE_FONTS, 'NotoEmoji-Regular.woff'), 'utf8')).toBe('emoji');
     } finally {
       removeDir(outDir);
     }

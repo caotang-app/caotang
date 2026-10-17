@@ -26,6 +26,10 @@
  * ({@link SHEET_LAYOUT}`.wideCharWidthEm`), the width the PDF's CJK font gives it. An estimate that errs wide
  * is the safe error here: it wraps early rather than overflow, and the emitter cuts with the real font.
  *
+ * An emoji is measured, wrapped and cut as one unit however many code points it has (a ZWJ family, a flag, a keycap, a
+ * skin tone: `./emoji.ts`), and counts {@link SHEET_LAYOUT}`.emojiWidthEm`, the advance the PDF's emoji font gives it. A line
+ * may break between two emoji, as between two Chinese characters, and never inside one.
+ *
  * Lines break at spaces, and between two Chinese or Japanese characters, since those scripts put no spaces
  * between words. Korean is written with spaces, so a Hangul word breaks at its spaces, as Latin does. A closing
  * mark (。、，」 and the like) stays on the line before it, and an opening mark (「（ and the like) on the line
@@ -35,6 +39,7 @@
 import { nodeById, type ArtifactFs, type ProjectState } from '@caotang/store';
 
 import { animaticTotals } from './animatic.js';
+import { graphemesOf, isEmojiCluster } from './emoji.js';
 import { readImage, type LoadedImage } from './assets.js';
 import { durationText, isStoryboardFolder, specRowOf } from './model.js';
 import { shotFieldOf } from './nodes.js';
@@ -71,6 +76,8 @@ export const SHEET_LAYOUT = {
   charWidthEm: 0.55,
   /** The width of a wide (East Asian) character, in em: the advance the PDF's CJK font gives it. */
   wideCharWidthEm: 1,
+  /** The width of an emoji, however many code points it has, in em: the PDF's emoji font (Noto Emoji) draws it 2600/2048 em across. */
+  emojiWidthEm: 1.3,
   chipHeight: 12,
 } as const;
 
@@ -108,7 +115,10 @@ const NO_LINE_END = new Set([...'（「『【〔〈《〖〘〚｛［〝‘“']
 /** Estimated width of a run of text at a font size. See the header on why this is an estimate. */
 export function measureText(text: string, fontSize: number): number {
   let ems = 0;
-  for (const char of text) ems += isWide(char) ? SHEET_LAYOUT.wideCharWidthEm : SHEET_LAYOUT.charWidthEm;
+  for (const cluster of graphemesOf(text)) {
+    if (isEmojiCluster(cluster)) ems += SHEET_LAYOUT.emojiWidthEm;
+    else for (const char of cluster) ems += isWide(char) ? SHEET_LAYOUT.wideCharWidthEm : SHEET_LAYOUT.charWidthEm;
+  }
   return ems * fontSize;
 }
 
@@ -126,15 +136,16 @@ function isHangul(char: string): boolean {
 }
 
 /**
- * The pieces a word may break between. A run of other characters is one piece; each Chinese or Japanese character is a piece
- * of its own, so a line may break between any two of them. A mark that must not start a line joins the piece before it, and
- * one that must not end a line joins the piece after it.
+ * The pieces a word may break between. A run of other characters is one piece; each Chinese or Japanese character, and each
+ * emoji, is a piece of its own, so a line may break between any two of them. A mark that must not start a line joins the
+ * piece before it, and one that must not end a line joins the piece after it. The word is read by grapheme cluster, so an
+ * emoji sequence or a letter with its marks is never split.
  */
 function piecesOf(word: string): string[] {
   const raw: string[] = [];
   let narrow = '';
-  for (const char of word) {
-    if ((isWide(char) && !isHangul(char)) || NO_LINE_START.has(char) || NO_LINE_END.has(char)) {
+  for (const char of graphemesOf(word)) {
+    if ((isWide(char) && !isHangul(char)) || isEmojiCluster(char) || NO_LINE_START.has(char) || NO_LINE_END.has(char)) {
       if (narrow !== '') raw.push(narrow);
       narrow = '';
       raw.push(char);
@@ -163,9 +174,9 @@ function piecesOf(word: string): string[] {
   return pieces;
 }
 
-/** The longest start of `text` that fits the width, at least one character, so a line always moves on. */
+/** The longest start of `text` that fits the width, at least one grapheme cluster, so a line always moves on. */
 function longestFit(text: string, maxWidth: number, fontSize: number): string {
-  const chars = [...text];
+  const chars = graphemesOf(text);
   let keep = 1;
   while (keep < chars.length && fits(chars.slice(0, keep + 1).join(''), maxWidth, fontSize)) keep += 1;
   return chars.slice(0, keep).join('');
@@ -206,7 +217,7 @@ export function wrapText(text: string, maxWidth: number, fontSize: number, maxLi
 
   if (lines.length <= maxLines) return lines;
   const kept = lines.slice(0, maxLines);
-  const chars = [...(kept[maxLines - 1] ?? '')];
+  const chars = graphemesOf(kept[maxLines - 1] ?? '');
   while (chars.length > 0 && !fits(`${chars.join('')}${ELLIPSIS}`, maxWidth, fontSize)) chars.pop();
   kept[maxLines - 1] = `${chars.join('')}${ELLIPSIS}`;
   return kept;

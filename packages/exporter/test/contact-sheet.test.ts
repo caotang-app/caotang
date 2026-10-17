@@ -22,12 +22,14 @@ import {
   type Command,
 } from '@caotang/bus';
 import { createProjectCommandRegistry, MemoryArtifactFs, type ProjectState } from '@caotang/store';
-import { addShotNode, planContactSheet } from '@caotang/storyboard';
+import { addShotNode, emojiStyleOf, graphemesOf, planContactSheet } from '@caotang/storyboard';
 import type { AssetRecord } from '@caotang/video-prompt-pack';
-import { cjkFontCandidates, loadCjkFontInNode } from '../src/cjk-font-node.js';
+import { cjkFontCandidates, emojiFontCandidates, loadCjkFontInNode, loadEmojiFontInNode } from '../src/fallback-fonts-node.js';
+import { EmojiFace, type FontkitFont } from '../src/emoji-font.js';
 import {
   CJK_FONT_FILE,
   CONTACT_SHEET_HEADER,
+  EMOJI_FONT_FILE,
   containIn,
   createExporter,
   drawContactSheet,
@@ -51,6 +53,7 @@ function rig(
     assets?: ReadonlyMap<string, AssetRecord>;
     files?: Record<string, Uint8Array>;
     loadFallbackFont?: FontLoader;
+    loadEmojiFont?: FontLoader;
   } = {},
 ): { exporter: ExporterService; reads: string[] } {
   const state = options.state ?? makeMediaProject();
@@ -67,6 +70,7 @@ function rig(
       return files[path] ?? null;
     },
     ...(options.loadFallbackFont === undefined ? {} : { loadFallbackFont: options.loadFallbackFont }),
+    ...(options.loadEmojiFont === undefined ? {} : { loadEmojiFont: options.loadEmojiFont }),
   });
   return { exporter, reads };
 }
@@ -141,13 +145,13 @@ function hexOf(text: string): string {
   return [...text].map((char) => (char.codePointAt(0) ?? 0).toString(16).toUpperCase().padStart(2, '0')).join('');
 }
 
-/** A loader over the package's font file that counts its calls. */
-function countingLoader(): { load: FontLoader; calls: () => number } {
+/** A loader over a package's font file that counts its calls. */
+function countingLoader(read: FontLoader = loadCjkFontInNode): { load: FontLoader; calls: () => number } {
   let calls = 0;
   return {
     load: async () => {
       calls += 1;
-      return loadCjkFontInNode();
+      return read();
     },
     calls: () => calls,
   };
@@ -470,10 +474,10 @@ describe('contact-sheet-pdf — text outside Latin script, in the Noto Sans CJK 
   });
 
   it('draws a character neither font has as "?", and names it in the log', async () => {
-    const state = withAction('雨 🎬 and ⲁ');
+    const state = withAction('雨 ⲁ and ب');
     const { result, pdf } = await compileSheet(rig({ state, loadFallbackFont: loadCjkFontInNode }).exporter);
     expect(result.log.notes).toContain(
-      'contact sheet: 2 characters neither the PDF\'s built-in font nor Noto Sans CJK SC can show were drawn as "?": 🎬 (U+1F3AC), ⲁ (U+2C81)',
+      'contact sheet: 2 characters neither the PDF\'s built-in font nor Noto Sans CJK SC can show were drawn as "?": ⲁ (U+2C81), ب (U+0628)',
     );
     expect(toUnicodeText(pdf)).toContain('雨');
   });
@@ -540,6 +544,234 @@ describe('the fallback font file', () => {
   });
 });
 
+/** Each ToUnicode entry of the file's Type 0 fonts, decoded: the text one CID gives back when it is copied. */
+function toUnicodeEntries(pdf: PDFDocument): string[] {
+  const entries: string[] = [];
+  for (const [, object] of pdf.context.enumerateIndirectObjects()) {
+    if (!(object instanceof PDFDict) || object.get(PDFName.of('Subtype')) !== PDFName.of('Type0')) continue;
+    const ref = object.get(PDFName.of('ToUnicode'));
+    const stream = ref === undefined ? undefined : pdf.context.lookup(ref);
+    if (!(stream instanceof PDFRawStream)) continue;
+    for (const match of new TextDecoder().decode(inflated(stream)).matchAll(/<[0-9a-fA-F]+>\s*<([0-9a-fA-F]+)>/g)) {
+      const hex = match[1] ?? '';
+      const units: number[] = [];
+      for (let i = 0; i + 4 <= hex.length; i += 4) units.push(parseInt(hex.slice(i, i + 4), 16));
+      if (hex.toUpperCase() !== 'FFFF') entries.push(String.fromCharCode(...units));
+    }
+  }
+  return entries;
+}
+
+/** The CID strings shown in the emoji font on a page: the hex of each `Tj` set after a `/NotoEmoji… Tf`. */
+function emojiShows(pdf: PDFDocument, index: number): string[] {
+  return [...pageContent(pdf, index).matchAll(/\/NotoEmoji\S* [\d.]+ Tf\s+[\d.-]+ [\d.-]+ Td\s+<([0-9A-F]*)> Tj/g)].map((match) => match[1] ?? '');
+}
+
+/** The fully-qualified emoji of Unicode Emoji 15.1, the version Noto Emoji 3.002 supports (test/fixtures). */
+function fullyQualifiedEmoji(): { emoji: string; name: string }[] {
+  return readFileSync(resolve(__dirname, 'fixtures/emoji-15.1-fully-qualified.txt'), 'utf8')
+    .split('\n')
+    .filter((line) => line !== '' && !line.startsWith('#'))
+    .map((line) => {
+      const [codes = '', comment = ''] = line.split(' # ');
+      return { emoji: String.fromCodePoint(...codes.trim().split(/\s+/).map((hex) => parseInt(hex, 16))), name: comment };
+    });
+}
+
+let emojiFace: EmojiFace | undefined;
+async function noto(): Promise<EmojiFace> {
+  emojiFace ??= new EmojiFace(fontkit.create(await sfntFromWoff(await loadEmojiFontInNode())) as unknown as FontkitFont);
+  return emojiFace;
+}
+
+describe('contact-sheet-pdf — emoji, in the Noto Emoji fallback font', () => {
+  // A ZWJ family, a ZWJ profession with a skin tone, a skin tone, a flag, two keycaps, a tag sequence, VS16 and a VS15 pictograph.
+  const SEQUENCES = ['👨‍👩‍👧‍👦', '🧑🏽‍💻', '👍🏽', '🇩🇪', '1️⃣', '#️⃣', '🏴󠁧󠁢󠁳󠁣󠁴󠁿', '❤️', '🎬', '🏳️‍🌈'];
+
+  it('draws each emoji sequence as one glyph, and the exact sequence extracts back', async () => {
+    const emojiLoader = countingLoader(loadEmojiFontInNode);
+    const cjkLoader = countingLoader();
+    const state = withAction(`Cut ${SEQUENCES.join(' ')} end`);
+    const { pdf, result } = await compileSheet(rig({ state, files: {}, loadFallbackFont: cjkLoader.load, loadEmojiFont: emojiLoader.load }).exporter);
+    expect(emojiLoader.calls()).toBe(1);
+    // Emoji in emoji presentation go straight to the emoji font: the CJK font is never read.
+    expect(cjkLoader.calls()).toBe(0);
+    const entries = toUnicodeEntries(pdf);
+    for (const sequence of SEQUENCES) expect(entries, sequence).toContain(sequence);
+    // One CID (four hex digits) per sequence: the ligature, never the parts.
+    const shows = emojiShows(pdf, 0);
+    expect(shows.map((hex) => hex.length / 4)).toEqual(SEQUENCES.map(() => 1));
+    expect(result.log.notes).toContain('contact sheet: emoji are set in Noto Emoji, in monochrome, embedded with only the glyphs they use');
+    expect(result.log.notes.some((note) => note.includes('drawn as "?"'))).toBe(false);
+  });
+
+  it('gives 👍 and 👍🏽 back as they were typed, though the monochrome font draws them with one glyph', async () => {
+    const { pdf } = await compileSheet(rig({ state: withAction('👍 and 👍🏽 and 👍'), loadEmojiFont: loadEmojiFontInNode }).exporter);
+    const entries = toUnicodeEntries(pdf);
+    expect(entries).toContain('👍');
+    expect(entries).toContain('👍🏽');
+    // Two CIDs, one per distinct sequence; the third thumb reuses the first.
+    const files = embeddedFontFiles(pdf);
+    expect(files).toHaveLength(1);
+    const subset = fontkit.create(files[0] as Uint8Array) as unknown as { numGlyphs: number };
+    expect(subset.numGlyphs).toBeGreaterThanOrEqual(2);
+    const [first, second, third] = emojiShows(pdf, 0);
+    expect(first).toBe(third);
+    expect(first).not.toBe(second);
+  });
+
+  it('draws a ZWJ sequence the font has no ligature for as its parts, and the whole sequence extracts back', async () => {
+    const walking = '🚶‍♀️‍➡️';
+    const { pdf, result } = await compileSheet(rig({ state: withAction(walking), loadEmojiFont: loadEmojiFontInNode }).exporter);
+    expect(emojiShows(pdf, 0).map((hex) => hex.length / 4)).toEqual([3]);
+    expect(toUnicodeEntries(pdf).join('')).toBe(walking);
+    expect(result.log.notes.some((note) => note.includes('drawn as "?"'))).toBe(false);
+  });
+
+  it('tries the text fonts first for a pictograph whose default is text, and keeps a VS15 pictograph in a text font', async () => {
+    const emojiLoader = countingLoader(loadEmojiFontInNode);
+    // ✌ (U+270C) has no emoji presentation by default, and the CJK font has no glyph for it; ©︎ asks for text and Helvetica has ©.
+    const { pdf, result } = await compileSheet(rig({ state: withAction('✌ ©︎'), loadFallbackFont: loadCjkFontInNode, loadEmojiFont: emojiLoader.load }).exporter);
+    expect(emojiLoader.calls()).toBe(1);
+    expect(toUnicodeEntries(pdf)).toContain('✌');
+    expect(pageContent(pdf, 0)).toContain(`<${hexOf(' ©')}> Tj`);
+    expect(result.log.notes.some((note) => note.includes('drawn as "?"'))).toBe(false);
+  });
+
+  it('never reads the emoji font for a sheet without emoji', async () => {
+    const emojiLoader = countingLoader(loadEmojiFontInNode);
+    const latin = await compileSheet(rig({ state: withAction('Abeßer crosses the café © 2026'), loadEmojiFont: emojiLoader.load }).exporter);
+    const cjk = await compileSheet(rig({ state: withAction('草堂的早晨'), loadFallbackFont: loadCjkFontInNode, loadEmojiFont: emojiLoader.load }).exporter);
+    expect(emojiLoader.calls()).toBe(0);
+    expect(embeddedFontFiles(latin.pdf)).toHaveLength(0);
+    expect(embeddedFontFiles(cjk.pdf)).toHaveLength(1);
+    expect([...latin.result.log.notes, ...cjk.result.log.notes].some((note) => note.includes('Noto Emoji'))).toBe(false);
+  });
+
+  it('draws an emoji newer than the font as "?", and names it in the log', async () => {
+    const { result, pdf } = await compileSheet(rig({ state: withAction('🎬 🫩'), loadEmojiFont: loadEmojiFontInNode }).exporter);
+    expect(result.log.notes).toContain('contact sheet: 1 character neither the PDF\'s built-in font nor Noto Emoji can show was drawn as "?": 🫩 (U+1FAE9)');
+    expect(toUnicodeEntries(pdf)).toContain('🎬');
+  });
+
+  it('draws emoji as "?", and says why, when the compile has no emoji font or it cannot be read', async () => {
+    const none = await compileSheet(rig({ state: withAction('🎬') }).exporter);
+    expect(none.result.log.notes).toContain(
+      'contact sheet: 1 character the PDF\'s built-in font cannot show, and this compile has no emoji font, was drawn as "?": 🎬 (U+1F3AC)',
+    );
+    const failing: FontLoader = async () => {
+      throw new Error('offline');
+    };
+    const broken = await compileSheet(rig({ state: withAction('👨‍👩‍👧'), loadEmojiFont: failing }).exporter);
+    expect(broken.result.log.notes).toContain(
+      'contact sheet: 1 character the PDF\'s built-in font cannot show, and the emoji font could not be read (offline), was drawn as "?": 👨‍👩‍👧 (U+1F468 U+200D U+1F469 U+200D U+1F467)',
+    );
+    expect(embeddedFontFiles(broken.pdf)).toHaveLength(0);
+  });
+
+  it('writes the same bytes for the same sheet and the same moment, with emoji', async () => {
+    const state = withAction(`草堂 ${SEQUENCES.join('')}`);
+    const options = { state, loadFallbackFont: loadCjkFontInNode, loadEmojiFont: loadEmojiFontInNode };
+    const first = await compileSheet(rig(options).exporter);
+    const second = await compileSheet(rig(options).exporter);
+    expect([...first.bytes]).toEqual([...second.bytes]);
+  });
+
+  it('wraps and cuts emoji as whole clusters, measured in the emoji font', async () => {
+    const family = '👨‍👩‍👧';
+    const planned = planContactSheet(withAction(family.repeat(80)), ['manuscript'], () => ({ drawn: false, note: 'none' }));
+    const card = planned.plan.pages[0]?.cards.find((placed) => placed.shotId === 'n_WORLD00001');
+    // The plan breaks between families, never inside one, and ends the second line with an ellipsis.
+    for (const line of card?.action ?? []) expect(line.text.replace('…', '').replaceAll(family, '')).toBe('');
+    expect(card?.action[1]?.text.endsWith('…')).toBe(true);
+    const drawn = await drawContactSheet({
+      plan: planned.plan,
+      pictures: new Map(),
+      readPicture: async () => null,
+      title: 'T',
+      at: new Date(COMPILED_AT),
+      loadEmojiFont: loadEmojiFontInNode,
+    });
+    const pdf = await PDFDocument.load(drawn.contents);
+    const width = card?.frame.width ?? 0;
+    // Each family is one CID; each line holds as many as fit at 8 pt, 2600/2048 em each, the last giving room to the ellipsis.
+    const perLine = Math.floor(width / ((8 * 2600) / 2048));
+    const counts = emojiShows(pdf, 0).map((hex) => hex.length / 4);
+    expect(counts[0]).toBe(perLine);
+    expect(counts[1]).toBeLessThan(perLine);
+    expect(toUnicodeEntries(pdf)).toEqual([family]);
+    expect(drawn.notes.some((note) => note.includes('drawn as "?"'))).toBe(false);
+  });
+});
+
+describe('the emoji font file covers Unicode Emoji 15.1', () => {
+  const ALL = fullyQualifiedEmoji();
+
+  it('lists every fully-qualified emoji of the version the font supports', () => {
+    expect(ALL).toHaveLength(3773);
+  });
+
+  it('draws every fully-qualified emoji with no .notdef, each as one glyph or, for a ZWJ sequence with no ligature, one per part', async () => {
+    const face = await noto();
+    const missing: string[] = [];
+    const split: string[] = [];
+    for (const { emoji, name } of ALL) {
+      expect(emojiStyleOf(emoji), name).toBe('emoji');
+      expect(graphemesOf(emoji), name).toHaveLength(1);
+      const glyphs = face.glyphsOf(emoji);
+      if (glyphs === null) missing.push(name);
+      else if (glyphs.length !== 1) {
+        split.push(name);
+        expect(glyphs.length, name).toBe(emoji.split('\u200d').length);
+      }
+      // The text the glyphs give back, joined, is the sequence as it was typed.
+      if (glyphs !== null) expect(glyphs.map((glyph) => glyph.text).join(''), name).toBe(emoji);
+    }
+    expect(missing).toEqual([]);
+    // Emoji 15.1's "facing right" people (with their skin tones and genders) are the only sequences the font draws in parts.
+    expect(split.every((name) => name.includes('facing right'))).toBe(true);
+    expect(split).toHaveLength(90);
+  });
+
+  it('prints every fully-qualified emoji in a contact sheet without one "?"', async () => {
+    const state = makeMediaProject();
+    // Eight emoji to a card, four to a line: a line of four "facing right" people, each drawn in three parts, still fits.
+    const per = 8;
+    for (let i = 0; i * per < ALL.length; i += 1) {
+      const chunk = ALL.slice(i * per, (i + 1) * per).map(({ emoji }) => emoji);
+      addShotNode(state, {
+        parentId: MEDIA_IDS.shots,
+        title: `Emoji ${i + 1}`,
+        id: `n_EMOJI${String(i).padStart(5, '0')}`,
+        now: OPENED,
+        stored: { action: `${chunk.slice(0, per / 2).join('')} ${chunk.slice(per / 2).join('')}` },
+      });
+    }
+    const { result, pdf } = await compileSheet(rig({ state, files: {}, loadEmojiFont: loadEmojiFontInNode }).exporter);
+    expect(result.log.notes.filter((note) => note.includes('drawn as "?"'))).toEqual([]);
+    const entries = new Set(toUnicodeEntries(pdf));
+    for (const { emoji, name } of ALL) {
+      const whole = entries.has(emoji);
+      const parts = emoji.split('\u200d').every((part, index) => entries.has(index === 0 ? part : `\u200d${part}`));
+      expect(whole || parts, name).toBe(true);
+    }
+  }, 120_000);
+});
+
+describe('the emoji font file', () => {
+  it('is found by the Node loader in @caotang/font-noto-emoji, and unpacks from WOFF to a static TrueType font', async () => {
+    expect(emojiFontCandidates().some((path) => path.endsWith(`font-noto-emoji/${EMOJI_FONT_FILE}`) || path.endsWith(`noto-emoji/${EMOJI_FONT_FILE}`))).toBe(true);
+    const woff = await loadEmojiFontInNode();
+    expect(new TextDecoder().decode(woff.slice(0, 4))).toBe('wOFF');
+    const sfnt = await sfntFromWoff(woff);
+    expect([...sfnt.slice(0, 4)]).toEqual([0, 1, 0, 0]);
+    const font = fontkit.create(sfnt) as unknown as { familyName: string; variationAxes: Record<string, unknown>; hasGlyphForCodePoint(code: number): boolean };
+    expect(font.familyName).toBe('Noto Emoji');
+    expect(Object.keys(font.variationAxes)).toEqual([]);
+    for (const char of ['🎬', '😀', '❤']) expect(font.hasGlyphForCodePoint(char.codePointAt(0) ?? 0)).toBe(true);
+  });
+});
+
 describe('the emitter draws the plan it is given', () => {
   it('draws exactly the pages the plan lists, from a plan with no project around it', async () => {
     const state = manyShots(14); // 16 shots
@@ -599,9 +831,10 @@ describe('pdf-lib is loaded lazily', () => {
     const woff = readFileSync(resolve(__dirname, '../src/cjk-font.ts'), 'utf8');
     expect(woff).toMatch(/await import\('fflate\/browser'\)/);
     expect(woff).not.toMatch(/^import (?!type )[^;]*from 'fflate[^']*';/m);
-    for (const file of ['exporter.ts', 'media.ts', 'index.ts', 'render-contact-sheet.ts', 'cjk-font.ts']) {
+    for (const file of ['exporter.ts', 'media.ts', 'index.ts', 'render-contact-sheet.ts', 'cjk-font.ts', 'emoji-font.ts']) {
       const text = readFileSync(resolve(__dirname, `../src/${file}`), 'utf8');
-      expect(text).not.toMatch(/from '\.\/cjk-font-node\.js'/);
+      expect(text).not.toMatch(/from '\.\/fallback-fonts-node\.js'/);
+      expect(text).not.toMatch(/^import (?!type )[^\n]*from 'pdf-lib'/m);
       expect(text).not.toMatch(/from 'node:/);
     }
   });

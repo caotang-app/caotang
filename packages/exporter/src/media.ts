@@ -103,6 +103,8 @@ export interface MediaRequest {
   readonly at?: number;
   /** Reads the contact sheet's fallback font for text outside Latin script (./cjk-font.ts). Only `contact-sheet-pdf` reads it. */
   readonly loadFallbackFont?: FontLoader;
+  /** Reads the contact sheet's emoji font (./emoji-font.ts). Only `contact-sheet-pdf` reads it, and only for a sheet with emoji. */
+  readonly loadEmojiFont?: FontLoader;
 }
 
 /**
@@ -518,6 +520,7 @@ function contactSheetOutput(request: MediaRequest): MediaOutput {
             title,
             ...(request.author.trim() === '' ? {} : { author: request.author }),
             ...(request.loadFallbackFont === undefined ? {} : { loadFallbackFont: request.loadFallbackFont }),
+            ...(request.loadEmojiFont === undefined ? {} : { loadEmojiFont: request.loadEmojiFont }),
             at,
           }),
       },
