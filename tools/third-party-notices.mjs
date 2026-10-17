@@ -33,6 +33,22 @@ export const NOTICES_FILE = 'THIRD-PARTY-NOTICES.md';
 const LICENSE_FILE = /^(licen[cs]e|copying|notice)([.-][\w.-]*)?$/i;
 
 /**
+ * Third-party files that ship inside a Caotang package rather than as a dependency, so the lockfile does not list them. Each
+ * names the file it ships as, its license, its source, and the license text kept beside it in the repository (a path from the
+ * repository root), which is reproduced in full. The screenplay PDF embeds Courier Prime (docs/architecture/screenplay.md §5.3).
+ */
+export const BUNDLED_ASSETS = Object.freeze([
+  Object.freeze({
+    name: 'Courier Prime Regular (font)',
+    version: '3.018',
+    license: 'OFL-1.1',
+    repository: 'https://github.com/quoteunquoteapps/CourierPrime',
+    shippedAs: 'packages/screenplay/src/fonts/courier-prime-regular.ts',
+    licenseFile: 'packages/screenplay/src/fonts/OFL.txt',
+  }),
+]);
+
+/**
  * Dual-licensed packages Caotang uses under the permissive side. The notice names the license it is used under, so a
  * reader does not take the GPL side of the declared expression to be an obligation. Each entry is a decision, and it is
  * reviewed when the package changes. `jszip` (MIT OR GPL-3.0-or-later) is used under MIT, through `docx`.
@@ -178,7 +194,7 @@ function repositoryOf(manifest) {
  * The notices document for the given packages. It is deterministic: the same packages and the same license files give the
  * same bytes, on any machine, so a committed copy can be compared with a fresh one.
  */
-export function renderNotices(packages, { filters = SHIPPED_FILTERS } = {}) {
+export function renderNotices(packages, { filters = SHIPPED_FILTERS, assets = [] } = {}) {
   const lines = [];
   lines.push('# Third-party notices');
   lines.push('');
@@ -216,6 +232,23 @@ export function renderNotices(packages, { filters = SHIPPED_FILTERS } = {}) {
       lines.push(fence);
     }
   }
+  if (assets.length > 0) {
+    lines.push('');
+    lines.push(`## Bundled files (${assets.length})`);
+    lines.push('');
+    lines.push('These ship inside Caotang\'s own packages, not as dependencies, so the lockfile does not list them.');
+    for (const asset of assets) {
+      lines.push('');
+      lines.push(`### ${asset.name} ${asset.version}`);
+      lines.push('');
+      lines.push(`License: ${asset.license}. Source: ${asset.repository}. Shipped as \`${asset.shippedAs}\`.`);
+      lines.push('');
+      const fence = fenceFor(asset.text);
+      lines.push(`${fence}text`);
+      lines.push(asset.text.replace(/\n+$/, ''));
+      lines.push(fence);
+    }
+  }
   lines.push('');
   return lines.join('\n');
 }
@@ -223,7 +256,8 @@ export function renderNotices(packages, { filters = SHIPPED_FILTERS } = {}) {
 /** Generates the document for the shipped packages in `root`. */
 export function generateNotices({ root = REPO_ROOT, filters = SHIPPED_FILTERS } = {}) {
   const packages = externalPackages(listProductionTree(root, filters)).map(describePackage);
-  return renderNotices(packages, { filters });
+  const assets = BUNDLED_ASSETS.map((asset) => ({ ...asset, text: normalizeText(readFileSync(join(root, asset.licenseFile), 'utf8')) }));
+  return renderNotices(packages, { filters, assets });
 }
 
 function fenceFor(text) {

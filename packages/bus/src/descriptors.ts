@@ -1227,8 +1227,8 @@ export const codexAttach: CommandDescriptor<CodexAttachParams> = {
  * renders. It is the prose formats (md, txt, docx, epub) and the media-track
  * formats the exporter ships (exporter.md §5, one-source compile): the screenplay
  * Fountain and FDX, the dialogue table and compiled Ink, the shot list, the
- * video prompt pack and the coherence report. The screenplay PDF is not in it
- * yet: it waits on a benchmark, and the list says what is compiled, not what is planned.
+ * video prompt pack, the coherence report and the screenplay PDF. The list says what
+ * is compiled, not what is planned.
  */
 export const EXPORT_FORMATS = [
   'md',
@@ -1244,6 +1244,8 @@ export const EXPORT_FORMATS = [
   // The coherence report. Two names, appended after the ten above (ten + two = twelve).
   'coherence-md',
   'coherence-json',
+  // The screenplay PDF (screenplay.md §5.3), appended after the twelve above.
+  'pdf',
 ] as const;
 
 function exportFormatRefusal(format: string): Result<never, CommandError> | undefined {

@@ -1,7 +1,7 @@
 /**
  * `@caotang/exporter` — the compile pipeline ([exporter.md](../../../docs/architecture/exporter.md)):
  * select → flatten → render → emit, with the Markdown, plain-text, DOCX and EPUB renderers, and the
- * media-track formats of the one-source compile (`media.ts`): screenplay Fountain and FDX, the dialogue table and
+ * media-track formats of the one-source compile (`media.ts`): screenplay Fountain, FDX and PDF, the dialogue table and
  * compiled Ink, the storyboard shot list, and the video prompt pack.
  *
  * The store never imports this package. The app builds one exporter over the

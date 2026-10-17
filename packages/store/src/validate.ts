@@ -146,8 +146,15 @@ function isRecipeOptions(v: unknown): boolean {
     (o['titlePage'] === undefined || typeof o['titlePage'] === 'boolean') &&
     (o['toc'] === undefined || typeof o['toc'] === 'boolean') &&
     (o['author'] === undefined || typeof o['author'] === 'string') &&
-    (o['charLimit'] === undefined || isCharLimit(o['charLimit']))
+    (o['charLimit'] === undefined || isCharLimit(o['charLimit'])) &&
+    (o['sceneNumbers'] === undefined || isSceneNumbers(o['sceneNumbers'])) &&
+    (o['continued'] === undefined || typeof o['continued'] === 'boolean')
   );
+}
+
+/** The screenplay PDF's scene-number placement (screenplay.md §5.3): one of the four the bus accepts. */
+function isSceneNumbers(v: unknown): boolean {
+  return v === 'off' || v === 'left' || v === 'right' || v === 'both';
 }
 
 /** exporter.md §2's recipe shape, the three fields a recipe cannot do without. */
@@ -284,7 +291,7 @@ function validateFields(
           // a saved selection the writer chose, and the options it cannot read fall back to the template's defaults.
           const options = (recipe as Record<string, unknown>)['options'];
           if (options !== undefined && !isRecipeOptions(options)) {
-            warn(`recipes[${i}].options`, 'not a set of recipe options (titlePage, toc, author, charLimit); dropped, and the recipe uses the template defaults');
+            warn(`recipes[${i}].options`, 'not a set of recipe options (titlePage, toc, author, charLimit, sceneNumbers, continued); dropped, and the recipe uses the template defaults');
             delete (recipe as Record<string, unknown>)['options'];
           }
           return true;

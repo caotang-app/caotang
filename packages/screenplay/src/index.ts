@@ -67,12 +67,18 @@ export {
   type SceneLength,
 } from './paginate.js';
 
-export { pdfString, writePdf, type PdfInfo, type PdfText } from './pdf.js';
+export { isPrintable, pdfString, writePdf, type PdfFont, type PdfInfo, type PdfText } from './pdf.js';
+
+export { COURIER_PRIME_METRICS } from './fonts/courier-prime-metrics.js';
 
 export {
   PDF_MIME,
   createPdfRenderer,
+  drawPdf,
+  layoutPdf,
+  loadCourierPrime,
   renderPdf,
+  type PdfLayout,
   type PdfRenderOptions,
   type PdfRenderResult,
   type PdfRenderer,

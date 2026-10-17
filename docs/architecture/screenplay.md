@@ -1,6 +1,6 @@
 # Screenplay — document kind + Fountain render pipeline (post-v0.1)
 
-> Status: built, except where a section says otherwise.
+> Status: built, except where a section says otherwise. §5.3's PDF renderer is built and compiled as the `pdf` export format.
 > Scope: Attaches to `project-store`/`binder` (a document kind), `editor` (decoration styling), `exporter` (three renderers), `coherence` (mention/check feed).
 > Cross-refs: kind vocabulary = [project-format.md](project-format.md) §2 media-additive note · exporter recipe shape = [exporter.md](exporter.md) §2/§3 · body projection & anchors = [project-format.md](project-format.md) §3 + [edit-anchors.md](edit-anchors.md) §2 · findings model = [coherence.md](coherence.md) §3/§5.1 · context layers = [context-assembly.md](context-assembly.md) §2.
 
@@ -104,6 +104,14 @@ interface FountainRenderer { emit(blocks: FlatBlock[], opts: { title: string; au
 - **Engine:** a Caotang-owned pagination pass over the element stream (pure function: elements + constants → pages) + a PDF emitter (`pdf-lib`-class library, lazy-loaded at the exporter edge — the DOCX/EPUB lazy-import pattern; exact pick joins the benchmark gate with the parser decision, §7 A4). afterwriting's MIT pipeline (aw-parser + PDF stage) is the studied reference implementation; vendor-if-dormant applies.
 - **Options (recipe/template):** scene numbers on export (left/right/both, off by default — Final Draft's number-scene command is a *compile-time* feature; Scrivener's years-long scene-number request confirms it never lives in the editor); title page on/off; `(CONT'D)` handling on/off.
 - **NOT in scope at any gate:** revision marks + colored/locked pages (the FDX-production stage), dual-column preview UI, print CSS. Parked explicitly.
+- **As built.** The `pdf` export format compiles this renderer (exporter.md §5).
+  - **Engine.** No PDF library. The pagination pass is `paginate.ts`, and the writer is `pdf.ts`: uncompressed content streams of positioned text in one font. Text in one monospaced font needs nothing more, so a dependency would only add weight. The benchmark of A4 is therefore moot for the emitter.
+  - **Font.** Courier Prime Regular (A3) is embedded whole as a TrueType font program (`FontFile2`, written in hexadecimal so the file stays ASCII). The font module is loaded by a dynamic import when a PDF is drawn, so the editor bundle never carries it, and nothing is fetched: the font travels inside the app. Its metrics are tested against the font's own tables. A character WinAnsi cannot encode prints as `?`, and the compile log names it.
+  - **Lines.** 54 lines a page: (11 − 1 − 1) × 72 / 12. The spec's "~55" is this figure.
+  - **Page numbers.** The title page is not counted and has no number. Script pages count from 1, and the number is printed at the top right from page 2, as `2.`.
+  - **Dual dialogue.** A pair prints in two columns of 27 characters from the same row. A pair is atomic: it moves to the next page whole. A pair taller than a page is laid as its two blocks in sequence, under the dialogue rules.
+  - **Options.** `sceneNumbers` (`off` by default, `left`, `right`, `both`) and `continued` (on by default) are recipe options; the title page is the recipe's `titlePage`. A heading's own `#n#` number is printed when it has one.
+  - **Not drawn.** Bold or underlined headings (the layout constants name none), A4 pages, and a choice of font.
 
 ## 6. Harness integration (zero new tools)
 
