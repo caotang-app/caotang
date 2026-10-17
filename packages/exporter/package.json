@@ -19,6 +19,7 @@
     "@caotang/video-prompt-pack": "workspace:*",
     "docx": "9.9.0",
     "fflate": "0.8.3",
+    "pdf-lib": "1.17.1",
     "remark-parse": "11.0.0",
     "unified": "11.0.5"
   },

@@ -170,6 +170,23 @@ describe('manifest serializer', () => {
     }
   });
 
+  it('keeps the contact sheet’s paper size, A4 or Letter, through a save and a load, and drops any other value with a warning', () => {
+    for (const good of ['A4', 'Letter'] as const) {
+      const m = rich();
+      m.recipes = [{ name: 'sheets', includeRootIds: ['manuscript'], format: 'contact-sheet-pdf', options: { pageSize: good } }];
+      const reloaded = JSON.parse(serializeManifest(m)) as Manifest;
+      expect(reloaded.recipes?.[0]?.options).toEqual({ pageSize: good });
+      const r = validateManifest(reloaded, { docFiles: [] });
+      expect(r.warnings.map((w) => w.path), good).not.toContain('recipes[0].options');
+      expect((r.manifest as Manifest).recipes?.[0]?.options).toEqual({ pageSize: good });
+    }
+    const m = rich();
+    m.recipes = [{ name: 'sheets', includeRootIds: ['manuscript'], format: 'contact-sheet-pdf', options: { pageSize: 'A3' as unknown as 'A4' } }];
+    expect((JSON.parse(serializeManifest(m)) as Manifest).recipes?.[0]?.options).toEqual({});
+    const r = validateManifest(m, { docFiles: [] });
+    expect(r.warnings.map((w) => w.path)).toContain('recipes[0].options');
+  });
+
   it('writes only the recipe options a load keeps, so a value of another type cannot put unquoted text in the file', () => {
     const m = rich();
     m.recipes = [

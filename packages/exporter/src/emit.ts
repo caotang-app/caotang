@@ -291,7 +291,7 @@ export function createEmitter(options: EmitterOptions): Emitter {
 }
 
 function isBinaryPath(path: string): boolean {
-  return /\.(docx|epub)$/i.test(path);
+  return /\.(docx|epub|pdf)$/i.test(path);
 }
 
 function messageOf(error: unknown): string {

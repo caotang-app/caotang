@@ -7,11 +7,18 @@
  *   chip and line of text comes out, in points with the origin at the top left. The plan has all the
  *   structure a contact sheet has (page count, capacity, reading order, what sits inside the page), and
  *   the tests check it directly.
- * - The **emitter** turns a plan into PDF bytes. It is an injected port. storyboard.md §6 gives this
- *   renderer the screenplay PDF's pattern, and screenplay.md §5.3 leaves that library's pick to the
- *   PDF-library benchmark. So no library is pinned here. {@link ContactSheetPdfRenderer.render} refuses with
- *   that reason until an emitter is supplied; {@link ContactSheetPdfRenderer.build} works without one,
- *   and returns the plan and the image bytes an emitter would be given.
+ * - The **emitter** turns a plan into PDF bytes. It is an injected port, so this package names no PDF
+ *   library: the exporter supplies the emitter (`@caotang/exporter`'s `contact-sheet-pdf` format, over
+ *   `pdf-lib`, loaded lazily). {@link ContactSheetPdfRenderer.render} refuses when no emitter is supplied;
+ *   {@link ContactSheetPdfRenderer.build} works without one, and returns the plan and the image bytes an
+ *   emitter would be given.
+ *
+ * {@link planContactSheet} is the plan from the project, with no reads: the caller says which pictures can be
+ * drawn. The exporter uses it, because a compile plans synchronously and reads the image bytes later.
+ *
+ * Each page's header carries the title (from the header template), the page label, and a summary line:
+ * the shot count, the animatic total and the shots left out of it for want of a duration (§2.2, the
+ * board header's three numbers).
  *
  * Text width is estimated, not measured. Helvetica averages about half an em per character, and the
  * layout uses {@link SHEET_LAYOUT}`.charWidthEm` of 0.55 so a wrapped line stays inside its card. An
@@ -20,8 +27,9 @@
 
 import { nodeById, type ArtifactFs, type ProjectState } from '@caotang/store';
 
+import { animaticTotals } from './animatic.js';
 import { readImage, type LoadedImage } from './assets.js';
-import { isStoryboardFolder, specRowOf } from './model.js';
+import { durationText, isStoryboardFolder, specRowOf } from './model.js';
 import { shotFieldOf } from './nodes.js';
 import { exportNumbers, shotsInBinderOrder } from './ordering.js';
 import { readShotMeta, storedOf } from './shot-meta.js';
@@ -51,6 +59,8 @@ export const SHEET_LAYOUT = {
   specFontSize: 8,
   actionFontSize: 8,
   headerFontSize: 11,
+  /** The header's second line: the shot count and the animatic total. */
+  summaryFontSize: 8,
   charWidthEm: 0.55,
   chipHeight: 12,
 } as const;
@@ -147,6 +157,11 @@ export interface PlacedCard {
   readonly spec: PlacedText;
   readonly action: readonly PlacedText[];
   readonly placeholder?: PlacedText;
+  /**
+   * The placeholder's text and place, present on every card. An emitter that cannot draw a planned picture (its
+   * bytes are gone, or the PDF engine cannot read them) draws this instead, so the card is never left blank.
+   */
+  readonly fallback: PlacedText;
 }
 
 export interface SheetPage {
@@ -154,6 +169,8 @@ export interface SheetPage {
   readonly index: number;
   readonly title: PlacedText;
   readonly pageLabel: PlacedText;
+  /** The header's second line, when the plan was given one: the shot count and the animatic total. */
+  readonly summary?: PlacedText;
   readonly cards: readonly PlacedCard[];
   /** Set on the single page of an empty sheet. */
   readonly emptyNote?: PlacedText;
@@ -182,6 +199,8 @@ export interface PaginateOptions {
   readonly columns?: number;
   /** The header text, already filled. Cut to one line, and to the room the page label leaves. */
   readonly headerText?: string;
+  /** The header's second line, on every page. Cut to one line of the content width. */
+  readonly summaryText?: string;
   readonly emptyText?: string;
 }
 
@@ -216,6 +235,8 @@ export function paginate(cards: readonly SheetCard[], options: PaginateOptions =
     const label = `Page ${index + 1} of ${pageCount}`;
     const labelWidth = measureText(label, SHEET_LAYOUT.headerFontSize);
     const headerLine = wrapText(options.headerText ?? '', Math.max(0, headerRoom - labelWidth), SHEET_LAYOUT.headerFontSize, 1)[0] ?? '';
+    const summaryLine =
+      options.summaryText === undefined ? undefined : (wrapText(options.summaryText, contentWidth, SHEET_LAYOUT.summaryFontSize, 1)[0] ?? '');
     const page = cards.slice(index * cardsPerPage, (index + 1) * cardsPerPage);
     const placed = page.map((card, slot) => placeCard(card, slot, columns, cardWidth, cardHeight, imageHeight));
     const emptyNote =
@@ -236,6 +257,16 @@ export function paginate(cards: readonly SheetCard[], options: PaginateOptions =
         y: margin + SHEET_LAYOUT.headerFontSize,
         fontSize: SHEET_LAYOUT.headerFontSize,
       },
+      ...(summaryLine === undefined
+        ? {}
+        : {
+            summary: {
+              text: summaryLine,
+              x: margin,
+              y: margin + SHEET_LAYOUT.headerFontSize + 4 + SHEET_LAYOUT.summaryFontSize,
+              fontSize: SHEET_LAYOUT.summaryFontSize,
+            },
+          }),
       cards: placed,
       ...(emptyNote !== undefined ? { emptyNote } : {}),
     });
@@ -263,14 +294,13 @@ function placeCard(
   const specY = y + imageHeight + gap + specFontSize;
   const specText = wrapText(card.specRow, cardWidth, specFontSize, 1)[0] ?? '';
   const actionText = wrapText(card.action, cardWidth, actionFontSize, actionLines);
-  const placeholder = card.image
-    ? undefined
-    : {
-        text: wrapText(card.placeholder, cardWidth - 2 * gap, actionFontSize, 1)[0] ?? '',
-        x: x + gap,
-        y: y + imageHeight / 2 + actionFontSize / 2,
-        fontSize: actionFontSize,
-      };
+  const fallback: PlacedText = {
+    text: wrapText(card.placeholder, cardWidth - 2 * gap, actionFontSize, 1)[0] ?? '',
+    x: x + gap,
+    y: y + imageHeight / 2 + actionFontSize / 2,
+    fontSize: actionFontSize,
+  };
+  const placeholder = card.image ? undefined : fallback;
 
   return {
     shotId: card.shotId,
@@ -288,6 +318,7 @@ function placeCard(
       fontSize: actionFontSize,
     })),
     ...(placeholder !== undefined ? { placeholder } : {}),
+    fallback,
   };
 }
 
@@ -305,8 +336,134 @@ export interface ContactSheetOptions {
   readonly headerTemplate?: string;
   readonly project?: string;
   readonly storyboard?: string;
-  /** The date `{date}` shows, as YYYY-MM-DD. Defaults to today. Pass it in tests. */
+  /** The date `{date}` shows, as YYYY-MM-DD. Wins over {@link now}; the exporter passes the writer's local day. */
+  readonly date?: string;
+  /** The moment `{date}` is taken from when no {@link date} is given (its UTC day). Defaults to now. Pass it in tests. */
   readonly now?: Date;
+}
+
+/** Whether a planned picture can be drawn, and, when it cannot, the note that says why. */
+export type SheetImageStatus = { readonly drawn: true } | { readonly drawn: false; readonly note: string };
+
+/** The plan of a contact sheet, with what it was built from: the notes, and the picture each drawn card points at. */
+export interface ContactSheetPlan {
+  readonly plan: SheetPlan;
+  readonly notes: readonly string[];
+  /** Shot id to the asset id of the picture its card draws. Only the cards whose picture {@link SheetImageStatus} said can be drawn. */
+  readonly pictures: ReadonlyMap<string, string>;
+  /** How many shots the sheet holds. */
+  readonly shotCount: number;
+}
+
+/**
+ * The spec row a contact-sheet card prints: the board's M-size row (§3.1), `shotSize · cameraAngle · cameraMovement ·
+ * durationSec s`, with `lens · transition` after it when they are set.
+ */
+export function sheetSpecRowOf(stored: Readonly<Record<string, unknown>>): string {
+  const parts = [specRowOf(stored)];
+  for (const field of ['lens', 'transition'] as const) {
+    const value = stored[field];
+    if (typeof value === 'string' && value.trim() !== '') parts.push(value.trim());
+  }
+  return parts.filter((part) => part !== '').join(' · ');
+}
+
+/**
+ * The header's summary line: the shot count, the animatic total, and how many shots are left out of it because they
+ * have no duration (§2.2). The board's header says the same three numbers.
+ */
+export function sheetSummaryOf(state: ProjectState, shotIds: readonly string[]): string {
+  const totals = animaticTotals(state, shotIds);
+  const count = shotIds.length;
+  const shots = `${count} ${count === 1 ? 'shot' : 'shots'}`;
+  const untimed = totals.untimed.length;
+  const left = untimed === 0 ? '' : ` (${untimed} ${untimed === 1 ? 'shot' : 'shots'} without a duration left out)`;
+  return `${shots} · ${durationText(totals.seconds)} s of animatic${left}`;
+}
+
+/**
+ * The plan of a contact sheet from the project, with no reads. `imageStatus` says, for each asset id a shot names,
+ * whether its picture can be drawn; a card whose picture cannot be drawn shows its caption (`imageAlt`), or "No image",
+ * and the note is kept once per asset. Cards are the shots under the selection in binder order, numbered 1 to n as the
+ * shot list numbers them.
+ */
+export function planContactSheet(
+  state: ProjectState,
+  selection: readonly string[] | undefined,
+  imageStatus: (assetId: string) => SheetImageStatus,
+  options: ContactSheetOptions = {},
+): ContactSheetPlan {
+  const notes: string[] = [];
+  for (const id of selection ?? []) {
+    if (nodeById(state, id) === undefined) notes.push(`no node "${id}" in the project, so nothing was drawn for it`);
+  }
+
+  const shots = shotsInBinderOrder(state, selection);
+  const numbers = exportNumbers(shots);
+  const pictures = new Map<string, string>();
+  const statuses = new Map<string, SheetImageStatus>();
+  const cards: SheetCard[] = [];
+
+  for (const node of shots) {
+    const read = readShotMeta(shotFieldOf(node));
+    const assetId = read.meta.image;
+    let hasImage = false;
+    if (assetId !== undefined) {
+      let status = statuses.get(assetId);
+      if (status === undefined) {
+        status = imageStatus(assetId);
+        statuses.set(assetId, status);
+        if (!status.drawn) notes.push(status.note);
+      }
+      if (status.drawn) {
+        hasImage = true;
+        pictures.set(node.id, assetId);
+      }
+    }
+    cards.push({
+      shotId: node.id,
+      shotNumber: numbers.get(node.id) ?? 0,
+      specRow: sheetSpecRowOf(storedOf(shotFieldOf(node)) ?? {}),
+      action: read.meta.action ?? '',
+      image: hasImage,
+      placeholder: read.meta.imageAlt ?? 'No image',
+    });
+  }
+
+  const storyboardName = options.storyboard ?? storyboardNameOf(state, selection, shots);
+  const date = options.date ?? (options.now ?? new Date()).toISOString().slice(0, 10);
+  const headerText = fillTemplate(options.headerTemplate ?? '{storyboard}', {
+    project: options.project ?? '',
+    storyboard: storyboardName,
+    date,
+  });
+
+  const plan = paginate(cards, {
+    ...(options.pageSize !== undefined ? { pageSize: options.pageSize } : {}),
+    ...(options.columns !== undefined ? { columns: options.columns } : {}),
+    headerText,
+    summaryText: sheetSummaryOf(
+      state,
+      shots.map((node) => node.id),
+    ),
+  });
+  return { plan, notes, pictures, shotCount: shots.length };
+}
+
+/**
+ * The name `{storyboard}` fills: the one storyboard folder the selection names, else the one storyboard every shot sits in,
+ * else "All shots".
+ */
+function storyboardNameOf(state: ProjectState, selection: readonly string[] | undefined, shots: readonly { readonly parentId: string | null }[]): string {
+  const single = selection?.length === 1 && selection[0] !== undefined ? nodeById(state, selection[0]) : undefined;
+  if (single !== undefined && isStoryboardFolder(single)) return single.title;
+  const parents = new Set(shots.map((node) => node.parentId));
+  if (parents.size === 1) {
+    const [parentId] = [...parents];
+    const parent = parentId === null || parentId === undefined ? undefined : nodeById(state, parentId);
+    if (parent !== undefined && isStoryboardFolder(parent)) return parent.title;
+  }
+  return 'All shots';
 }
 
 /** What an emitter is given: the plan, and the image bytes its cards point at. */
@@ -338,57 +495,23 @@ export class ContactSheetPdfRenderer {
     selection?: readonly string[],
     options: ContactSheetOptions = {},
   ): Promise<ContactSheetDocument> {
-    const notes: string[] = [];
-    for (const id of selection ?? []) {
-      if (nodeById(state, id) === undefined) notes.push(`no node "${id}" in the project, so nothing was drawn for it`);
-    }
-
-    const shots = shotsInBinderOrder(state, selection);
-    const numbers = exportNumbers(shots);
     const images = new Map<string, LoadedImage>();
-    const missing = new Set<string>();
-    const cards: SheetCard[] = [];
-
-    for (const node of shots) {
-      const number = numbers.get(node.id) ?? 0;
-      const read = readShotMeta(shotFieldOf(node));
-      let hasImage = false;
-      const assetId = read.meta.image;
-      if (assetId !== undefined) {
-        const loaded = images.get(assetId) ?? (await readImage(fs, assetId));
-        if (loaded !== undefined) {
-          images.set(assetId, loaded);
-          hasImage = true;
-        } else if (!missing.has(assetId)) {
-          missing.add(assetId);
-          notes.push(`image ${assetId} could not be read from assets/, so its cards draw a placeholder`);
-        }
-      }
-      cards.push({
-        shotId: node.id,
-        shotNumber: number,
-        specRow: specRowOf(storedOf(shotFieldOf(node)) ?? {}),
-        action: read.meta.action ?? '',
-        image: hasImage,
-        placeholder: read.meta.imageAlt ?? 'No image',
-      });
+    for (const node of shotsInBinderOrder(state, selection)) {
+      const assetId = readShotMeta(shotFieldOf(node)).meta.image;
+      if (assetId === undefined || images.has(assetId)) continue;
+      const loaded = await readImage(fs, assetId);
+      if (loaded !== undefined) images.set(assetId, loaded);
     }
-
-    const single = selection?.length === 1 && selection[0] !== undefined ? nodeById(state, selection[0]) : undefined;
-    const storyboardName = options.storyboard ?? (single !== undefined && isStoryboardFolder(single) ? single.title : 'All shots');
-    const now = options.now ?? new Date();
-    const headerText = fillTemplate(options.headerTemplate ?? '{storyboard}', {
-      project: options.project ?? '',
-      storyboard: storyboardName,
-      date: now.toISOString().slice(0, 10),
-    });
-
-    const plan = paginate(cards, {
-      ...(options.pageSize !== undefined ? { pageSize: options.pageSize } : {}),
-      ...(options.columns !== undefined ? { columns: options.columns } : {}),
-      headerText,
-    });
-    return { plan, images, notes };
+    const planned = planContactSheet(
+      state,
+      selection,
+      (assetId) =>
+        images.has(assetId)
+          ? { drawn: true }
+          : { drawn: false, note: `image ${assetId} could not be read from assets/, so its cards draw a placeholder` },
+      options,
+    );
+    return { plan: planned.plan, images, notes: planned.notes };
   }
 
   /** The PDF bytes, when an emitter is wired. Refused with the reason otherwise, never a silent empty file. */
@@ -401,7 +524,7 @@ export class ContactSheetPdfRenderer {
     if (this.emitter === undefined) {
       return refuse(
         'pdf-engine-not-wired',
-        'the contact sheet is laid out, but no PDF engine is wired yet: the PDF library will be chosen after it is measured against real contact sheets. Use the shot list CSV for now.',
+        'the contact sheet is laid out, but no PDF engine is wired into this renderer: compile the contact-sheet-pdf format through the exporter, which supplies one.',
       );
     }
     const document = await this.build(fs, state, selection, options);

@@ -253,6 +253,7 @@ function recipeOptions(o: NonNullable<ExportRecipe['options']>): string {
   if (typeof limit === 'number' && Number.isSafeInteger(limit) && limit >= 1 && limit <= CHAR_LIMIT_MAX) {
     pairs.push(['charLimit', String(limit)]);
   }
+  if (o.pageSize === 'A4' || o.pageSize === 'Letter') pairs.push(['pageSize', str(o.pageSize)]);
   return pairs.length === 0 ? '{}' : oneLine(pairs);
 }
 

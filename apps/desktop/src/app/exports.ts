@@ -185,7 +185,7 @@ async function compileRows(fs: ArtifactFs): Promise<unknown[]> {
 }
 
 function isBinaryPath(path: string): boolean {
-  return /\.(docx|epub)$/i.test(path);
+  return /\.(docx|epub|pdf)$/i.test(path);
 }
 
 /** The basenames of the paths directly inside `dir`. */

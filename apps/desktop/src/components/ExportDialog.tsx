@@ -62,6 +62,11 @@ const FORMAT_GROUPS: readonly { readonly name: string; readonly formats: readonl
       { format: 'ink-json', label: 'Ink story (.ink.json)', help: 'The dialogue compiled for a game engine that reads Ink. One file per story.' },
       { format: 'dialogue-csv', label: 'Dialogue table (.csv)', help: 'Each spoken line with its id, speaker and text, for translation or recording.' },
       { format: 'shot-list-csv', label: 'Shot list (.csv)', help: 'Each shot in order, with its size, angle, movement and duration.' },
+      {
+        format: 'contact-sheet-pdf',
+        label: 'Storyboard contact sheet (.pdf)',
+        help: 'Each shot as a card with its picture, number, camera details and action, with the animatic total on every page.',
+      },
     ],
   },
   // The coherence report (media-track.md, Review): the findings file and its run history, for reading outside Caotang.
@@ -81,7 +86,12 @@ interface ShownOptions {
   readonly author: string;
   /** The dialogue table's character limit; `undefined` is no limit (dialogue-narrative.md §4). */
   readonly charLimit: number | undefined;
+  /** The contact sheet's paper; `undefined` is A4 (storyboard.md §6). */
+  readonly pageSize: PageSize | undefined;
 }
+
+/** The papers a contact sheet is drawn on. */
+type PageSize = 'A4' | 'Letter';
 
 function shownOptionsOf(recipe: ExportRecipe | undefined): ShownOptions {
   return {
@@ -89,6 +99,7 @@ function shownOptionsOf(recipe: ExportRecipe | undefined): ShownOptions {
     toc: recipe?.options?.toc ?? DEFAULT_TEMPLATE.toc,
     author: recipe?.options?.author ?? '',
     charLimit: recipe?.options?.charLimit,
+    pageSize: recipe?.options?.pageSize,
   };
 }
 
@@ -142,6 +153,7 @@ export function ExportDialog({
         toc: next.toc,
         ...(author === '' ? {} : { author }),
         ...(next.charLimit === undefined ? {} : { charLimit: next.charLimit }),
+        ...(next.pageSize === undefined ? {} : { pageSize: next.pageSize }),
       },
     });
     if (outcome.ok) setNotice(null);
@@ -165,6 +177,7 @@ export function ExportDialog({
         toc: shown.toc,
         ...(author === '' ? {} : { author }),
         ...(shown.charLimit === undefined ? {} : { charLimit: shown.charLimit }),
+        ...(shown.pageSize === undefined ? {} : { pageSize: shown.pageSize }),
       },
     });
     if (outcome.ok) {
@@ -344,6 +357,18 @@ export function ExportDialog({
               onInvalid={(text) => setNotice({ text, tone: 'error' })}
             />
           ) : null}
+          {format === 'contact-sheet-pdf' ? (
+            <label className="export-field">
+              <span className="export-option-label">Paper size</span>
+              <select
+                value={shown.pageSize ?? 'A4'}
+                onChange={(event) => saveOptions({ ...shown, pageSize: event.target.value === 'Letter' ? 'Letter' : 'A4' })}
+              >
+                <option value="A4">A4</option>
+                <option value="Letter">US Letter</option>
+              </select>
+            </label>
+          ) : null}
         </fieldset>
 
         <div className="export-field export-save-new">
@@ -489,6 +514,7 @@ function holdsOf(digest: ExportCommandDigest): string {
       return `${countPhrase(digest.blockCount, 'line')} in ${countPhrase(digest.sceneCount, 'container')}, ${countPhrase(digest.wordCount, 'word')}`;
     case 'shot-list-csv':
     case 'promptpack':
+    case 'contact-sheet-pdf':
       return countPhrase(digest.blockCount, 'shot');
     case 'coherence-md':
     case 'coherence-json':
