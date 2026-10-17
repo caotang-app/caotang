@@ -1,7 +1,7 @@
 /**
  * The user-facing "not in this build" lists name only what is missing. Each list is prose a writer reads, and nothing
  * else checks it, so a feature that ships (visual references, the dialogue table's character limit, the demo's continuity
- * findings in the Findings tab, weekly and monthly goals) can stay on the list after it is built. These tests read the
+ * findings in the Findings tab, weekly and monthly goals, spreadsheet export) can stay on the list after it is built. These tests read the
  * three lists and fail when one of them names a built feature as missing.
  */
 import { readFileSync } from 'node:fs';
@@ -30,6 +30,7 @@ const BUILT_FEATURES: readonly { readonly name: string; readonly pattern: RegExp
   { name: 'the continuity check reporting outside the Findings tab', pattern: /continuity check/i },
   { name: 'weekly and monthly goals', pattern: /weekly|monthly/i },
   { name: 'goals counted in characters', pattern: /characters, are not|counted in characters/i },
+  { name: 'spreadsheet export', pattern: /spreadsheet/i },
 ];
 
 describe('the not-in-this-build lists name only what is missing', () => {
