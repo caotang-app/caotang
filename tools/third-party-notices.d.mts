@@ -9,6 +9,9 @@ export const NOTICES_FILE: string;
 /** Dual-licensed packages and the license each is used under. */
 export const ELECTED_LICENSES: Readonly<Record<string, string>>;
 
+/** Workspace packages that vendor third-party work under its own license, listed like external packages. */
+export const VENDORED_WORKSPACE_PACKAGES: readonly string[];
+
 /** The label a README-sourced notice carries in place of a license file name. */
 export const README_NOTICE_NAME: string;
 

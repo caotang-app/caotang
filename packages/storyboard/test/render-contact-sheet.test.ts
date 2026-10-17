@@ -1,7 +1,7 @@
 /**
  * The contact sheet — storyboard.md §6. The page plan is the part with structure, so most of this file checks
  * positions: what fits on a page, what sits inside the margins, what overlaps, and in what order cards read.
- * The PDF port is exercised with a stand-in emitter, since no library is pinned (the PDF-library benchmark has not run).
+ * The PDF port is exercised with a stand-in emitter: the real one is the exporter's (`contact-sheet-pdf`, over pdf-lib), tested there.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -9,9 +9,14 @@ import { describe, expect, it } from 'vitest';
 import {
   ContactSheetPdfRenderer,
   SHEET_LAYOUT,
+  planContactSheet,
+  sheetSpecRowOf,
+  sheetSummaryOf,
   addShotNode,
   fillTemplate,
   importImage,
+  emojiStyleOf,
+  graphemesOf,
   measureText,
   paginate,
   wrapText,
@@ -21,6 +26,9 @@ import {
   type SheetPlan,
 } from '../src/index.js';
 
+import { addFolder } from '@caotang/store';
+
+import { setNodeKind } from '../src/nodes.js';
 import { CountingFs, NOW, buildFixture, pngBytes } from './fixtures.js';
 
 const MARGIN = SHEET_LAYOUT.margin;
@@ -209,6 +217,88 @@ describe('wrapText', () => {
   });
 });
 
+describe('wrapText and measureText with CJK text', () => {
+  // At 10 points a wide character is one em, 10 units, so a 60-unit line holds 6 of them.
+  it('counts a wide character as one em, and a narrow one as 0.55 em', () => {
+    expect(measureText('草堂', 10)).toBe(20);
+    expect(measureText('ひら', 10)).toBe(20);
+    expect(measureText('한국', 10)).toBe(20);
+    expect(measureText('ab', 10)).toBeCloseTo(11, 9);
+    expect(measureText('a草', 10)).toBeCloseTo(15.5, 9);
+  });
+
+  it('breaks between CJK characters, which have no spaces between words', () => {
+    expect(wrapText('草堂的早晨很安静茶馆还没开门', 60, 10, 3)).toEqual(['草堂的早晨很', '安静茶馆还没', '开门']);
+    expect(wrapText('ひらがなとカタカナです', 60, 10, 2)).toEqual(['ひらがなとカ', 'タカナです']);
+  });
+
+  it('wraps Korean on its spaces, as it is written', () => {
+    expect(wrapText('한국어 문장을 씁니다', 60, 10, 3)).toEqual(['한국어', '문장을', '씁니다']);
+    // A Hangul word longer than the line is still broken, so nothing overflows.
+    expect(wrapText('가나다라마바사아', 60, 10, 2)).toEqual(['가나다라마바', '사아']);
+  });
+
+  it('keeps a closing mark on the line before it, and an opening mark with the text after it', () => {
+    // 。would start the second line; it stays with 很, and 很 moves down with it.
+    expect(wrapText('草堂的早晨很。安静', 60, 10, 2)).toEqual(['草堂的早晨', '很。安静']);
+    // 「 would end the first line; it moves down with 茶.
+    expect(wrapText('他走进了一「茶馆」', 60, 10, 2)).toEqual(['他走进了一', '「茶馆」']);
+  });
+
+  it('wraps mixed text, breaking at spaces and between CJK characters, and keeps every line within the width', () => {
+    const lines = wrapText('Mei 走进茶馆, orders 龙井 tea and waits for the ferry', 60, 10, 6);
+    for (const line of lines) expect(measureText(line, 10)).toBeLessThanOrEqual(60 + 1e-9);
+    expect(lines[0]).toBe('Mei 走进茶');
+    // The comma stays with 馆: it does not start a line.
+    expect(lines[1]?.startsWith('馆,')).toBe(true);
+    expect(lines.join(' ').replace(/\s+/g, '')).toBe('Mei走进茶馆,orders龙井teaandwaitsfortheferry');
+  });
+
+  it('cuts CJK text past the last line with an ellipsis inside the width', () => {
+    const lines = wrapText('山'.repeat(30), 60, 10, 2);
+    expect(lines).toEqual(['山山山山山山', '山山山山山…']);
+    for (const line of lines) expect(measureText(line, 10)).toBeLessThanOrEqual(60 + 1e-9);
+  });
+});
+
+describe('emoji in the plan: one unit per grapheme cluster', () => {
+  // At 10 points an emoji is 1.3 em, 13 units, so a 60-unit line holds 4 of them.
+  const FAMILY = '👨‍👩‍👧‍👦';
+
+  it('says which clusters are emoji, by Unicode presentation', () => {
+    for (const emoji of ['🎬', FAMILY, '🧑🏽‍💻', '👍🏽', '🇩🇪', '1️⃣', '#️⃣', '🏴󠁧󠁢󠁳󠁣󠁴󠁿', '❤️', '🏳️‍🌈']) expect(emojiStyleOf(emoji), emoji).toBe('emoji');
+    // Default text presentation, or VS15: a text font is tried first.
+    for (const pictograph of ['☺', '✌', '❤', '☺︎', '🎬︎']) expect(emojiStyleOf(pictograph), pictograph).toBe('text');
+    // Digits, Latin-1's © and ®, letters and CJK are no emoji.
+    for (const text of ['1', '#', '©', '®', 'a', 'é', '草', '?']) expect(emojiStyleOf(text), text).toBeNull();
+  });
+
+  it('segments a text into grapheme clusters, so a sequence is one unit', () => {
+    expect(graphemesOf(`a${FAMILY}🇩🇪1️⃣e\u0301`)).toEqual(['a', FAMILY, '🇩🇪', '1️⃣', 'e\u0301']);
+  });
+
+  it('counts an emoji as 1.3 em however many code points it has', () => {
+    for (const emoji of ['🎬', FAMILY, '👍🏽', '🇩🇪', '1️⃣', '🏴󠁧󠁢󠁳󠁣󠁴󠁿']) expect(measureText(emoji, 10)).toBeCloseTo(13, 9);
+    expect(measureText(`ab${FAMILY}`, 10)).toBeCloseTo(24, 9);
+    // © stays a narrow Latin character.
+    expect(measureText('©', 10)).toBeCloseTo(5.5, 9);
+  });
+
+  it('breaks between emoji, never inside one, and keeps every line within the width', () => {
+    const lines = wrapText(FAMILY.repeat(10), 60, 10, 3);
+    expect(lines).toEqual([FAMILY.repeat(4), FAMILY.repeat(4), FAMILY.repeat(2)]);
+    expect(wrapText(`Go ${'🇩🇪'.repeat(6)}`, 60, 10, 3)).toEqual(['Go 🇩🇪🇩🇪🇩🇪', '🇩🇪🇩🇪🇩🇪']);
+    for (const line of wrapText(`Cut to ${FAMILY}${'👍🏽'.repeat(5)} then 1️⃣#️⃣`, 60, 10, 6)) expect(measureText(line, 10)).toBeLessThanOrEqual(60 + 1e-9);
+  });
+
+  it('cuts emoji past the last line with an ellipsis, dropping whole clusters', () => {
+    const lines = wrapText('🏴󠁧󠁢󠁳󠁣󠁴󠁿'.repeat(20), 60, 10, 2);
+    // Four flags and the ellipsis (4 × 13 + 5.5) still fit the 60-unit line.
+    expect(lines).toEqual(['🏴󠁧󠁢󠁳󠁣󠁴󠁿'.repeat(4), `${'🏴󠁧󠁢󠁳󠁣󠁴󠁿'.repeat(4)}…`]);
+    for (const line of lines) expect(measureText(line, 10)).toBeLessThanOrEqual(60 + 1e-9);
+  });
+});
+
 describe('fillTemplate: the exporter’s placeholder rule', () => {
   it('fills the names it has, and leaves a name it does not have as written, so a typo shows', () => {
     expect(fillTemplate('{project} — {storyboard} — {date} {nope}', { project: 'P', storyboard: 'S', date: '2026-10-08' })).toBe(
@@ -263,12 +353,17 @@ describe('the renderer: the page plan, the images, and the PDF port', () => {
     expect(allCards(document.plan).map((placed) => placed.chipText.text)).toEqual(['1', '2']);
   });
 
-  it('names the header after the one storyboard it draws, and after all shots otherwise', async () => {
+  it('names the header after the one storyboard it draws, or the one its shots sit in, and after all shots otherwise', async () => {
     const { fixture, fs } = await project();
     const single = await new ContactSheetPdfRenderer().build(fs, fixture.state, ['board1'], { headerTemplate: '{storyboard}' });
     const whole = await new ContactSheetPdfRenderer().build(fs, fixture.state, undefined, { headerTemplate: '{storyboard}' });
     expect(single.plan.pages[0]?.title.text).toBe('Board');
-    expect(whole.plan.pages[0]?.title.text).toBe('All shots');
+    expect(whole.plan.pages[0]?.title.text).toBe('Board');
+    const second = addFolder(fixture.state, { id: 'board2', parentId: 'manuscript', title: 'Second board', now: NOW });
+    setNodeKind(second, 'storyboard');
+    addShotNode(fixture.state, { parentId: 'board2', title: 'three', stored: {}, id: 'n_SHOTTRE001', now: NOW });
+    const both = await new ContactSheetPdfRenderer().build(fs, fixture.state, undefined, { headerTemplate: '{storyboard}' });
+    expect(both.plan.pages[0]?.title.text).toBe('All shots');
   });
 
   it('fills the header template with the project and the date it is given', async () => {
@@ -278,7 +373,7 @@ describe('the renderer: the page plan, the images, and the PDF port', () => {
       project: 'Lighthouse',
       now: new Date('2026-10-08T12:00:00.000Z'),
     });
-    expect(document.plan.pages[0]?.title.text).toBe('Lighthouse · All shots · 2026-10-08');
+    expect(document.plan.pages[0]?.title.text).toBe('Lighthouse · Board · 2026-10-08');
   });
 
   it('says so, and draws nothing, when a selection names a node the project does not hold', async () => {
@@ -292,7 +387,7 @@ describe('the renderer: the page plan, the images, and the PDF port', () => {
     const { fixture, fs } = await project();
     const result = await new ContactSheetPdfRenderer().render(fs, fixture.state, ['board1']);
     expect(result).toMatchObject({ ok: false, refusal: { code: 'pdf-engine-not-wired' } });
-    expect(result.ok === false && result.refusal.message).toContain('no PDF engine is wired yet');
+    expect(result.ok === false && result.refusal.message).toContain('no PDF engine is wired into this renderer');
   });
 
   it('hands the plan and the images to the emitter, and returns what the emitter wrote', async () => {
@@ -313,5 +408,103 @@ describe('the renderer: the page plan, the images, and the PDF port', () => {
 
   it('identifies itself as the contact-sheet recipe the exporter will name', () => {
     expect(new ContactSheetPdfRenderer()).toMatchObject({ id: 'contact-sheet-pdf', mime: 'application/pdf' });
+  });
+});
+
+describe('the header summary: the shot count and the animatic total', () => {
+  it('puts the summary on every page, below the title and inside the header', () => {
+    const plan = paginate(cards(31), { headerText: 'Board', summaryText: '31 shots · 62 s of animatic' });
+    expect(plan.pages).toHaveLength(3);
+    for (const page of plan.pages) {
+      expect(page.summary?.text).toBe('31 shots · 62 s of animatic');
+      expect(page.summary?.y ?? 0).toBeGreaterThan(page.title.y);
+      expect(page.summary?.y ?? Infinity).toBeLessThanOrEqual(MARGIN + SHEET_LAYOUT.headerHeight);
+      for (const placed of page.cards) expect(placed.frame.y).toBeGreaterThanOrEqual(MARGIN + SHEET_LAYOUT.headerHeight);
+    }
+  });
+
+  it('leaves the summary out when none is given', () => {
+    expect(paginate(cards(1)).pages[0]?.summary).toBeUndefined();
+  });
+
+  it('sums the timed shots and counts the untimed ones, as the board header does', () => {
+    const fixture = buildFixture();
+    addShotNode(fixture.state, { parentId: 'board1', title: 'a', stored: { durationSec: 2.5 }, id: 'n_SUMONE0001', now: NOW });
+    addShotNode(fixture.state, { parentId: 'board1', title: 'b', stored: { durationSec: 4 }, id: 'n_SUMTWO0001', now: NOW });
+    addShotNode(fixture.state, { parentId: 'board1', title: 'c', stored: {}, id: 'n_SUMTRE0001', now: NOW });
+    expect(sheetSummaryOf(fixture.state, ['n_SUMONE0001', 'n_SUMTWO0001', 'n_SUMTRE0001'])).toBe(
+      '3 shots · 6.5 s of animatic (1 shot without a duration left out)',
+    );
+    expect(sheetSummaryOf(fixture.state, ['n_SUMONE0001'])).toBe('1 shot · 2.5 s of animatic');
+  });
+});
+
+describe('the card spec row on the sheet', () => {
+  it('is the board’s M-size row: the camera values and the duration, then the lens and the transition when set', () => {
+    expect(sheetSpecRowOf({ shotSize: 'CU', cameraAngle: 'low', cameraMovement: 'pan', durationSec: 3, lens: '35mm', transition: 'cut' })).toBe(
+      'CU · low · pan · 3 s · 35mm · cut',
+    );
+    expect(sheetSpecRowOf({ lens: '  ' })).toBe('');
+    expect(sheetSpecRowOf({ transition: 'dissolve' })).toBe('dissolve');
+  });
+});
+
+describe('planContactSheet: the plan with no reads', () => {
+  function projectWithPictures() {
+    const fixture = buildFixture();
+    addShotNode(fixture.state, { parentId: 'board1', title: 'one', stored: { image: 'a_7K2QX9M4A1', durationSec: 2 }, id: 'n_PLNONE0001', now: NOW });
+    addShotNode(fixture.state, {
+      parentId: 'board1',
+      title: 'two',
+      stored: { image: 'a_7K2QX9M4A2', imageAlt: 'the empty quay' },
+      id: 'n_PLNTWO0001',
+      now: NOW,
+    });
+    addShotNode(fixture.state, { parentId: 'board1', title: 'three', stored: { image: 'a_7K2QX9M4A2' }, id: 'n_PLNTRE0001', now: NOW });
+    return fixture;
+  }
+
+  it('draws the pictures the caller says can be drawn, and gives the others their caption with one note per picture', () => {
+    const fixture = projectWithPictures();
+    const asked: string[] = [];
+    const planned = planContactSheet(fixture.state, ['board1'], (assetId) => {
+      asked.push(assetId);
+      return assetId === 'a_7K2QX9M4A1' ? { drawn: true } : { drawn: false, note: `cannot draw ${assetId}` };
+    });
+    const [one, two, three] = allCards(planned.plan);
+    expect(one?.hasImage).toBe(true);
+    expect(two?.hasImage).toBe(false);
+    expect(two?.placeholder?.text).toBe('the empty quay');
+    expect(three?.placeholder?.text).toBe('No image');
+    expect([...planned.pictures]).toEqual([['n_PLNONE0001', 'a_7K2QX9M4A1']]);
+    expect(planned.notes).toEqual(['cannot draw a_7K2QX9M4A2']);
+    // Each picture is asked about once, however many cards show it.
+    expect(asked).toEqual(['a_7K2QX9M4A1', 'a_7K2QX9M4A2']);
+    expect(planned.shotCount).toBe(3);
+  });
+
+  it('gives every card a fallback in the picture box, so an emitter that cannot draw a planned picture still shows the caption', () => {
+    const planned = planContactSheet(projectWithPictures().state, ['board1'], () => ({ drawn: true }));
+    for (const placed of allCards(planned.plan)) {
+      expect(placed.fallback.y).toBeGreaterThan(placed.image.y);
+      expect(placed.fallback.y).toBeLessThan(placed.image.y + placed.image.height);
+    }
+    expect(allCards(planned.plan)[1]?.fallback.text).toBe('the empty quay');
+  });
+
+  it('fills the header with the date it is given, and names the one storyboard every shot sits in', () => {
+    const planned = planContactSheet(projectWithPictures().state, undefined, () => ({ drawn: true }), {
+      headerTemplate: '{project} — {storyboard} — {date}',
+      project: 'Lighthouse',
+      date: '2026-10-17',
+    });
+    expect(planned.plan.pages[0]?.title.text).toBe('Lighthouse — Board — 2026-10-17');
+    expect(planned.plan.pages[0]?.summary?.text).toBe('3 shots · 2 s of animatic (2 shots without a duration left out)');
+  });
+
+  it('lays the sheet out on Letter when asked', () => {
+    const planned = planContactSheet(projectWithPictures().state, ['board1'], () => ({ drawn: true }), { pageSize: 'Letter' });
+    expect(planned.plan.pageSize).toBe('Letter');
+    expect(planned.plan.geometry.height).toBe(792);
   });
 });

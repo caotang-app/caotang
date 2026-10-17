@@ -834,6 +834,8 @@ describe('export.compile, export.compileSelection and project.deleteNode', () =>
       // The coherence report, as Markdown and JSON. Ten formats before it, twelve in all.
       'coherence-md',
       'coherence-json',
+      // The storyboard contact sheet (storyboard.md §6), the thirteenth.
+      'contact-sheet-pdf',
     ]);
   });
 

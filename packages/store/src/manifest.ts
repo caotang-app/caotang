@@ -47,6 +47,8 @@ export interface ExportRecipeOptions {
   author?: string;
   /** The dialogue table's character limit (dialogue-narrative.md §4). Absent = no limit. */
   charLimit?: number;
+  /** The contact sheet's paper (storyboard.md §6). Absent = A4. */
+  pageSize?: 'A4' | 'Letter';
 }
 
 /**

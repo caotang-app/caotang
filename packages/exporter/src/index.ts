@@ -2,7 +2,7 @@
  * `@caotang/exporter` — the compile pipeline ([exporter.md](../../../docs/architecture/exporter.md)):
  * select → flatten → render → emit, with the Markdown, plain-text, DOCX and EPUB renderers, and the
  * media-track formats of the one-source compile (`media.ts`): screenplay Fountain and FDX, the dialogue table and
- * compiled Ink, the storyboard shot list, and the video prompt pack.
+ * compiled Ink, the storyboard shot list and contact sheet, and the video prompt pack.
  *
  * The store never imports this package. The app builds one exporter over the
  * project's artifact folder and hands its `commandPort()` to the store's registry:
@@ -45,7 +45,13 @@ export { createExporter, EXPORT_MIME, recipesOf, type ExportDispatch, type Expor
 // The metadata and the stored images an export reads, the same for every host that compiles (epub-metadata.md).
 export { assetRecordsOf, exportMetadataOf } from './export-metadata.js';
 export { flatten, documentLabel, type FlattenOptions, type FlattenResult } from './flatten.js';
-export { renderMedia, type MediaFile, type MediaOutput, type MediaRequest } from './media.js';
+export { CONTACT_SHEET_HEADER, renderMedia, type MediaFile, type MediaOutput, type MediaRequest } from './media.js';
+// The storyboard contact sheet's PDF emitter (storyboard.md §6), over pdf-lib, loaded lazily.
+export { PDF_MIME, containIn, drawContactSheet, fitToWidth, type ContactSheetPdf, type ContactSheetPdfInput } from './render-contact-sheet.js';
+// Its fallback fonts: for text outside Latin script, and for emoji. The Node loaders are the subpath
+// `@caotang/exporter/fallback-fonts-node`.
+export { CJK_FONT_FILE, CJK_FONT_NAME, sfntFromWoff, type FontLoader } from './cjk-font.js';
+export { EMOJI_FONT_FILE, EMOJI_FONT_NAME } from './emoji-font.js';
 // The coherence report's renderers (the one-source compile's Review row). The compile reaches them through `renderMedia`.
 export {
   COHERENCE_JSON_MIME,

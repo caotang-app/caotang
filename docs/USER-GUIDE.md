@@ -158,6 +158,12 @@ Choose **New storyboard here** from a folder's menu. A storyboard holds shots, a
 
 **The shot's prompt.** The **Prompt** section writes one target model's prompt for the shot: its camera, subject, action, context and style; its audio; the negative prompt; the clip length, aspect ratio, resolution and seed; and its references. Use **Vendor for this prompt** to choose the model. **Save prompt** saves that vendor's prompt, and the other vendors' prompts are kept as they were. The text you type for one vendor stays when you switch to another vendor and back. A change to the stored prompt, such as an undo or the agent's draft, can replace it, and then the section says so. **Remove this prompt** deletes it. Each check under the fields names a problem, and **Go to the field** brings that field into view. **Writer's note for this shot** is for you, and it is not sent to the model. **Add a reference** adds a codex entry or a picture the prompt sends with the shot, and **Best take** records the take you kept from your own generation.
 
+**Contact sheet.** To print a storyboard, choose **Compile…** and **Storyboard contact sheet (.pdf)**, with **Only “…”** for one storyboard or **The whole manuscript** for every shot. The PDF lays the shots out as cards in board order, 15 to an A4 page or 12 to a US Letter page. Each card shows the picture, the shot number, the camera details and duration, and the first two lines of the action. Each page's header gives the project, the storyboard, the date, the page number, the number of shots and the animatic total. A shot with no picture shows its caption. **Paper size** in the recipe's settings chooses A4 or US Letter.
+
+Chinese, Japanese and Korean text prints in the Noto Sans CJK font. Lines break between Chinese and Japanese characters, and at spaces in Korean. Caotang loads the font only when a sheet holds such text, and the PDF carries only the characters it uses. Greek and Cyrillic print in the same font.
+
+Emoji print too, in black and white, in the Noto Emoji font: if you can type it, it prints. A family, a profession, a skin tone, a flag or a keycap prints as one picture and wraps as one character, and copying it out of the PDF gives back what you typed. Caotang loads this font only when a sheet holds an emoji. Skin tones print as the plain figure, since the font has no colour.
+
 **The prompt pack.** The **Prompt pack** tab lists each shot's prompt for one **Target model**, the references it sends, and the codex entries those references came from. Each check links back to its field, and **Fix on the board** opens the field. Export the pack as a **JSON pack**, a **Markdown pack** (with a Consistency block for each shot that names a codex entry, listing the entries that sent references and those that sent none) or a **CSV shot list**. Export is held while a row is an error, so no file is written from a prompt the model would refuse. Caotang never sends anything to a video service. You paste the prompts into your own tool.
 
 ## The codex
@@ -216,7 +222,7 @@ Reading the agent's work:
 
 Choose **Compile…** in the toolbar. Then choose a recipe, a format and what to export.
 
-- **Recipe** picks a saved set of export settings. The settings are **Title page**, **Contents list** and **Author on the title page**, and, for the dialogue table, **Character limit for each line**. They apply to the whole manuscript, or to the one item you choose. To keep a set of settings, name it under **Save these settings as a new recipe** and choose **Save as recipe**.
+- **Recipe** picks a saved set of export settings. The settings are **Title page**, **Contents list** and **Author on the title page**, and, for the dialogue table, **Character limit for each line**, and, for the contact sheet, **Paper size**. They apply to the whole manuscript, or to the one item you choose. To keep a set of settings, name it under **Save these settings as a new recipe** and choose **Save as recipe**.
 - **What to export** is **The whole manuscript**, or **Only “…”** for the item you selected in the binder.
 - Choose **Compile**. Undo removes the file the compile wrote. A compile that Caotang refuses is said inside the dialog, beside **Compile**, and no file is saved. The message clears when you choose another recipe or format.
 - Empty documents are left out, and the status line says how many were skipped.
@@ -235,6 +241,7 @@ The formats come in three groups:
 | Media | Ink story (`.ink.json`) | The dialogue compiled for a game engine that reads Ink. |
 | Media | Dialogue table (`.csv`) | Each spoken line with its id, speaker and text. |
 | Media | Shot list (`.csv`) | Each shot in order, with its size, angle, movement and duration. |
+| Media | Storyboard contact sheet (`.pdf`) | Each shot as a card with its picture, number, camera details and action, on A4 or US Letter pages. |
 | Review | Coherence report (`.md` or `.json`) | The findings and the runs, for reading outside Caotang. |
 
 The title page's date is the day you compile, in your own time zone, not the UTC day.
@@ -326,7 +333,8 @@ With writes allowed, an outside tool can also compile the manuscript, one item, 
 
 ## What is not in this build yet
 
-- **Exports.** There is no PDF of a screenplay or a storyboard, and no spreadsheet export.
+- **Exports.** There is no PDF of a screenplay, and no spreadsheet export.
+- **Contact sheet pictures and characters.** The contact sheet does not draw WebP pictures; their cards show the caption. Characters that none of its fonts has, such as Arabic, Hindi and emoji newer than Unicode Emoji 15.1 (🫩, for one), print as `?`. The compile log names them. Emoji print in black and white, skin tones as the plain figure, and the people "facing right" of Emoji 15.1 as their parts side by side (the person, the gender sign, an arrow). Chinese, Japanese and Korean text has no bold, and Han characters take their Simplified Chinese forms.
 - **Final Draft files.** Import and export of `.fdx` files have not been checked against files that Final Draft wrote or opened. The scene numbers and page headers that Caotang writes are not yet confirmed to show in Final Draft.
 - **Word contents.** How Word and LibreOffice handle the contents field in a `.docx` file has not been tested.
 - **The Source tab.** Only Enter and Tab have a meaning on the Source tab. There is no element menu. The Pages view is a read-only preview.

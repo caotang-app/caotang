@@ -16,7 +16,7 @@ import type { ProjectState } from '@caotang/store';
  * The formats this build compiles. The prose formats are exporter.md §2 and §3 (`epub` is §3a's). The rest
  * are the media-track formats of the one-source compile, each compiled from its own package's renderer: the
  * screenplay Fountain and FDX, the dialogue table and compiled Ink, the storyboard shot list and the video
- * prompt pack. The screenplay PDF is not here: its engine waits on the PDF-library benchmark.
+ * prompt pack. The storyboard contact sheet (`contact-sheet-pdf`, storyboard.md §6) is appended last. The screenplay PDF is not here.
  */
 export const EXPORT_FORMATS = [
   'md',
@@ -32,6 +32,8 @@ export const EXPORT_FORMATS = [
   // The one-source compile's Review row: the coherence report, as Markdown and as JSON. Appended, so the order above holds.
   'coherence-md',
   'coherence-json',
+  // The storyboard's contact sheet (storyboard.md §6): a PDF of shot cards. Appended, so the order above holds.
+  'contact-sheet-pdf',
 ] as const;
 
 export type ExportFormat = (typeof EXPORT_FORMATS)[number];
@@ -50,12 +52,13 @@ export const MEDIA_FORMATS = [
   'promptpack',
   'coherence-md',
   'coherence-json',
+  'contact-sheet-pdf',
 ] as const satisfies readonly ExportFormat[];
 
 export type MediaFormat = (typeof MEDIA_FORMATS)[number];
 
 /** Formats whose artifact is a binary container, which `ArtifactFs` (string-only) cannot hold. */
-export const BINARY_FORMATS: readonly ExportFormat[] = ['docx', 'epub'];
+export const BINARY_FORMATS: readonly ExportFormat[] = ['docx', 'epub', 'contact-sheet-pdf'];
 
 export function isExportFormat(value: string): value is ExportFormat {
   return (EXPORT_FORMATS as readonly string[]).includes(value);
@@ -98,6 +101,8 @@ export interface ExportRecipeOptions {
    * Only `dialogue-csv` reads it, and the other formats ignore it. A whole number above zero (the bus caps it at its own maximum).
    */
   readonly charLimit?: number;
+  /** The contact sheet's paper (storyboard.md §6): `A4` or `Letter`. Absent is A4. Only `contact-sheet-pdf` reads it. */
+  readonly pageSize?: 'A4' | 'Letter';
 }
 
 /**
