@@ -1,6 +1,26 @@
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
+
+/** The screenplay PDF's CJK fallback font, which the screenplay package reads from `./fonts/` beside the running module. */
+const CJK_FONT = 'fonts/NotoSansMonoCJKsc-Regular.otf';
+
+/**
+ * Emits the CJK fallback font as `dist/fonts/NotoSansMonoCJKsc-Regular.otf`. A server build leaves the font's
+ * `new URL('./fonts/…', import.meta.url)` as it is, so the file must sit in `fonts/` beside the bundle. It is read only when a
+ * screenplay PDF holds a character Courier Prime cannot print, so the bundle still runs without it for everything else.
+ */
+function cjkFont(): Plugin {
+  return {
+    name: 'caotang-cjk-font',
+    apply: 'build',
+    generateBundle() {
+      const source = readFileSync(fileURLToPath(new URL(`../screenplay/src/${CJK_FONT}`, import.meta.url)));
+      this.emitFile({ type: 'asset', fileName: CJK_FONT, source });
+    },
+  };
+}
 
 /**
  * The bundle build: `src/bin.ts` to `dist/caotang-mcp.mjs`, one file a plain Node can run.
@@ -10,9 +30,10 @@ import { defineConfig } from 'vite';
  * `noExternal` is true. Node's built-in modules are left as imports, which is what
  * Vite's server-side build does for them already. The shebang is added so the file can
  * be run directly as the `caotang-mcp` bin. Minification is off, so a reviewer can read
- * what is shipped.
+ * what is shipped. The one file beside it is the screenplay PDF's CJK fallback font (cjkFont below).
  */
 export default defineConfig({
+  plugins: [cjkFont()],
   build: {
     ssr: fileURLToPath(new URL('./src/bin.ts', import.meta.url)),
     outDir: 'dist',

@@ -20,6 +20,10 @@
  * column, the second in the right. A pair moves to the next page whole and never splits; a pair
  * taller than a page is laid one block after the other, which splits by the dialogue rules.
  *
+ * Widths are grid columns (width.ts): a Chinese, Japanese or Korean character takes two, every other
+ * character one, so the indents, the column widths and the 54-line page hold for CJK text. A line breaks
+ * at white space and between Chinese or Japanese characters, with the kinsoku marks kept on their side.
+ *
  * Estimates (screenplay.md §2.2, §5.2): a page count is the pagination's own count, and one page is
  * about one minute of screen time. The minute figure is an estimate, never a
  * timing.
@@ -27,6 +31,7 @@
 
 import { printedText, sceneNumberOf, stripSceneNumber } from './classify.js';
 import type { ScreenplayElement } from './types.js';
+import { breakPieces, splitColumns, textColumns } from './width.js';
 
 /**
  * The layout constants (screenplay.md §5.3): 12pt Courier, US Letter, 1.5in left margin,
@@ -139,6 +144,8 @@ type ParaKind = 'scene' | 'action' | 'character' | 'parenthetical' | 'dialogue' 
 interface Para {
   readonly kind: ParaKind;
   readonly lines: readonly string[];
+  /** What joins each line to the next when a dual-dialogue column rewraps the text: a space, or nothing between CJK characters. */
+  readonly joins: readonly string[];
   /** Dialogue only: line i ends a sentence, so the text may split after it. */
   readonly ends: readonly boolean[];
   readonly blankBefore: boolean;
@@ -208,32 +215,64 @@ interface BlockRow {
   readonly cuts: readonly number[];
 }
 
-const SENTENCE_END_RE = /[.!?…]["')\]”’]*$/;
+/** A sentence end: Latin `.`, `!`, `?` or `…`, or the CJK `。`, `！`, `？`, each with any closing quotes after it. */
+const SENTENCE_END_RE = /(?:[.!?…]["')\]”’]*|[。！？][」』）〉》"”’]*)$/;
 
-/** Words wrapped to a column. A word wider than the column is broken, never dropped. */
-function wrap(text: string, width: number): string[] {
+/** Wrapped lines, and what joins each line to the one before it when the text is rewrapped: a space, or nothing. */
+interface Wrapped {
+  readonly lines: string[];
+  /** `joins[i]` goes between line i and line i + 1. */
+  readonly joins: string[];
+}
+
+/**
+ * Words wrapped to a column, measured in grid columns (width.ts: a CJK character is two). A line breaks at white space,
+ * and also between Chinese or Japanese characters. A piece wider than the column is broken, never dropped.
+ */
+function wrap(text: string, width: number): Wrapped {
   const words = text.split(/\s+/).filter((word) => word !== '');
   const lines: string[] = [];
+  const joins: string[] = [];
   let current = '';
+  const push = (line: string, join: string): void => {
+    if (lines.length > 0) joins.push(join);
+    lines.push(line);
+  };
+  // What joins the line being built to the line before it.
+  let currentJoin = ' ';
   for (const word of words) {
-    let rest = word;
-    while (rest.length > width) {
-      if (current !== '') {
-        lines.push(current);
-        current = '';
+    breakPieces(word).forEach((piece, index) => {
+      // The first piece of a word follows a space; the others join the piece before them directly.
+      const joint = index === 0 ? ' ' : '';
+      let rest = piece;
+      while (textColumns(rest) > width) {
+        if (current !== '') {
+          push(current, currentJoin);
+          currentJoin = joint;
+          current = '';
+        }
+        const [head, tail] = splitColumns(rest, width);
+        push(head, currentJoin);
+        // A word broken at the column edge is rejoined with a space, as it always was.
+        currentJoin = ' ';
+        rest = tail;
       }
-      lines.push(rest.slice(0, width));
-      rest = rest.slice(width);
-    }
-    if (current === '') current = rest;
-    else if (current.length + 1 + rest.length <= width) current += ` ${rest}`;
-    else {
-      lines.push(current);
-      current = rest;
-    }
+      if (current === '') current = rest;
+      else if (textColumns(current) + joint.length + textColumns(rest) <= width) current += `${joint}${rest}`;
+      else {
+        push(current, currentJoin);
+        currentJoin = joint;
+        current = rest;
+      }
+    });
   }
-  if (current !== '') lines.push(current);
-  return lines;
+  if (current !== '') push(current, currentJoin);
+  return { lines, joins };
+}
+
+/** A paragraph's text as its lines join back: the text a rewrap starts from. */
+function joinLines(para: Para): string {
+  return para.lines.map((line, i) => (i === 0 ? line : `${para.joins[i - 1] ?? ' '}${line}`)).join('');
 }
 
 function makePara(
@@ -248,10 +287,11 @@ function makePara(
     readonly width?: number;
   } = {},
 ): Para {
-  const lines = wrap(text, extra.width ?? LAYOUT.width[kind]);
+  const { lines, joins } = wrap(text, extra.width ?? LAYOUT.width[kind]);
   return {
     kind,
     lines,
+    joins,
     ends: lines.map((line) => SENTENCE_END_RE.test(line)),
     blankBefore,
     align: kind === 'transition' ? 'right' : kind === 'centered' ? 'center' : 'left',
@@ -265,7 +305,8 @@ function makePara(
 /** The offsets in a row where a sentence ends and a space follows (screenplay.md §5.3). */
 function sentenceCuts(text: string): number[] {
   const cuts: number[] = [];
-  const pattern = /[.!?…]["')\]”’]*(?= )/g;
+  // A Latin sentence end needs a space after it. A CJK one needs only more text: CJK puts no space between sentences.
+  const pattern = /[.!?…]["')\]”’]*(?= )|[。！？][」』）〉》"”’]*(?=\S)/g;
   for (let m = pattern.exec(text); m !== null; m = pattern.exec(text)) cuts.push(m.index + m[0].length);
   return cuts;
 }
@@ -297,7 +338,7 @@ function dualSide(open: OpenCue, column: 'left' | 'right'): DualSide {
   const at = LAYOUT.dual[column];
   const width = LAYOUT.dual.width;
   const rewrap = (para: Para, kind: 'parenthetical' | 'dialogue'): Para =>
-    makePara(kind, para.lines.join(' '), false, { indent: at[kind], width: width[kind] });
+    makePara(kind, joinLines(para), false, { indent: at[kind], width: width[kind] });
   return {
     cue: makePara('character', open.cue.cueName, true, { cueName: open.cue.cueName, indent: at.character, width: width.character }),
     body: [...open.parens, ...open.items].map((para) => rewrap(para, para.kind === 'parenthetical' ? 'parenthetical' : 'dialogue')),
@@ -457,8 +498,8 @@ function rowY(row: number): number {
 }
 
 function columnOf(para: Para, text: string): number {
-  if (para.align === 'right') return LAYOUT.columns - text.length;
-  if (para.align === 'center') return Math.floor((LAYOUT.columns - text.length) / 2);
+  if (para.align === 'right') return LAYOUT.columns - textColumns(text);
+  if (para.align === 'center') return Math.floor((LAYOUT.columns - textColumns(text)) / 2);
   return para.indent;
 }
 
@@ -562,7 +603,7 @@ class Pager {
     const y = rowY(row);
     this.current.push({ kind, text, x: LAYOUT.marginLeft + col * LAYOUT.charWidth, y, row, scene });
     if (sceneNumber !== null) {
-      const width = sceneNumber.length * LAYOUT.charWidth;
+      const width = textColumns(sceneNumber) * LAYOUT.charWidth;
       if (this.sceneNumbers === 'left' || this.sceneNumbers === 'both') {
         this.current.push({ kind: 'sceneNumber', text: sceneNumber, x: LAYOUT.sceneNumberLeftX, y, row: null, scene });
       }
@@ -774,17 +815,17 @@ function titleLines(entries: Readonly<Record<string, string>>, opts: PaginateOpt
   const lines: LayoutLine[] = [];
   const title = pick(entries, ['Title'], opts.title);
   let row = 18;
-  for (const text of wrap(title, LAYOUT.columns)) {
-    lines.push(titleLine('title', text, Math.floor((LAYOUT.columns - text.length) / 2), row));
+  for (const text of wrap(title, LAYOUT.columns).lines) {
+    lines.push(titleLine('title', text, Math.floor((LAYOUT.columns - textColumns(text)) / 2), row));
     row += 1;
   }
   const author = pick(entries, ['Author', 'Authors'], opts.author);
   const credit = pick(entries, ['Credit'], 'by');
   row += 2;
   if (author !== '') {
-    lines.push(titleLine('title', credit, Math.floor((LAYOUT.columns - credit.length) / 2), row));
+    lines.push(titleLine('title', credit, Math.floor((LAYOUT.columns - textColumns(credit)) / 2), row));
     row += 2;
-    lines.push(titleLine('title', author, Math.floor((LAYOUT.columns - author.length) / 2), row));
+    lines.push(titleLine('title', author, Math.floor((LAYOUT.columns - textColumns(author)) / 2), row));
   }
   const date = pick(entries, ['Draft date', 'Date'], opts.date);
   if (date !== '') lines.push(titleLine('title', date, 0, 47));

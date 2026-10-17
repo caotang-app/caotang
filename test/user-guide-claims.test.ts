@@ -170,4 +170,20 @@ describe('the user guide’s reviewed claims match the code', () => {
     expect(workspace).toContain('return siblings[at + 1]?.id ?? siblings[at - 1]?.id ?? node.parentId;');
     expect(workspace).toContain('if (place !== null) focusAfterDelete(place);');
   });
+
+  it('says the screenplay PDF prints CJK in its fallback font, two columns a character, loaded only when needed', () => {
+    const pdfSection = guide.slice(guide.indexOf('### The screenplay PDF'), guide.indexOf('## Writing dialogue'));
+    expect(pdfSection).toContain('Other characters, such as Chinese, Japanese and Korean, print in Noto Sans Mono CJK SC.');
+    expect(pdfSection).toContain('A script with no such character does not load this font.');
+    expect(pdfSection).toContain('A Chinese, Japanese or Korean character takes the width of two Courier letters.');
+    expect(pdfSection).toContain('Korean breaks at spaces.');
+    expect(pdfSection).toContain('A character neither font has, such as an emoji, prints as a question mark, and the compile log names it.');
+    expect(pdfSection).not.toMatch(/such as Chinese or emoji, prints as a question mark/);
+    const render = read('packages/screenplay/src/render-pdf.ts');
+    expect(render).toContain('if (layout.fallbackCharacters.length === 0) return undefined;');
+    expect(render).toContain("await import('./cjk-font.js')");
+    expect(read('packages/screenplay/src/width.ts')).toContain("return inRanges(ch.codePointAt(0) ?? 0, WIDE) ? 2 : 1;");
+    expect(read('packages/screenplay/src/cjk-font.ts')).toContain("NOTO_CJK_POSTSCRIPT_NAME = 'NotoSansMonoCJKsc-Regular'");
+    expect(changelog).not.toMatch(/A character the font does not cover, such as Chinese, prints as a question mark/);
+  });
 });

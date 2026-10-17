@@ -35,7 +35,8 @@ const LICENSE_FILE = /^(licen[cs]e|copying|notice)([.-][\w.-]*)?$/i;
 /**
  * Third-party files that ship inside a Caotang package rather than as a dependency, so the lockfile does not list them. Each
  * names the file it ships as, its license, its source, and the license text kept beside it in the repository (a path from the
- * repository root), which is reproduced in full. The screenplay PDF embeds Courier Prime (docs/architecture/screenplay.md §5.3).
+ * repository root), which is reproduced in full. The screenplay PDF embeds Courier Prime, and a subset of Noto Sans Mono CJK SC
+ * for the characters Courier Prime cannot print (docs/architecture/screenplay.md §5.3).
  */
 export const BUNDLED_ASSETS = Object.freeze([
   Object.freeze({
@@ -45,6 +46,14 @@ export const BUNDLED_ASSETS = Object.freeze([
     repository: 'https://github.com/quoteunquoteapps/CourierPrime',
     shippedAs: 'packages/screenplay/src/fonts/courier-prime-regular.ts',
     licenseFile: 'packages/screenplay/src/fonts/OFL.txt',
+  }),
+  Object.freeze({
+    name: 'Noto Sans Mono CJK SC Regular (font)',
+    version: '2.004',
+    license: 'OFL-1.1',
+    repository: 'https://github.com/notofonts/noto-cjk',
+    shippedAs: 'packages/screenplay/src/fonts/NotoSansMonoCJKsc-Regular.otf',
+    licenseFile: 'packages/screenplay/src/fonts/OFL-NotoSansMonoCJK.txt',
   }),
 ]);
 

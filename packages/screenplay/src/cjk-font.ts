@@ -1,0 +1,146 @@
+/**
+ * The CJK fallback font of the screenplay PDF ([screenplay.md §5.3](../../../docs/architecture/screenplay.md)).
+ *
+ * Courier Prime prints what WinAnsi encodes. Every other character the script holds is printed in Noto Sans Mono CJK
+ * SC (OFL), a Pan-CJK font: Hanzi, kana, Hangul, and more. The font file sits beside this module
+ * (src/fonts/NotoSansMonoCJKsc-Regular.otf, byte for byte as notofonts/noto-cjk publishes it; the source URL and the
+ * SHA-256 are in src/fonts/README.md). Only the glyphs the script uses are written into the PDF: the subset is cut with
+ * @pdf-lib/fontkit.
+ *
+ * This module is reached only by the dynamic import in render-pdf.ts, and only for a script with a character WinAnsi
+ * cannot encode. A Latin-only compile loads neither this module, nor fontkit, nor the font file. The file is loaded
+ * from the app's own origin (the build emits it as an asset beside the code), or from disk under Node, so nothing is
+ * fetched from another host.
+ */
+
+import * as fontkitModule from '@pdf-lib/fontkit';
+import type { Font } from '@pdf-lib/fontkit';
+
+import type { PdfCidFont, PdfCidGlyph } from './pdf.js';
+import { charColumns } from './width.js';
+
+/** The font file, resolved against this module: an asset URL in the browser build, a file URL under Node. */
+const FONT_URL = new URL('./fonts/NotoSansMonoCJKsc-Regular.otf', import.meta.url);
+
+/** The PostScript name the font's `name` table gives. */
+export const NOTO_CJK_POSTSCRIPT_NAME = 'NotoSansMonoCJKsc-Regular';
+
+/** The ES build of fontkit has only a default export; its types name `create` directly. Both shapes are read. */
+const fontkit = ((fontkitModule as unknown as { default?: typeof fontkitModule }).default ?? fontkitModule) as typeof fontkitModule;
+
+interface NodeFs {
+  readFile(path: URL): Promise<Uint8Array>;
+}
+
+async function fontBytes(): Promise<Uint8Array> {
+  if (FONT_URL.protocol === 'file:') {
+    // Under Node (the tests, the MCP server) the file is read from disk. The specifier is a variable, so the browser build
+    // does not try to bundle a Node module it never runs.
+    const specifier = 'node:fs/promises';
+    const fs = (await import(/* @vite-ignore */ specifier)) as NodeFs;
+    return new Uint8Array(await fs.readFile(FONT_URL));
+  }
+  const response = await fetch(FONT_URL);
+  if (!response.ok) throw new Error(`pdf: the CJK fallback font did not load (${response.status} ${response.statusText})`);
+  return new Uint8Array(await response.arrayBuffer());
+}
+
+let loaded: Promise<Font> | undefined;
+
+/** The parsed fallback font. Loaded once per session. */
+export function loadNotoCjk(): Promise<Font> {
+  loaded ??= fontBytes().then(
+    (bytes) => fontkit.create(bytes),
+    (error: unknown) => {
+      loaded = undefined;
+      throw error;
+    },
+  );
+  return loaded;
+}
+
+function encodeSubset(subset: ReturnType<Font['createSubset']>): Promise<Uint8Array> {
+  return new Promise((resolve) => {
+    const parts: Uint8Array[] = [];
+    subset
+      .encodeStream()
+      .on('data', (chunk) => parts.push(chunk))
+      .on('end', () => {
+        const out = new Uint8Array(parts.reduce((n, part) => n + part.length, 0));
+        let at = 0;
+        for (const part of parts) {
+          out.set(part, at);
+          at += part.length;
+        }
+        resolve(out);
+      });
+  });
+}
+
+/** The font dictionary a glyph of a CID-keyed CFF font uses (0 for a font with one). */
+function fontDictOf(font: Font): (gid: number) => number {
+  const cff = (font as unknown as { 'CFF '?: { fdForGlyph(gid: number): number | null } })['CFF '];
+  return (gid) => cff?.fdForGlyph(gid) ?? 0;
+}
+
+/**
+ * fontkit 1.1.1 writes the source font's table length into the CFF header's offSize byte (CFFSubset.encode), which must be
+ * 1 to 4 (CFF spec §6), and poppler refuses the font for it. The byte is set to the size this file's offsets need.
+ */
+function withOffSize(program: Uint8Array): Uint8Array {
+  const out = program.slice();
+  out[3] = out.length < 0x100 ? 1 : out.length < 0x10000 ? 2 : out.length < 0x1000000 ? 3 : 4;
+  return out;
+}
+
+/** Six capital letters from the glyph list (PDF 1.7 §9.6.4): the same subset always gets the same tag. */
+function subsetTag(key: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < key.length; i++) hash = Math.imul(hash ^ key.charCodeAt(i), 0x01000193) >>> 0;
+  let tag = '';
+  for (let i = 0; i < 6; i++) {
+    tag += String.fromCharCode(65 + (hash % 26));
+    hash = Math.floor(hash / 26) + i * 7919;
+  }
+  return tag;
+}
+
+/**
+ * The fallback subset for a set of characters: the glyphs of the ones the font maps, in code point order, as a CFF
+ * font program. A character the font does not map is left out; the writer prints it as "?".
+ */
+export async function subsetNotoCjk(font: Font, characters: Iterable<string>): Promise<PdfCidFont> {
+  const scale = 1000 / font.unitsPerEm;
+  const codeOf = (ch: string): number => ch.codePointAt(0) ?? 0;
+  const fdOf = fontDictOf(font);
+  const notdef = fdOf(0);
+  // fontkit 1.1.1 gives each glyph of a CID-keyed subset the font dictionary added last, not its own (CFFSubset.subsetFontdict).
+  // The glyphs are therefore included grouped by font dictionary, .notdef's first, which makes the two the same.
+  const chars = [...new Set(characters)]
+    .filter((ch) => font.hasGlyphForCodePoint(codeOf(ch)))
+    .map((ch) => ({ ch, glyph: font.glyphForCodePoint(codeOf(ch)) }))
+    .map((entry) => ({ ...entry, fd: fdOf(entry.glyph.id) }))
+    .sort((a, b) => Number(b.fd === notdef) - Number(a.fd === notdef) || a.fd - b.fd || codeOf(a.ch) - codeOf(b.ch));
+  const subset = font.createSubset();
+  const glyphs = new Map<string, PdfCidGlyph>();
+  const widths: number[] = [];
+  for (const { ch, glyph } of chars) {
+    const cid = subset.includeGlyph(glyph);
+    // The stated advance is the character's cell on the grid, 600 a column, whatever the glyph's own advance.
+    const width = widths[cid] ?? charColumns(ch) * 600;
+    widths[cid] = width;
+    glyphs.set(ch, { cid, width });
+  }
+  const key = chars.map((entry) => entry.ch).join('');
+  const bbox = font.bbox;
+  return {
+    baseFont: `${subsetTag(key)}+${NOTO_CJK_POSTSCRIPT_NAME}`,
+    program: withOffSize(await encodeSubset(subset)),
+    glyphs,
+    widths: widths.slice(1).map((w) => w ?? 1000),
+    bbox: [bbox.minX, bbox.minY, bbox.maxX, bbox.maxY].map((v) => Math.round(v * scale)) as [number, number, number, number],
+    ascent: Math.round(font.ascent * scale),
+    descent: Math.round(font.descent * scale),
+    capHeight: Math.round(font.capHeight * scale),
+  };
+}

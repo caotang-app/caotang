@@ -142,7 +142,11 @@ Compile a screenplay from **Compile…**, in the Media group, as Fountain, as Fi
 - **Scene numbers** can be printed in the left margin, the right margin or both. They are off unless you choose them. A heading's own number, such as `#24A#`, is used when it has one.
 - Notes (`[[…]]`), boneyard text (`/* … */`), sections and synopses are not printed.
 
-Courier Prime covers Western European letters and the usual punctuation. A character outside that set, such as Chinese or emoji, prints as a question mark, and the compile log names it.
+Courier Prime covers Western European letters and the usual punctuation. Other characters, such as Chinese, Japanese and Korean, print in Noto Sans Mono CJK SC. Only the characters the script uses go into the file. A script with no such character does not load this font.
+
+A Chinese, Japanese or Korean character takes the width of two Courier letters. A line can break between Chinese or Japanese characters without a space, but not before a closing mark such as `。` or `」`. Korean breaks at spaces.
+
+A character neither font has, such as an emoji, prints as a question mark, and the compile log names it.
 
 The PDF is made in your browser. Nothing is sent anywhere.
 

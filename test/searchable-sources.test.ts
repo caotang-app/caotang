@@ -179,9 +179,23 @@ function offendersIn(root: string, files: readonly string[]): Array<[string, num
     .filter((pair): pair is [string, number[]] => pair[1].length > 0);
 }
 
-/** The same scan over the real tree. */
+/**
+ * Binary files under the guarded roots, each named. A font program is binary by nature, and search tools are right to
+ * call it binary: it holds no source line to find. The screenplay PDF's CJK fallback font is 16 MB, so carrying it as
+ * base64 text, as Courier Prime is, would put 22 MB of text into the browser bundle. Each entry is checked below to be the
+ * file it says it is, so the exemption cannot quietly cover anything else.
+ */
+const BINARY_ASSETS: Readonly<Record<string, string>> = {
+  // An OpenType font with CFF outlines starts with the tag 'OTTO'.
+  'packages/screenplay/src/fonts/NotoSansMonoCJKsc-Regular.otf': 'OTTO',
+};
+
+/** The same scan over the real tree, the named binary assets left out. */
 function offenders(): Array<[string, number[]]> {
-  return offendersIn(repoRoot, guardedFiles());
+  return offendersIn(
+    repoRoot,
+    guardedFiles().filter((rel) => BINARY_ASSETS[rel] === undefined),
+  );
 }
 
 const tempDirs: string[] = [];
@@ -255,6 +269,14 @@ describe('no source file is invisible to search', () => {
 
   // It reads every guarded file in the repository, so it gets a budget for a full suite on a loaded machine (it timed out at the
   // 5 s default once the tree passed 250 test files).
+  it('exempts only the named binary assets, each of which is the file it is named as', () => {
+    const files = guardedFiles();
+    for (const [rel, magic] of Object.entries(BINARY_ASSETS)) {
+      expect(files).toContain(rel);
+      expect(readFileSync(join(repoRoot, rel)).subarray(0, magic.length).toString('latin1'), rel).toBe(magic);
+    }
+  });
+
   it('no guarded file carries a literal control byte', () => {
     expect(offenders()).toEqual([]);
   }, 30_000);

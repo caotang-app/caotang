@@ -175,10 +175,16 @@ describe('createPdfRenderer', () => {
   });
 });
 
-describe('layoutPdf — what the font cannot print', () => {
+describe('layoutPdf — what the fonts cannot print', () => {
   it('says which characters print as a question mark, once each', () => {
-    const { notes } = layoutPdf(blocksOf(text('INT. 草堂 - DAY', '', 'She reads 草堂 aloud.')), { title: 'T' });
-    expect(notes).toEqual(['pdf: Courier Prime cannot print these 2 characters, so they are printed as "?": 草 堂']);
+    const { notes } = layoutPdf(blocksOf(text('INT. 草堂 - DAY', '', 'She reads 草堂 aloud: ꙮ 🎬 ꙮ.')), { title: 'T' });
+    expect(notes).toEqual(['pdf: neither Courier Prime nor the CJK fallback font can print these 2 characters, so they are printed as "?": ꙮ 🎬']);
+  });
+
+  it('says nothing of the CJK characters the fallback font prints', () => {
+    const layout = layoutPdf(blocksOf(text('INT. 草堂 - DAY', '', 'She reads 草堂 aloud.')), { title: 'T' });
+    expect(layout.notes).toEqual([]);
+    expect(layout.fallbackCharacters).toEqual(['草', '堂']);
   });
 
   it('says nothing when every character prints', () => {

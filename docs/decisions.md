@@ -264,6 +264,7 @@ Superseded decisions, research notes and history are not listed. The specs in [a
 - The prompt pack is one normalised shot schema mapped to per-vendor templates; Caotang never generates video, holds no vendor keys and uploads nothing. Why: generation happens in the writer's own tool. [delegated]
 - The shot prompt editor keeps each vendor's typed text across a vendor switch while the shot is open. Why: switching vendors loses nothing. [delegated]
 - The screenplay PDF is Caotang's own writer over its paginator, with Courier Prime embedded and loaded lazily; no PDF library. Why: text in one monospaced font needs none, and nothing is fetched. [delegated]
+- Characters Courier Prime cannot print go to a subset of Noto Sans Mono CJK SC, cut with `@pdf-lib/fontkit` 1.1.1 and loaded only when the script needs it; the writer stays Caotang's own rather than moving to pdf-lib. Why: the writer's tests and Latin-only files stay byte for byte as they were, and fontkit is the piece the storyboard PDF shares. A CJK character is two grid columns. [delegated]
 - The screenplay PDF's title page is not counted; script page 1 has no number, and numbers print from page 2. Why: the screenplay convention. [delegated]
 - Dual dialogue prints side by side in the PDF, and a pair never splits across a page. Why: the Fountain `^` pair is a side-by-side block. [delegated]
 - Not yet built: PDF output for storyboards, spreadsheet export, the Source tab's element menu, engine target and locale in exports. (specified, not built) [delegated]
