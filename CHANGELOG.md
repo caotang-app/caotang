@@ -45,6 +45,6 @@ The first public version: a free, local-first writing studio for novels, scripts
 - The MCP server does not read or write `coherence.json`. Its findings and runs stay in its memory until it stops.
 - The desktop app asks before it saves over the MCP server's folder lock, but a save the writer confirms can still replace a change the server made. Keep the server stopped while the app saves to the same folder.
 - Undo history is kept in memory for the open tab. Text typed in the moment before a reload may not be saved yet.
-- The Yarn Spinner strings file leaves `lock` empty and has no character limit. Yarn has not been run on it.
+- The Yarn Spinner strings file leaves its `lock` column empty. It has not been loaded in Yarn Spinner itself.
 - The end-to-end suite runs in Chromium only, and CI tests Node 24 only.
 - CI uses the built-in demo and mock providers only. An opt-in real-key smoke test (`e2e/provider-smoke.spec.ts`, one `CAOTANG_SMOKE_<PRESET>` variable per provider) runs locally and never in CI.
