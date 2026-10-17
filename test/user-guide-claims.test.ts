@@ -170,4 +170,14 @@ describe('the user guide’s reviewed claims match the code', () => {
     expect(workspace).toContain('return siblings[at + 1]?.id ?? siblings[at - 1]?.id ?? node.parentId;');
     expect(workspace).toContain('if (place !== null) focusAfterDelete(place);');
   });
+  it('says how the engine target and the locale change the dialogue exports, in the names the compile writes', () => {
+    expect(guide).toContain("A container set to **Yarn string table (CSV)** goes into a Yarn Spinner strings file, `<name> (dialogue, Yarn).csv`, with Yarn's columns and `line:` ids.");
+    expect(guide).toContain('A container with no locale uses the project\'s language. A container with its own locale puts it in the Ink story\'s file name, such as `Tavern.de.ink.json`.');
+    expect(read('apps/desktop/src/components/InspectorDialogue.tsx')).toContain("'yarn-csv': 'Yarn string table (CSV)'");
+    const media = read('packages/exporter/src/media.ts');
+    expect(media).toContain('name: `${request.base} (dialogue, Yarn).csv`');
+    expect(media).toContain('`${fileStem(title)}.${locale}.ink.json`');
+    expect(media).toContain('{ includeLocale: true }');
+    expect(read('packages/dialogue/src/table.ts')).toContain("export const YARN_COLUMNS = ['language', 'id', 'text', 'file', 'node', 'lineNumber', 'lock', 'comment'] as const;");
+  });
 });
