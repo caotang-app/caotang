@@ -136,10 +136,16 @@ Choose **New dialogue here** from a folder's menu. A dialogue container holds an
 - **Outline and findings.** The structure of the story and what the checks found. Both follow the text when you pause, about 800 ms after your last keystroke.
 - Tab after a divert arrow (`->`) completes the knot or stitch name you started.
 - **Add line ids to N lines** asks first, then writes an id into each line that has none. With **Add line ids on save** turned on, Caotang writes the missing ids each time it saves.
-- **Container settings**, in the inspector: **Default speaker** (a codex character, who fills the speaker column of the dialogue table), **Engine target** (a hint only), **Add line ids on save**, and **Locale** (recorded only).
+- **Container settings**, in the inspector: **Default speaker** (a codex character, who fills the speaker column of the dialogue table), **Engine target**, **Add line ids on save**, and **Locale** (the language the text is written in, such as `en` or `en-GB`).
 - If the Ink does not compile, the view says so and lists the errors. Fix them in the Ink text.
 
-Compile a dialogue container from **Compile…**, in the Media group, as an Ink story (`.ink.json`) or as a dialogue table (`.csv`): each spoken line with its id, speaker and text.
+Compile a dialogue container from **Compile…**, in the Media group, as an Ink story (`.ink.json`) or as a dialogue table (`.csv`): each spoken line with its id, speaker, text and locale.
+
+The container settings change these files:
+
+- **Engine target** picks the table. A container set to **Yarn string table (CSV)** goes into a Yarn Spinner strings file, `<name> (dialogue, Yarn).csv`, with Yarn's columns and `line:` ids. Any other target, or none, goes into the dialogue table, `<name> (dialogue).csv`. A compile that holds both kinds writes both files. The Ink story is the same for every target.
+- **Locale** is written on each line of both tables. A container with no locale uses the project's language. A container with its own locale puts it in the Ink story's file name, such as `Tavern.de.ink.json`.
+- The Yarn strings file has no character limit column. Its `lock` column is empty.
 
 ## Planning a storyboard
 
@@ -233,7 +239,7 @@ The formats come in three groups:
 | Media | Fountain (`.fountain`) | The screenplay as plain Fountain text, for Beat or Highland. |
 | Media | Final Draft (`.fdx`) | The screenplay in Final Draft's XML. Not yet checked in Final Draft itself. |
 | Media | Ink story (`.ink.json`) | The dialogue compiled for a game engine that reads Ink. |
-| Media | Dialogue table (`.csv`) | Each spoken line with its id, speaker and text. |
+| Media | Dialogue table (`.csv`) | Each spoken line with its id, speaker, text and locale. A Yarn container gets a Yarn strings file. |
 | Media | Shot list (`.csv`) | Each shot in order, with its size, angle, movement and duration. |
 | Review | Coherence report (`.md` or `.json`) | The findings and the runs, for reading outside Caotang. |
 
@@ -330,6 +336,5 @@ With writes allowed, an outside tool can also compile the manuscript, one item, 
 - **Final Draft files.** Import and export of `.fdx` files have not been checked against files that Final Draft wrote or opened. The scene numbers and page headers that Caotang writes are not yet confirmed to show in Final Draft.
 - **Word contents.** How Word and LibreOffice handle the contents field in a `.docx` file has not been tested.
 - **The Source tab.** Only Enter and Tab have a meaning on the Source tab. There is no element menu. The Pages view is a read-only preview.
-- **Dialogue export settings.** The engine target and the locale are kept with the container, but no export uses them yet.
 - **Undo and reloads.** Undo lasts for the open tab, and text typed in the moment before a reload may not be saved yet.
 - **The desktop app.** Caotang runs in the browser. A desktop wrapper is not in this build.
