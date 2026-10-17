@@ -188,6 +188,8 @@ function offendersIn(root: string, files: readonly string[]): Array<[string, num
 const BINARY_ASSETS: Readonly<Record<string, string>> = {
   // An OpenType font with CFF outlines starts with the tag 'OTTO'.
   'packages/screenplay/src/fonts/NotoSansMonoCJKsc-Regular.otf': 'OTTO',
+  // A TrueType font starts with the version 1.0 tag, 00 01 00 00. Noto Emoji is 0.9 MB.
+  'packages/screenplay/src/fonts/NotoEmoji-Regular.ttf': '\u0000\u0001\u0000\u0000',
 };
 
 /** The same scan over the real tree, the named binary assets left out. */

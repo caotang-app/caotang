@@ -177,7 +177,6 @@ describe('the user guide’s reviewed claims match the code', () => {
     expect(pdfSection).toContain('A script with no such character does not load this font.');
     expect(pdfSection).toContain('A Chinese, Japanese or Korean character takes the width of two Courier letters.');
     expect(pdfSection).toContain('Korean breaks at spaces.');
-    expect(pdfSection).toContain('A character neither font has, such as an emoji, prints as a question mark, and the compile log names it.');
     expect(pdfSection).not.toMatch(/such as Chinese or emoji, prints as a question mark/);
     const render = read('packages/screenplay/src/render-pdf.ts');
     expect(render).toContain('if (layout.fallbackCharacters.length === 0) return undefined;');
@@ -185,5 +184,23 @@ describe('the user guide’s reviewed claims match the code', () => {
     expect(read('packages/screenplay/src/width.ts')).toContain("return inRanges(ch.codePointAt(0) ?? 0, WIDE) ? 2 : 1;");
     expect(read('packages/screenplay/src/cjk-font.ts')).toContain("NOTO_CJK_POSTSCRIPT_NAME = 'NotoSansMonoCJKsc-Regular'");
     expect(changelog).not.toMatch(/A character the font does not cover, such as Chinese, prints as a question mark/);
+  });
+
+  it('says the screenplay PDF prints emoji in Noto Emoji, two columns each, whole, loaded only when needed', () => {
+    const pdfSection = guide.slice(guide.indexOf('### The screenplay PDF'), guide.indexOf('## Writing dialogue'));
+    expect(pdfSection).toContain('Emoji print in Noto Emoji, a black-and-white emoji font.');
+    expect(pdfSection).toContain('An emoji takes the width of two Courier letters, however it is built');
+    expect(pdfSection).toContain('it is never split across lines');
+    expect(pdfSection).toContain('so 👍🏽 prints as 👍, but text you copy out of the PDF keeps the emoji you typed');
+    expect(pdfSection).toContain('A script with no emoji does not load this font.');
+    expect(pdfSection).toContain('A character no font has prints as a question mark, and the compile log names it.');
+    expect(pdfSection).not.toMatch(/such as an emoji, prints as a question mark/);
+    const render = read('packages/screenplay/src/render-pdf.ts');
+    expect(render).toContain('if (layout.emojiCharacters.length === 0) return undefined;');
+    expect(render).toContain("await import('./emoji-font.js')");
+    expect(read('packages/screenplay/src/width.ts')).toContain('if ((unit.length > 1 || unit.charCodeAt(0) >= 0x231a) && isEmojiCluster(unit)) return 2;');
+    expect(read('packages/screenplay/src/emoji-font.ts')).toContain("NOTO_EMOJI_POSTSCRIPT_NAME = 'NotoEmoji-Regular'");
+    expect(read('packages/screenplay/src/emoji-font.ts')).toContain('font.layout(text)');
+    expect(changelog).not.toMatch(/A character neither font covers, such as an emoji, prints as a question mark/);
   });
 });

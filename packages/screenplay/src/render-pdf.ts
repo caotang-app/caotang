@@ -16,14 +16,23 @@
  * (cjk-font.ts). The layout knows which characters those are without loading the font (the coverage table in
  * src/fonts/noto-cjk-coverage.ts), so the compile log can name the ones that still print as "?" before anything is
  * drawn. {@link loadCjkFallback} loads the font and fontkit by a dynamic import, and only for a layout that needs them.
+ *
+ * Emoji print in the emoji fallback, Noto Emoji, after both (emoji.ts, emoji-font.ts). The layout reads that font's
+ * coverage too (src/fonts/noto-emoji-coverage.ts), so it knows which emoji print whole, which print as their first emoji
+ * (a sequence newer than the font), and which print as "?". {@link loadEmojiFallback} loads it, by a dynamic import, only
+ * for a layout with an emoji it prints.
  */
 
 import type { FlatBlock } from './flat-block.js';
 import { paginate, type LayoutPage, type PaginateOptions } from './paginate.js';
 import { parseFountain } from './parse.js';
-import { NOTO_CJK_RANGES } from './fonts/noto-cjk-coverage.js';
-import { isPrintable, writePdf, type PdfCidFont, type PdfFont } from './pdf.js';
+import { emojiFontMaps, fallbackCovers } from './coverage.js';
+import { emojiPrint, firstCodePoint, isEmojiCluster } from './emoji.js';
+import { isPrintable, writePdf, type PdfCidFont, type PdfEmojiFont, type PdfFont } from './pdf.js';
 import { renderFountain, type FountainRenderOptions } from './render-fountain.js';
+import { textUnits } from './width.js';
+
+export { fallbackCovers };
 
 export const PDF_MIME = 'application/pdf';
 
@@ -40,6 +49,11 @@ export interface PdfLayout {
   readonly notes: readonly string[];
   /** The characters WinAnsi cannot encode that the CJK fallback prints, in order of first use. Empty: no fallback is loaded. */
   readonly fallbackCharacters: readonly string[];
+  /**
+   * The units the emoji fallback prints (emoji clusters, and characters only it has), in order of first use. Empty: the
+   * emoji font is not loaded.
+   */
+  readonly emojiCharacters: readonly string[];
 }
 
 export interface PdfRenderResult {
@@ -49,48 +63,50 @@ export interface PdfRenderResult {
   readonly notes: readonly string[];
 }
 
-/** The characters on the pages that WinAnsi cannot encode, once each, in order of first use. */
-function unprintable(pages: readonly LayoutPage[]): string[] {
-  const found = new Set<string>();
+/** What the pages hold that Courier Prime cannot print, once each, in order of first use, sorted by the font that prints it. */
+interface Unprintable {
+  readonly cjk: string[];
+  readonly emoji: string[];
+  /** Emoji sequences the emoji font has no glyph for, which print as their first emoji. */
+  readonly partial: string[];
+  /** What no font has: printed as "?". */
+  readonly missing: string[];
+}
+
+function unprintable(pages: readonly LayoutPage[]): Unprintable {
+  const seen = new Set<string>();
+  const found: Unprintable = { cjk: [], emoji: [], partial: [], missing: [] };
   for (const page of pages) {
     for (const line of page.lines) {
-      for (const ch of line.text) if (!isPrintable(ch)) found.add(ch);
+      for (const unit of textUnits(line.text)) {
+        if (seen.has(unit)) continue;
+        seen.add(unit);
+        if ((unit.length > 1 || unit.charCodeAt(0) >= 0x231a) && isEmojiCluster(unit)) {
+          const print = emojiPrint(unit);
+          if (print === 'none') found.missing.push(unit);
+          else found.emoji.push(unit);
+          if (print === 'base') found.partial.push(unit);
+          continue;
+        }
+        const base = firstCodePoint(unit);
+        if (isPrintable(base)) continue;
+        if (fallbackCovers(base)) {
+          if (!found.cjk.includes(base)) found.cjk.push(base);
+        } else if (emojiFontMaps(base)) found.emoji.push(unit);
+        else if (!found.missing.includes(base)) found.missing.push(base);
+      }
     }
   }
-  return [...found];
+  return found;
 }
 
-let coverage: readonly (readonly [number, number])[] | undefined;
-
-/** The code point ranges the fallback font maps, decoded once from the coverage table. */
-function fallbackRanges(): readonly (readonly [number, number])[] {
-  if (coverage !== undefined) return coverage;
-  const ranges: [number, number][] = [];
-  let end = -1;
-  for (const token of NOTO_CJK_RANGES.split(' ')) {
-    const [gap, length] = token.split('.').map((part) => parseInt(part, 36)) as [number, number];
-    const start = end + 1 + gap;
-    end = start + length - 1;
-    ranges.push([start, end]);
-  }
-  coverage = ranges;
-  return ranges;
-}
-
-/** Whether the CJK fallback font (Noto Sans Mono CJK SC) has a glyph for a character. */
-export function fallbackCovers(ch: string): boolean {
-  const code = ch.codePointAt(0) ?? 0;
-  const ranges = fallbackRanges();
-  let lo = 0;
-  let hi = ranges.length - 1;
-  while (lo <= hi) {
-    const mid = (lo + hi) >> 1;
-    const range = ranges[mid] as readonly [number, number];
-    if (code < range[0]) hi = mid - 1;
-    else if (code > range[1]) lo = mid + 1;
-    else return true;
-  }
-  return false;
+/** "this character … it is" or "these N characters … they are", for the log. */
+function counted(list: readonly string[], one: string, many: string): { what: string; verb: string; shown: string } {
+  return {
+    what: list.length === 1 ? `this ${one}` : `these ${list.length} ${many}`,
+    verb: list.length === 1 ? 'it is' : 'they are',
+    shown: `${list.slice(0, 10).join(' ')}${list.length > 10 ? ' …' : ''}`,
+  };
 }
 
 /** Paginates the blocks. Pure and synchronous: the same blocks and options always give the same pages. */
@@ -107,13 +123,13 @@ export function layoutPdf(blocks: readonly FlatBlock[], opts: PdfRenderOptions):
   });
   const notes = [...fountain.notes];
   const outside = unprintable(pages);
-  const fallbackCharacters = outside.filter(fallbackCovers);
-  const missing = outside.filter((ch) => !fallbackCovers(ch));
-  if (missing.length > 0) {
-    const shown = missing.slice(0, 10).join(' ');
-    notes.push(
-      `pdf: neither Courier Prime nor the CJK fallback font can print ${missing.length === 1 ? 'this character' : `these ${missing.length} characters`}, so ${missing.length === 1 ? 'it is' : 'they are'} printed as "?": ${shown}${missing.length > 10 ? ' …' : ''}`,
-    );
+  if (outside.missing.length > 0) {
+    const { what, verb, shown } = counted(outside.missing, 'character', 'characters');
+    notes.push(`pdf: neither Courier Prime nor the CJK or emoji fallback font can print ${what}, so ${verb} printed as "?": ${shown}`);
+  }
+  if (outside.partial.length > 0) {
+    const { what, verb, shown } = counted(outside.partial, 'emoji sequence', 'emoji sequences');
+    notes.push(`pdf: the emoji font has no glyph for ${what}, so ${verb} printed as ${outside.partial.length === 1 ? 'its' : 'their'} first emoji: ${shown}`);
   }
   return {
     pages,
@@ -121,20 +137,23 @@ export function layoutPdf(blocks: readonly FlatBlock[], opts: PdfRenderOptions):
     title: opts.title,
     ...(opts.author === undefined ? {} : { author: opts.author }),
     notes,
-    fallbackCharacters,
+    fallbackCharacters: outside.cjk,
+    emojiCharacters: outside.emoji,
   };
 }
 
 /**
  * Draws a layout as a PDF. With a font, the font is embedded; without one the file names the base-14 Courier. With a
- * fallback ({@link loadCjkFallback}), the characters WinAnsi cannot encode print in it; without one they print as "?".
+ * fallback ({@link loadCjkFallback}), the characters WinAnsi cannot encode print in it; with an emoji font
+ * ({@link loadEmojiFallback}), the emoji print in it; without them they print as "?".
  */
-export function drawPdf(layout: PdfLayout, font?: PdfFont, fallback?: PdfCidFont): Uint8Array<ArrayBuffer> {
+export function drawPdf(layout: PdfLayout, font?: PdfFont, fallback?: PdfCidFont, emoji?: PdfEmojiFont): Uint8Array<ArrayBuffer> {
   return writePdf(
     layout.pages.map((page) => page.lines.map((line) => ({ text: line.text, x: line.x, y: line.y }))),
     { title: layout.title, ...(layout.author === undefined ? {} : { author: layout.author }) },
     font,
     fallback,
+    emoji,
   );
 }
 
@@ -146,6 +165,16 @@ export async function loadCjkFallback(layout: PdfLayout): Promise<PdfCidFont | u
   if (layout.fallbackCharacters.length === 0) return undefined;
   const { loadNotoCjk, subsetNotoCjk } = await import('./cjk-font.js');
   return subsetNotoCjk(await loadNotoCjk(), layout.fallbackCharacters);
+}
+
+/**
+ * The emoji subset a layout needs, or undefined when it needs none. Only a layout with an emoji the font prints loads
+ * emoji-font.ts, fontkit and the font file, by a dynamic import.
+ */
+export async function loadEmojiFallback(layout: PdfLayout): Promise<PdfEmojiFont | undefined> {
+  if (layout.emojiCharacters.length === 0) return undefined;
+  const { loadNotoEmoji, subsetNotoEmoji } = await import('./emoji-font.js');
+  return subsetNotoEmoji(await loadNotoEmoji(), layout.emojiCharacters);
 }
 
 /** Courier Prime Regular's bytes. The module that holds them is imported here and nowhere else. */
@@ -171,12 +200,13 @@ export interface PdfRenderer {
   emit(blocks: readonly FlatBlock[], opts: PdfRenderOptions): Promise<Blob>;
 }
 
-/** The renderer seam of screenplay.md §5.3. Its files always embed Courier Prime, and the CJK fallback when the script needs it. */
+/** The renderer seam of screenplay.md §5.3. Its files always embed Courier Prime, and the CJK and emoji fallbacks when the script needs them. */
 export function createPdfRenderer(): PdfRenderer {
   return {
     async emit(blocks, opts) {
       const layout = layoutPdf(blocks, opts);
-      const bytes = drawPdf(layout, await loadCourierPrime(), await loadCjkFallback(layout));
+      const [font, cjk, emoji] = await Promise.all([loadCourierPrime(), loadCjkFallback(layout), loadEmojiFallback(layout)]);
+      const bytes = drawPdf(layout, font, cjk, emoji);
       return new Blob([bytes], { type: PDF_MIME });
     },
   };

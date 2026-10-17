@@ -146,7 +146,9 @@ Courier Prime covers Western European letters and the usual punctuation. Other c
 
 A Chinese, Japanese or Korean character takes the width of two Courier letters. A line can break between Chinese or Japanese characters without a space, but not before a closing mark such as `。` or `」`. Korean breaks at spaces.
 
-A character neither font has, such as an emoji, prints as a question mark, and the compile log names it.
+Emoji print in Noto Emoji, a black-and-white emoji font. An emoji takes the width of two Courier letters, however it is built: a family such as 👨‍👩‍👧, a flag such as 🇩🇪, a keycap such as 1️⃣ or a skin tone such as 👍🏽 is one picture, and it is never split across lines. A line can break before or after an emoji without a space. The font has no colours and no skin tones, so 👍🏽 prints as 👍, but text you copy out of the PDF keeps the emoji you typed. A script with no emoji does not load this font.
+
+A character no font has prints as a question mark, and the compile log names it. That is so for an emoji newer than Unicode 15.1, such as 🫩. A few newer sequences, such as 🚶‍♀️‍➡️, print as their first emoji (🚶), and the log says so.
 
 The PDF is made in your browser. Nothing is sent anywhere.
 

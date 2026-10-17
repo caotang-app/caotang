@@ -21,3 +21,4 @@ pnpm-lock.yaml binary
 *.woff      binary
 *.woff2     binary
 *.otf       binary
+*.ttf       binary

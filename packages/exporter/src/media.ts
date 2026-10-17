@@ -19,7 +19,7 @@
  * carries a `bytes` render that the queue runs, as it runs the DOCX and EPUB renderers.
  */
 
-import { drawPdf, layoutPdf, loadCjkFallback, loadCourierPrime, renderFdx, renderFountain, isScreenplayKind, PDF_MIME } from '@caotang/screenplay';
+import { drawPdf, layoutPdf, loadCjkFallback, loadCourierPrime, loadEmojiFallback, renderFdx, renderFountain, isScreenplayKind, PDF_MIME } from '@caotang/screenplay';
 import { exportCsv, exportInkJson, isDialogueNodeType, readDialogueMeta, toCsv, type DialogueSource, type TableRow } from '@caotang/dialogue';
 import { countBody, getBody, nodeById, type ProjectState, type TreeNode } from '@caotang/store';
 import {
@@ -266,7 +266,7 @@ function fountainOutput(request: MediaRequest): MediaOutput {
 
 /**
  * The screenplay PDF (screenplay.md §5.3). The selection, the gate and the pagination are the plan's, so a refusal writes
- * nothing and the log row can give the page count. The file is drawn in the queue, with Courier Prime embedded, and the CJK fallback when the script needs it.
+ * nothing and the log row can give the page count. The file is drawn in the queue, with Courier Prime embedded, and the CJK and emoji fallbacks when the script needs them.
  */
 function pdfOutput(request: MediaRequest): MediaOutput {
   const { flat, left } = screenplayBlocks(request);
@@ -283,7 +283,16 @@ function pdfOutput(request: MediaRequest): MediaOutput {
   const pages = layout.scriptPageCount;
   const titled = layout.pages.length > pages ? ', and a title page' : '';
   return {
-    files: [{ name: `${request.base}.pdf`, mimeType: PDF_MIME, bytes: async () => drawPdf(layout, await loadCourierPrime(), await loadCjkFallback(layout)) }],
+    files: [
+      {
+        name: `${request.base}.pdf`,
+        mimeType: PDF_MIME,
+        bytes: async () => {
+          const [font, cjk, emoji] = await Promise.all([loadCourierPrime(), loadCjkFallback(layout), loadEmojiFallback(layout)]);
+          return drawPdf(layout, font, cjk, emoji);
+        },
+      },
+    ],
     blockCount: flat.blocks.length,
     chapterCount: flat.chapterCount,
     sceneCount: flat.sceneCount,

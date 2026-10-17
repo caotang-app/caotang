@@ -124,18 +124,20 @@ describe('pdf — through the §4 API', () => {
     await expect(attempt).rejects.toThrow('the selection holds no screenplay scene');
   });
 
-  it('prints CJK text in the embedded fallback font, and says in the log which characters neither font can print', async () => {
+  it('prints CJK text and emoji in the embedded fallback fonts, and says in the log which characters no font can print', async () => {
     const state = makeMediaProject();
     const kitchen = state.documents.get(MEDIA_IDS.kitchen);
     if (kitchen === undefined) throw new Error('the fixture has no body for the kitchen scene');
-    state.documents.set(MEDIA_IDS.kitchen, { ...kitchen, body: 'INT. KITCHEN - DAY\n\nMARA\nThe sign says 草堂, ようこそ, 환영합니다 🎬.' });
+    state.documents.set(MEDIA_IDS.kitchen, { ...kitchen, body: 'INT. KITCHEN - DAY\n\nMARA\nThe sign says 草堂, ようこそ, 환영합니다 🎬 👨‍👩‍👧, and 🫩.' });
     const { log, blob } = await rig({ state }).exporter.compile({ includeRootIds: ['manuscript'] }, 'pdf');
-    expect(log.notes).toContain('pdf: neither Courier Prime nor the CJK fallback font can print this character, so it is printed as "?": 🎬');
+    expect(log.notes).toContain('pdf: neither Courier Prime nor the CJK or emoji fallback font can print this character, so it is printed as "?": 🫩');
     const pdf = ascii(new Uint8Array(await blob.arrayBuffer()));
     expect(pdf).toContain('/BaseFont /CourierPrime');
     expect(pdf).toMatch(/\/BaseFont \/[A-Z]{6}\+NotoSansMonoCJKsc-Regular/);
     expect(pdf).toContain('/Subtype /CIDFontType0C');
     expect(pdf).toContain('/ToUnicode ');
+    expect(pdf).toMatch(/\/BaseFont \/[A-Z]{6}\+NotoEmoji-Regular/);
+    expect(pdf).toContain('/Subtype /CIDFontType2');
   });
 });
 

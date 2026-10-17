@@ -67,9 +67,22 @@ export {
   type SceneLength,
 } from './paginate.js';
 
-export { isPrintable, pdfString, writePdf, type PdfCidFont, type PdfCidGlyph, type PdfFont, type PdfInfo, type PdfText } from './pdf.js';
+export {
+  isPrintable,
+  pdfString,
+  writePdf,
+  type PdfCidFont,
+  type PdfCidGlyph,
+  type PdfEmojiFont,
+  type PdfEmojiGlyph,
+  type PdfFont,
+  type PdfInfo,
+  type PdfText,
+} from './pdf.js';
 
-export { breakBetween, charColumns, textColumns } from './width.js';
+export { emojiKey, emojiPrint, isEmojiCluster } from './emoji.js';
+
+export { breakBetween, charColumns, textColumns, textUnits, unitColumns } from './width.js';
 
 export { COURIER_PRIME_METRICS } from './fonts/courier-prime-metrics.js';
 
@@ -80,6 +93,7 @@ export {
   fallbackCovers,
   layoutPdf,
   loadCjkFallback,
+  loadEmojiFallback,
   loadCourierPrime,
   renderPdf,
   type PdfLayout,

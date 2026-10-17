@@ -13,9 +13,9 @@
  * fetched from another host.
  */
 
-import * as fontkitModule from '@pdf-lib/fontkit';
 import type { Font } from '@pdf-lib/fontkit';
 
+import { encodeSubset, fontFileBytes, fontkit, subsetTag } from './font-file.js';
 import type { PdfCidFont, PdfCidGlyph } from './pdf.js';
 import { charColumns } from './width.js';
 
@@ -25,31 +25,11 @@ const FONT_URL = new URL('./fonts/NotoSansMonoCJKsc-Regular.otf', import.meta.ur
 /** The PostScript name the font's `name` table gives. */
 export const NOTO_CJK_POSTSCRIPT_NAME = 'NotoSansMonoCJKsc-Regular';
 
-/** The ES build of fontkit has only a default export; its types name `create` directly. Both shapes are read. */
-const fontkit = ((fontkitModule as unknown as { default?: typeof fontkitModule }).default ?? fontkitModule) as typeof fontkitModule;
-
-interface NodeFs {
-  readFile(path: URL): Promise<Uint8Array>;
-}
-
-async function fontBytes(): Promise<Uint8Array> {
-  if (FONT_URL.protocol === 'file:') {
-    // Under Node (the tests, the MCP server) the file is read from disk. The specifier is a variable, so the browser build
-    // does not try to bundle a Node module it never runs.
-    const specifier = 'node:fs/promises';
-    const fs = (await import(/* @vite-ignore */ specifier)) as NodeFs;
-    return new Uint8Array(await fs.readFile(FONT_URL));
-  }
-  const response = await fetch(FONT_URL);
-  if (!response.ok) throw new Error(`pdf: the CJK fallback font did not load (${response.status} ${response.statusText})`);
-  return new Uint8Array(await response.arrayBuffer());
-}
-
 let loaded: Promise<Font> | undefined;
 
 /** The parsed fallback font. Loaded once per session. */
 export function loadNotoCjk(): Promise<Font> {
-  loaded ??= fontBytes().then(
+  loaded ??= fontFileBytes(FONT_URL, 'CJK fallback font').then(
     (bytes) => fontkit.create(bytes),
     (error: unknown) => {
       loaded = undefined;
@@ -57,24 +37,6 @@ export function loadNotoCjk(): Promise<Font> {
     },
   );
   return loaded;
-}
-
-function encodeSubset(subset: ReturnType<Font['createSubset']>): Promise<Uint8Array> {
-  return new Promise((resolve) => {
-    const parts: Uint8Array[] = [];
-    subset
-      .encodeStream()
-      .on('data', (chunk) => parts.push(chunk))
-      .on('end', () => {
-        const out = new Uint8Array(parts.reduce((n, part) => n + part.length, 0));
-        let at = 0;
-        for (const part of parts) {
-          out.set(part, at);
-          at += part.length;
-        }
-        resolve(out);
-      });
-  });
 }
 
 /** The font dictionary a glyph of a CID-keyed CFF font uses (0 for a font with one). */
@@ -91,18 +53,6 @@ function withOffSize(program: Uint8Array): Uint8Array {
   const out = program.slice();
   out[3] = out.length < 0x100 ? 1 : out.length < 0x10000 ? 2 : out.length < 0x1000000 ? 3 : 4;
   return out;
-}
-
-/** Six capital letters from the glyph list (PDF 1.7 §9.6.4): the same subset always gets the same tag. */
-function subsetTag(key: string): string {
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < key.length; i++) hash = Math.imul(hash ^ key.charCodeAt(i), 0x01000193) >>> 0;
-  let tag = '';
-  for (let i = 0; i < 6; i++) {
-    tag += String.fromCharCode(65 + (hash % 26));
-    hash = Math.floor(hash / 26) + i * 7919;
-  }
-  return tag;
 }
 
 /**
